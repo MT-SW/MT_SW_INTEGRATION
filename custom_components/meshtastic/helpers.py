@@ -36,13 +36,19 @@ _remove_listeners = defaultdict(lambda: defaultdict(list))
 
 
 async def setup_platform_entry(
-    hass: HomeAssistant,  # noqa: ARG001 function argument: `hass`
+    hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
     async_add_entities: AddEntitiesCallback,
     entity_factory: Callable[[typing.Mapping[int, typing.Mapping[str, Any]], MeshtasticData], Iterable[Entity]],
 ) -> None:
     async_add_entities(entity_factory(get_nodes(entry), entry.runtime_data))
     platform = entity_platform.async_get_current_platform()
+
+    # defensive cleanup: ensure no stale listener remains from a previous
+    # setup of this entry/platform (guards against duplicate entity
+    # registration if unload wasn't called cleanly before a reload)
+    for stale_remove in _remove_listeners[platform.domain].pop(entry.entry_id, []):
+        stale_remove()
 
     def on_coordinator_data_update() -> None:
         entities = entity_factory(get_nodes(entry), entry.runtime_data)
