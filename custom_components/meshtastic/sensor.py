@@ -688,7 +688,7 @@ def _build_host_metrics_sensors(
             add_sensor("load1", None, PERCENTAGE, name="Load 1")
             add_sensor("load5", None, PERCENTAGE, name="Load 5")
             add_sensor("load15", None, PERCENTAGE, name="Load 15")
-            add_sensor("userString", None, None, name="User String")
+            add_sensor("userString", None, None, state_class=None, name="User String")
 
     except:  # noqa: E722
         LOGGER.warning("Failed to create host metric entities", exc_info=True)
