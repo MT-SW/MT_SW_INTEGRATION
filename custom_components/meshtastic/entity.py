@@ -260,9 +260,7 @@ class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):
         gateway_short_name = gateway.get("user", {}).get("shortName", "")
         gateway_long_name = gateway.get("user", {}).get("longName", "")
         gateway_short_prefix = _gateway_short_prefix(gateway_short_name, gateway_long_name)
-        gateway_prefix = f"{gateway_short_prefix}_"
-
-        self.entity_id = f"{platform}.{DOMAIN}_{gateway_prefix}{self.node_id}_{self.entity_description.key}"
+        self._gateway_prefix = f"{gateway_short_prefix}_" if gateway_short_prefix else ""
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self.node_id))},
@@ -271,6 +269,10 @@ class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):
             f"{coordinator.config_entry.entry_id}_{platform}_{self.node_id}_{self.entity_description.key}"
         )
         self._attr_has_entity_name = True
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        return f"{self._gateway_prefix}{self.node_id}_{self.entity_description.key}"
 
     @property
     def node_id(self) -> int:
