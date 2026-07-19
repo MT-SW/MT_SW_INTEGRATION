@@ -46,12 +46,15 @@ async def setup_platform_entry(
     async_add_entities(entities)
     platform = entity_platform.async_get_current_platform()
 
-    # remove stale entities left over from nodes that were removed from the
-    # filter list (or otherwise no longer produced by entity_factory)
+    # remove stale entities, but only for nodes that fully dropped out of
+    # the filter — a metric-specific entity temporarily missing (e.g.
+    # localStats telemetry not received yet since restart) must NOT be
+    # treated as stale
     registry = er.async_get(hass)
-    current_unique_ids = {e.unique_id for e in entities}
+    allowed_node_ids = get_nodes(entry).keys()
+    allowed_prefixes = tuple(f"{entry.entry_id}_{platform.domain}_{node_id}_" for node_id in allowed_node_ids)
     for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-        if reg_entry.domain == platform.domain and reg_entry.unique_id not in current_unique_ids:
+        if reg_entry.domain == platform.domain and not reg_entry.unique_id.startswith(allowed_prefixes):
             registry.async_remove(reg_entry.entity_id)
 
     # defensive cleanup: ensure no stale listener remains from a previous
