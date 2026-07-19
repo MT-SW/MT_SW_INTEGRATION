@@ -133,6 +133,11 @@ async def _add_node_entities(
     if new_entities:
         async_add_entities(new_entities)
 
+    current_unique_ids = {e.unique_id for e in entities}
+    for reg_entry in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id):
+        if reg_entry.domain == "notify" and reg_entry.unique_id.startswith("meshtastic_node_") and reg_entry.unique_id not in current_unique_ids:
+            entity_registry.async_remove(reg_entry.entity_id)
+
 
 
 def _channel_global_id(channel: Mapping[str, Any]) -> str:
@@ -181,6 +186,12 @@ async def _add_channel_entities(
     if new_entities:
         async_add_entities(new_entities)
 
+    entity_registry = er.async_get(hass)
+    current_unique_ids = {e.unique_id for e in entities}
+    for reg_entry in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id):
+        if reg_entry.domain == "notify" and reg_entry.unique_id.startswith("meshtastic_channel_") and reg_entry.unique_id not in current_unique_ids:
+            entity_registry.async_remove(reg_entry.entity_id)
+            
 async def async_unload_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
