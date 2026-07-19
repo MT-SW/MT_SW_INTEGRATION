@@ -4,6 +4,7 @@ import typing
 from collections import defaultdict
 
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_OPTION_FILTER_NODES, LOGGER
@@ -41,8 +42,17 @@ async def setup_platform_entry(
     async_add_entities: AddEntitiesCallback,
     entity_factory: Callable[[typing.Mapping[int, typing.Mapping[str, Any]], MeshtasticData], Iterable[Entity]],
 ) -> None:
-    async_add_entities(entity_factory(get_nodes(entry), entry.runtime_data))
+    entities = list(entity_factory(get_nodes(entry), entry.runtime_data))
+    async_add_entities(entities)
     platform = entity_platform.async_get_current_platform()
+
+    # remove stale entities left over from nodes that were removed from the
+    # filter list (or otherwise no longer produced by entity_factory)
+    registry = er.async_get(hass)
+    current_unique_ids = {e.unique_id for e in entities}
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain == platform.domain and reg_entry.unique_id not in current_unique_ids:
+            registry.async_remove(reg_entry.entity_id)
 
     # defensive cleanup: ensure no stale listener remains from a previous
     # setup of this entry/platform (guards against duplicate entity
