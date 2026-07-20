@@ -46,12 +46,14 @@ async def setup_platform_entry(
     async_add_entities(entities)
     platform = entity_platform.async_get_current_platform()
 
-    # remove stale entities, but only for nodes that fully dropped out of
-    # the filter — a metric-specific entity temporarily missing (e.g.
-    # localStats telemetry not received yet since restart) must NOT be
-    # treated as stale
+    # remove stale entities, but only for nodes that were actually
+    # unselected in the filter option — a node temporarily offline/not
+    # yet reporting into coordinator.data (or a metric temporarily
+    # missing) must NOT be treated as stale. Base this on the configured
+    # filter list itself, not on which nodes currently have live data.
     registry = er.async_get(hass)
-    allowed_node_ids = get_nodes(entry).keys()
+    filter_nodes = entry.options.get(CONF_OPTION_FILTER_NODES, [])
+    allowed_node_ids = {el["id"] for el in filter_nodes}
     allowed_prefixes = tuple(f"{entry.entry_id}_{platform.domain}_{node_id}_" for node_id in allowed_node_ids)
     for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if reg_entry.domain == platform.domain and not reg_entry.unique_id.startswith(allowed_prefixes):
