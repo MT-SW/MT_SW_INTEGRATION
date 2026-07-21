@@ -1,6 +1,6 @@
 {
   "domain": "meshtastic",
-  "name": "Meshtastic",
+  "name": "Meshtastic_S+",
   "after_dependencies": [
     "bluetooth",
     "bluetooth_adapters",
@@ -349,7 +349,7 @@
       "pid": "802A"
     }
   ],
-  "version": "0.6.2-rc1-fix-2.5",
+  "version": "0.6.2-rc1-fix-2.6",
   "zeroconf": [
     "_meshtastic._tcp.local.",
     "_http._tcp.local."
