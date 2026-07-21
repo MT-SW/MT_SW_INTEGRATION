@@ -186,9 +186,27 @@ async def _setup_meshtastic_devices(
                 client, device_hardware_names, device_registry, entry, gateway_node, node, node_id
             )
 
-        else:
-            await _remove_meshtastic_device(device_registry, entry, node_id)
+    # remove devices for nodes no longer in the filter, based on what is
+    # actually registered for this config entry — not just nodes that
+    # happen to appear in async_get_all_nodes() right now (a node that's
+    # offline or hasn't reported yet this session would otherwise be
+    # silently skipped and left as an orphaned device forever)
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        registered_node_id = _node_id_from_device(device)
+        if registered_node_id is not None and registered_node_id not in filter_node_nums:
+            await _remove_meshtastic_device(device_registry, entry, registered_node_id)
+
     return gateway_node
+
+
+def _node_id_from_device(device: dr.DeviceEntry) -> int | None:
+    for domain, identifier in device.identifiers:
+        if domain == DOMAIN:
+            try:
+                return int(identifier)
+            except ValueError:
+                return None
+    return None
 
 
 async def _remove_meshtastic_device(
