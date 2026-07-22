@@ -22,6 +22,7 @@ from homeassistant.const import (
     CONF_PORT,
     Platform,
 )
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
@@ -33,6 +34,10 @@ from homeassistant.loader import async_get_loaded_integration
 
 from . import frontend, meshtastic_web, services
 from .api import (
+    ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID,
+    ATTR_EVENT_MESHTASTIC_API_DATA,
+    ATTR_EVENT_MESHTASTIC_API_NODE,
+    EVENT_MESHTASTIC_API_NODE_UPDATED,
     MeshtasticApiClient,
 )
 from .const import (
@@ -67,7 +72,7 @@ from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, MutableMapping
 
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import Event, HomeAssistant, _DataT
     from homeassistant.helpers.device_registry import DeviceRegistry
     from homeassistant.helpers.entity import Entity
 
@@ -152,6 +157,9 @@ async def async_setup_entry(
     await _setup_meshtastic_devices(hass, entry, client)
     await _setup_meshtastic_entities(hass, entry, client)
 
+    cancel_device_name_sync = _setup_device_name_sync(hass, entry)
+    _remove_listeners[entry.entry_id].append(cancel_device_name_sync)
+
     await services.async_register_gateway(hass, entry)
 
     # listeners
@@ -207,6 +215,27 @@ def _node_id_from_device(device: dr.DeviceEntry) -> int | None:
             except ValueError:
                 return None
     return None
+
+
+def _setup_device_name_sync(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> Callable[[], None]:
+    @callback
+    def _api_node_updated(event: Event[_DataT]) -> None:
+        event_data = event.data
+        if event_data.get(ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID) != entry.entry_id:
+            return
+
+        node_id = event_data.get(ATTR_EVENT_MESHTASTIC_API_NODE)
+        node_info = event_data.get(ATTR_EVENT_MESHTASTIC_API_DATA) or {}
+        new_name = node_info.get("user", {}).get("longName")
+        if node_id is None or not new_name:
+            return
+
+        device_registry = dr.async_get(hass)
+        device = device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
+        if device is not None and device.name != new_name:
+            device_registry.async_update_device(device.id, name=new_name)
+
+    return hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, _api_node_updated)
 
 
 async def _remove_meshtastic_device(
