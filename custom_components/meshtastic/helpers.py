@@ -34,6 +34,7 @@ def get_nodes(entry: MeshtasticConfigEntry) -> typing.Mapping[int, typing.Mappin
 
 
 _remove_listeners = defaultdict(lambda: defaultdict(list))
+_known_unique_ids: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
 
 
 async def setup_platform_entry(
@@ -46,6 +47,10 @@ async def setup_platform_entry(
     async_add_entities(entities)
     platform = entity_platform.async_get_current_platform()
 
+    known_unique_ids = _known_unique_ids[platform.domain][entry.entry_id]
+    known_unique_ids.clear()
+    known_unique_ids.update(e.unique_id for e in entities)
+   
     # remove stale entities, but only for nodes that were actually
     # unselected in the filter option — a node temporarily offline/not
     # yet reporting into coordinator.data (or a metric temporarily
@@ -67,9 +72,9 @@ async def setup_platform_entry(
 
     def on_coordinator_data_update() -> None:
         entities = entity_factory(get_nodes(entry), entry.runtime_data)
-        existing_unique_ids = {e.unique_id for e in platform.entities.values()}
-        new_entities = [s for s in entities if s.unique_id not in existing_unique_ids]
+        new_entities = [s for s in entities if s.unique_id not in known_unique_ids]
         if new_entities:
+            known_unique_ids.update(e.unique_id for e in new_entities)
             async_add_entities(new_entities)
 
     remove_listener = entry.runtime_data.coordinator.async_add_listener(on_coordinator_data_update)
@@ -83,6 +88,7 @@ async def async_unload_entry(
     platform = entity_platform.async_get_current_platform()
     for remove_listener in _remove_listeners[platform.domain].pop(entry.entry_id, []):
         remove_listener()
+    _known_unique_ids[platform.domain].pop(entry.entry_id, None)
 
     return True
 
