@@ -241,6 +241,7 @@ class MeshtasticApiClient:
         *,
         want_ack: bool = False,
         channel_index: int | None = None,
+        reply_id: int | None = None,
     ) -> bool:
         async def _on_message_sent(packet: Packet) -> None:
             # publish event so that outgoing messages are recorded to logbook
@@ -255,6 +256,7 @@ class MeshtasticApiClient:
                     destination=destination_id,
                     want_ack=want_ack,
                     channel_index=channel_index,
+                    reply_id=reply_id,
                     on_message_sent=_on_message_sent,
                 ),
                 timeout=30,
