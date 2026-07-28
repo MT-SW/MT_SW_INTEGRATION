@@ -339,7 +339,7 @@ def _build_local_stats_sensors(
                     key="stats_packets_tx",
                     name="Packets sent",
                     icon="mdi:call-made",
-                    state_class=SensorStateClass.TOTAL_INCREASING,
+                    state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
                     .get("localStats", {})
                     .get("numPacketsTx", None),
@@ -357,7 +357,7 @@ def _build_local_stats_sensors(
                     key="stats_packets_rx",
                     name="Packets received",
                     icon="mdi:call-received",
-                    state_class=SensorStateClass.TOTAL_INCREASING,
+                    state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
                     .get("localStats", {})
                     .get("numPacketsRx", None),
@@ -375,7 +375,7 @@ def _build_local_stats_sensors(
                     key="stats_packets_rx_bad",
                     name="Malformed Packets received",
                     icon="mdi:call-missed",
-                    state_class=SensorStateClass.TOTAL_INCREASING,
+                    state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
                     .get("localStats", {})
                     .get("numPacketsRxBad", None),
@@ -393,7 +393,7 @@ def _build_local_stats_sensors(
                     key="stats_packets_rx_duplicate",
                     name="Duplicate Packets received",
                     icon="mdi:call-split",
-                    state_class=SensorStateClass.TOTAL_INCREASING,
+                    state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
                     .get("localStats", {})
                     .get("numRxDupe", None),
@@ -411,7 +411,7 @@ def _build_local_stats_sensors(
                     key="stats_packets_tx_relayed",
                     name="Packets relayed",
                     icon="mdi:call-missed",
-                    state_class=SensorStateClass.TOTAL_INCREASING,
+                    state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
                     .get("localStats", {})
                     .get("numTxRelay", None),
@@ -429,7 +429,7 @@ def _build_local_stats_sensors(
                     key="stats_packets_tx_relay_cancelled",
                     name="Packets relay canceled",
                     icon="mdi:call-missed",
-                    state_class=SensorStateClass.TOTAL_INCREASING,
+                    state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
                     .get("localStats", {})
                     .get("numTxRelayCanceled", None),
