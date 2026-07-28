@@ -1055,6 +1055,7 @@ class MeshInterface:
         want_ack: bool = False,
         channel_index: int | None = None,
         priority: Optional[MeshPacket.Priority] = None,  # noqa: UP045
+        reply_id: int | None = None,
         on_message_sent: Callable[[Packet], Awaitable[None]] | None = None,
     ) -> None:
         if isinstance(destination, MeshNode):
@@ -1102,6 +1103,7 @@ class MeshInterface:
             priority=priority or (MeshPacket.Priority.RELIABLE if want_ack else MeshPacket.Priority.DEFAULT),
             want_response=False,
             ack=want_ack,
+            reply_id=reply_id,
             out_callback=out_callback,
         )
 
