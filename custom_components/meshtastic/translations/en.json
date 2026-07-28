@@ -177,6 +177,10 @@
         "ack": {
           "name": "Acknowledgement",
           "description": "Request an acknowledgement"
+        },
+        "reply_id": {
+          "name": "Reply ID",
+          "description": "A message ID to reply to."
         }
       }
     },
@@ -195,6 +199,10 @@
         "ack": {
           "name": "Acknowledgement",
           "description": "Request an acknowledgement"
+        },
+        "reply_id": {
+          "name": "Reply ID",
+          "description": "A message ID to reply to."
         }
       }
     },
@@ -213,6 +221,10 @@
         "ack": {
           "name": "Acknowledgement",
           "description": "Request an acknowledgement"
+        },
+        "reply_id": {
+          "name": "Reply ID",
+          "description": "A message ID to reply to."
         }
       }
     },
