@@ -478,8 +478,9 @@ async def _add_entities_for_entry(hass: HomeAssistant, entities: list[Entity], e
     # attach entities to config entry (as async_add_entities does not support apply config_entry_id from entities)
     for e in entities:
         device_id = UNDEFINED
-        if e.device_info:
-            device = device_registry.async_get_device(identifiers=e.device_info["identifiers"])
+        identifiers = getattr(e, "_device_identifiers", None)
+        if identifiers:
+            device = device_registry.async_get_device(identifiers=identifiers)
             if device:
                 device_id = device.id
         try:
