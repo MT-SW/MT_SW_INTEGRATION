@@ -9,7 +9,7 @@ PL — WERSJA POLSKA
 
 ## Meshtastic_S+ — fork integracji Meshtastic dla Home Assistant
 
-Fork oficjalnej integracji meshtastic/home-assistant, rozwijany dla sieci mesh Świętokrzyskie. Aktualna wersja: v0.6.2-rc1-fix-2.11.
+Fork oficjalnej integracji meshtastic/home-assistant, rozwijany dla sieci mesh Świętokrzyskie.
 
 Co naprawia względem oryginału:
 - Deduplikacja encji po unique_id zamiast entity_id (sensor / binary_sensor / device_tracker), także dla notify między config entries
@@ -43,7 +43,7 @@ EN — ENGLISH VERSION
 
 ## Meshtastic_S+ — Meshtastic integration fork for Home Assistant
 
-A fork of the official meshtastic/home-assistant integration, maintained for the Świętokrzyskie mesh network. Current version: v0.6.2-rc1-fix-2.11.
+A fork of the official meshtastic/home-assistant integration, maintained for the Świętokrzyskie mesh network.
 
 Fixes over upstream:
 - Deduplicates entities by unique_id instead of entity_id (sensor / binary_sensor / device_tracker), including notify entities across config entries
