@@ -65,7 +65,7 @@ from .entity import (
     GatewayEntity,
     MeshtasticEntity,
 )
-from .helpers import fetch_meshtastic_hardware_names
+from .helpers import fetch_meshtastic_hardware_names, node_identity_key
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
 
@@ -183,38 +183,44 @@ async def _setup_meshtastic_devices(
     hass: HomeAssistant, entry: MeshtasticConfigEntry, client: MeshtasticApiClient
 ) -> None:
     gateway_node = await client.async_get_own_node()
-    nodes = await client.async_get_all_nodes()
+    coordinator = entry.runtime_data.coordinator
+    nodes = coordinator.data or {}
     device_registry = dr.async_get(hass)
     filter_nodes = entry.options.get(CONF_OPTION_FILTER_NODES, [])
     filter_node_nums = [el["id"] for el in filter_nodes]
     device_hardware_names = await fetch_meshtastic_hardware_names(hass)
     for node_id, node in nodes.items():
-        if node_id in filter_node_nums:
-            await _setup_meshtastic_device(
-                client, device_hardware_names, device_registry, entry, gateway_node, node, node_id
-            )
+        await _setup_meshtastic_device(
+            client, device_hardware_names, device_registry, entry, gateway_node, node, node_id
+        )
 
     # remove devices for nodes no longer in the filter, based on what is
     # actually registered for this config entry — not just nodes that
-    # happen to appear in async_get_all_nodes() right now (a node that's
+    # happen to appear in coordinator.data right now (a node that's
     # offline or hasn't reported yet this session would otherwise be
-    # silently skipped and left as an orphaned device forever)
+    # silently skipped and left as an orphaned device forever). A device
+    # is only removed if NONE of the raw node numbers it has ever been
+    # seen under are in the filter — a node that changed its number after
+    # a collision is still matched via the number it used to have.
     for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
-        registered_node_id = _node_id_from_device(device)
-        if registered_node_id is not None and registered_node_id not in filter_node_nums:
-            await _remove_meshtastic_device(device_registry, entry, registered_node_id)
+        legacy_node_ids = _legacy_node_ids_from_device(device)
+        if legacy_node_ids and legacy_node_ids.isdisjoint(filter_node_nums):
+            await _remove_meshtastic_device(device_registry, entry, device)
 
     return gateway_node
 
 
-def _node_id_from_device(device: dr.DeviceEntry) -> int | None:
+def _legacy_node_ids_from_device(device: dr.DeviceEntry) -> set[int]:
+    """Return every raw node number ever recorded as an identifier for this device."""
+    node_ids = set()
     for domain, identifier in device.identifiers:
-        if domain == DOMAIN:
-            try:
-                return int(identifier)
-            except ValueError:
-                return None
-    return None
+        if domain != DOMAIN:
+            continue
+        try:
+            node_ids.add(int(identifier))
+        except ValueError:
+            continue
+    return node_ids
 
 
 def _setup_device_name_sync(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> Callable[[], None]:
@@ -239,15 +245,13 @@ def _setup_device_name_sync(hass: HomeAssistant, entry: MeshtasticConfigEntry) -
 
 
 async def _remove_meshtastic_device(
-    device_registry: DeviceRegistry, entry: MeshtasticConfigEntry, node_id: int
+    device_registry: DeviceRegistry, entry: MeshtasticConfigEntry, device: dr.DeviceEntry
 ) -> None:
-    device = device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
     # only clean up devices if they are exclusively from us
-    if device:
-        if device.config_entries == {entry.entry_id}:
-            device_registry.async_remove_device(device.id)
-        else:
-            device_registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
+    if device.config_entries == {entry.entry_id}:
+        device_registry.async_remove_device(device.id)
+    else:
+        device_registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
 
 
 async def _setup_meshtastic_device(  # noqa: PLR0913
@@ -260,13 +264,19 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     node_id: int,
 ) -> None:
     gateway_node_id = cast("int", gateway_node["num"])
+    identity_key = node_identity_key(node_id, node)
     mac_address = base64.b64decode(node["user"]["macaddr"]).hex(":") if "macaddr" in node["user"] else None
     connections = set()
     if mac_address:
         connections.add((dr.CONNECTION_NETWORK_MAC, mac_address))
     hops_away = node.get("hopsAway", 99)
     snr = node.get("snr", 0)
-    existing_device = device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
+    # look up any device we already know for this node — by identity first
+    # (survives a node-number change), falling back to the raw number for
+    # devices created by an older version of the integration
+    existing_device = device_registry.async_get_device(
+        identifiers={(DOMAIN, identity_key)}
+    ) or device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
     via_device = None
     if existing_device is not None and existing_device.config_entries != {entry.entry_id}:
         # get other meshtastic connections
@@ -309,9 +319,19 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     if gateway_node_id != node_id:
         connections.add((DOMAIN, f"{gateway_node_id}/{node_id}/{hops_away}/{snr}"))
 
+    # identifiers: the stable identity key, plus every raw node number this
+    # device has ever been seen under (including the current one) —
+    # accumulated so that (a) an install upgrading from a version that only
+    # knew raw numbers merges into the same device instead of duplicating
+    # it, and (b) a future node-number change is still recognised as the
+    # same device.
+    identifiers = {(DOMAIN, identity_key), (DOMAIN, str(node_id))}
+    if existing_device is not None:
+        identifiers |= {(d, i) for d, i in existing_device.identifiers if d == DOMAIN}
+
     d = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, str(node_id))},
+        identifiers=identifiers,
         name=node["user"]["longName"],
         model=device_hardware_names.get(node["user"]["hwModel"], None),
         model_id=str(node["user"]["hwModel"]),
