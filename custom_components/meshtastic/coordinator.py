@@ -244,3 +244,13 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
         return new_data
+
+    def resolve_node_id(self, identity_key: str) -> int | None:
+        """Return the current node number for a known identity key, if any."""
+        if not self.data:
+            return None
+        for node_num, node_data in self.data.items():
+            if node_identity_key(node_num, node_data) == identity_key:
+                return node_num
+        return None
+        
