@@ -35,7 +35,8 @@ def get_nodes(entry: MeshtasticConfigEntry) -> typing.Mapping[int, typing.Mappin
 
 
 def node_identity_key(node_id: int, node_data: typing.Mapping[str, Any] | None) -> str:
-    """Return a stable identity key for a node.
+    """
+    Return a stable identity key for a node.
 
     Meshtastic node numbers (``num``) are normally derived from the radio's
     MAC address, but the firmware regenerates a new random ``num`` if it
