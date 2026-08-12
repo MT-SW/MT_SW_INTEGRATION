@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, STATE_ATTRIBUTE_CHANNEL_INDEX, STATE_ATTRIBUTE_CHANNEL_NODE
 from .coordinator import MeshtasticDataUpdateCoordinator
+from .helpers import node_identity_key
 
 if typing.TYPE_CHECKING:
     from homeassistant.helpers.entity import EntityDescription
@@ -262,13 +263,38 @@ class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):
         gateway_short_prefix = _gateway_short_prefix(gateway_short_name, gateway_long_name)
         self._gateway_prefix = f"{gateway_short_prefix}_" if gateway_short_prefix else ""
 
+        node_data = coordinator.data.get(node_id) if coordinator.data else None
+        self._identity_key = node_identity_key(node_id, node_data)
+
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, str(self.node_id))},
+            identifiers={(DOMAIN, self._identity_key)},
         )
         self._attr_unique_id = (
-            f"{coordinator.config_entry.entry_id}_{platform}_{self.node_id}_{self.entity_description.key}"
+            f"{coordinator.config_entry.entry_id}_{platform}_{self._identity_key}_{self.entity_description.key}"
         )
         self._attr_has_entity_name = True
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._resync_node_id()
+        super()._handle_coordinator_update()
+
+    def _resync_node_id(self) -> None:
+        """
+        Follow this node to its current node number if it changed.
+
+        unique_id/device identifiers are based on the stable identity key
+        computed in __init__, but coordinator.data (and therefore
+        availability/state lookups) is keyed by the node's live number,
+        which can change after a Meshtastic node-number collision. If our
+        cached number is no longer present, ask the coordinator whether
+        our identity is now live under a different number and follow it.
+        """
+        if self.coordinator.data and self._node_id in self.coordinator.data:
+            return
+        resolved = self.coordinator.resolve_node_id(self._identity_key)
+        if resolved is not None and resolved != self._node_id:
+            self._node_id = resolved
 
     @property
     def suggested_object_id(self) -> str | None:
