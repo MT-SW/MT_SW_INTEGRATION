@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import typing
 from collections import defaultdict
 
@@ -31,6 +32,24 @@ def get_nodes(entry: MeshtasticConfigEntry) -> typing.Mapping[int, typing.Mappin
         for node_num, node_info in entry.runtime_data.coordinator.data.items()
         if node_num in filter_node_nums
     }
+
+
+def node_identity_key(node_id: int, node_data: typing.Mapping[str, Any] | None) -> str:
+    """Return a stable identity key for a node.
+
+    Meshtastic node numbers (``num``) are normally derived from the radio's
+    MAC address, but the firmware regenerates a new random ``num`` if it
+    detects a collision with another node on the mesh. The node's PKI public
+    key survives that change, so it is a much more stable identity than the
+    raw number. Falls back to the node number when no public key is known
+    yet (older firmware, or a node we haven't received a NodeInfo for).
+    """
+    public_key_b64 = (node_data or {}).get("user", {}).get("publicKey")
+    if public_key_b64:
+        public_key_hex = base64.b64decode(public_key_b64).hex()
+        if public_key_hex:
+            return f"pk_{public_key_hex}"
+    return f"num_{node_id}"
 
 
 _remove_listeners = defaultdict(lambda: defaultdict(list))
