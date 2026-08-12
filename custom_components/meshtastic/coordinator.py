@@ -18,6 +18,14 @@ from .api import (
     MeshtasticApiClientError,
 )
 from .const import CONF_OPTION_FILTER_NODES, DOMAIN, LOGGER
+from .helpers import node_identity_key
+
+EVENT_MESHTASTIC_NODE_IDENTITY_MIGRATED = f"{DOMAIN}_node_identity_migrated"
+
+ATTR_EVENT_MESHTASTIC_IDENTITY_CONFIG_ENTRY_ID = "config_entry_id"
+ATTR_EVENT_MESHTASTIC_IDENTITY_KEY = "identity_key"
+ATTR_EVENT_MESHTASTIC_IDENTITY_OLD_NODE = "old_node_id"
+ATTR_EVENT_MESHTASTIC_IDENTITY_NEW_NODE = "new_node_id"
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -80,6 +88,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(hours=1),
         )
         self._logger = LOGGER.getChild(self.__class__.__name__)
+        self._tracked_identity_by_num: dict[int, str] = {}
         self._remove_event_listeners = []
         self._remove_event_listeners.append(
             hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, self._api_node_updated)
@@ -183,13 +192,55 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
 
         try:
             node_infos = await self.config_entry.runtime_data.client.async_get_all_nodes()
-
-            filter_nodes = self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
-            filter_node_nums = [el["id"] for el in filter_nodes]
-            return {
-                node_num: deepcopy(node_info)
-                for node_num, node_info in node_infos.items()
-                if node_num in filter_node_nums
-            }
         except MeshtasticApiClientError as exception:
             raise UpdateFailed(exception) from exception
+
+        filter_nodes = self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
+        filter_node_nums = [el["id"] for el in filter_nodes]
+
+        # Node numbers are normally stable, but the firmware regenerates a
+        # new random num if it detects a collision with another node on
+        # the mesh. Build an identity_key -> live num index from
+        # everything currently visible on the mesh so a tracked node
+        # whose num just changed can still be found via the identity
+        # (public key) it had the last time we saw it.
+        live_identity_index = {
+            node_identity_key(node_num, node_info): node_num for node_num, node_info in node_infos.items()
+        }
+
+        resolved_node_nums = set()
+        for tracked_num in filter_node_nums:
+            if tracked_num in node_infos:
+                resolved_node_nums.add(tracked_num)
+                continue
+
+            known_identity_key = self._tracked_identity_by_num.get(tracked_num)
+            new_num = live_identity_index.get(known_identity_key) if known_identity_key else None
+            if new_num is not None and new_num != tracked_num:
+                self._logger.info(
+                    "Node %d appears to have a new node number %d (unchanged identity %s)",
+                    tracked_num,
+                    new_num,
+                    known_identity_key,
+                )
+                resolved_node_nums.add(new_num)
+                self.hass.bus.async_fire(
+                    EVENT_MESHTASTIC_NODE_IDENTITY_MIGRATED,
+                    {
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_CONFIG_ENTRY_ID: self.config_entry.entry_id,
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_KEY: known_identity_key,
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_OLD_NODE: tracked_num,
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_NEW_NODE: new_num,
+                    },
+                )
+            # else: node is genuinely offline / not heard from yet this
+            # session, same as before — it stays out of self.data until
+            # it (or its new num) is seen again.
+
+        new_data = {node_num: deepcopy(node_infos[node_num]) for node_num in resolved_node_nums}
+
+        self._tracked_identity_by_num = {
+            node_num: node_identity_key(node_num, node_info) for node_num, node_info in new_data.items()
+        }
+
+        return new_data
