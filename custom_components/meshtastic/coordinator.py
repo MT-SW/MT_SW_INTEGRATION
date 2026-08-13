@@ -285,4 +285,3 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         if node_id in self._tracked_identity_by_num:
             return self._tracked_identity_by_num[node_id]
         return node_identity_key(node_id, None)
-        
