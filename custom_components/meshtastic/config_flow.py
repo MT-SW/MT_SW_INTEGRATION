@@ -47,7 +47,6 @@ from .const import (
     ConfigOptionNotifyPlatformNodes,
     ConnectionType,
 )
-
 from .helpers import node_identity_key
 
 if TYPE_CHECKING:
