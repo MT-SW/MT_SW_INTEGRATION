@@ -48,6 +48,8 @@ from .const import (
     ConnectionType,
 )
 
+from .helpers import node_identity_key
+
 if TYPE_CHECKING:
     import asyncio
     from collections.abc import Mapping
@@ -515,6 +517,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     {
                         "id": node_id,
                         "name": self.nodes[node_id]["user"]["longName"],
+                        "identity_key": node_identity_key(node_id, self.nodes[node_id]),
                     }
                 )
                 if user_input.get(CONF_OPTION_ADD_ANOTHER_NODE, False):
@@ -635,10 +638,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if user_input.get(CONF_OPTION_NODE):
                 # Add the new node
+                new_node_id = int(user_input[CONF_OPTION_NODE])
                 updated_filter_node_option.append(
                     {
-                        "id": int(user_input[CONF_OPTION_NODE]),
-                        "name": self.nodes[int(user_input[CONF_OPTION_NODE])]["user"]["longName"],
+                        "id": new_node_id,
+                        "name": self.nodes[new_node_id]["user"]["longName"],
+                        "identity_key": node_identity_key(new_node_id, self.nodes[new_node_id]),
                     }
                 )
 
