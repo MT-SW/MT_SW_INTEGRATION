@@ -79,7 +79,11 @@ async def setup_platform_entry(
     registry = er.async_get(hass)
     filter_nodes = entry.options.get(CONF_OPTION_FILTER_NODES, [])
     allowed_node_ids = {el["id"] for el in filter_nodes}
-    allowed_prefixes = tuple(f"{entry.entry_id}_{platform.domain}_{node_id}_" for node_id in allowed_node_ids)
+    coordinator = entry.runtime_data.coordinator
+    allowed_identity_keys = {coordinator.identity_key_for(node_id) for node_id in allowed_node_ids}
+    allowed_prefixes = tuple(
+        f"{entry.entry_id}_{platform.domain}_{identity_key}_" for identity_key in allowed_identity_keys
+    )
     for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if reg_entry.domain == platform.domain and not reg_entry.unique_id.startswith(allowed_prefixes):
             registry.async_remove(reg_entry.entity_id)
