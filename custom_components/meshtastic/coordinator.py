@@ -197,6 +197,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
 
         filter_nodes = self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
         filter_node_nums = [el["id"] for el in filter_nodes]
+        configured_identity_keys = {el["identity_key"] for el in filter_nodes if el.get("identity_key")}
 
         # Node numbers are normally stable, but the firmware regenerates a
         # new random num if it detects a collision with another node on
@@ -209,12 +210,17 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
         resolved_node_nums = set()
-        for tracked_num in filter_node_nums:
+        for el in filter_nodes:
+            tracked_num = el["id"]
             if tracked_num in node_infos:
                 resolved_node_nums.add(tracked_num)
                 continue
 
-            known_identity_key = self._tracked_identity_by_num.get(tracked_num)
+            # not currently live under its configured number — try to
+            # follow it via identity, preferring the identity stored in
+            # the filter config itself (durable across HA restarts) and
+            # falling back to what we've observed so far this session
+            known_identity_key = el.get("identity_key") or self._tracked_identity_by_num.get(tracked_num)
             new_num = live_identity_index.get(known_identity_key) if known_identity_key else None
             if new_num is not None and new_num != tracked_num:
                 self._logger.info(
@@ -237,17 +243,21 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             # session, same as before — it stays out of self.data until
             # it (or its new num) is seen again.
 
-       new_data = {node_num: deepcopy(node_infos[node_num]) for node_num in resolved_node_nums}
+        new_data = {node_num: deepcopy(node_infos[node_num]) for node_num in resolved_node_nums}
 
         # merge (not replace) so a node that's simply offline this poll
-        # doesn't lose its last-known identity — only drop entries for
-        # numbers that have fallen out of the filter entirely
+        # doesn't lose its last-known identity. Drop entries only for
+        # numbers that have genuinely fallen out of the filter — checked
+        # by identity first (so a migrated node's new num isn't pruned
+        # just because it doesn't literally match the configured raw
+        # number), falling back to the raw number for filter entries
+        # that don't have a stored identity_key yet.
         for node_num, node_info in new_data.items():
             self._tracked_identity_by_num[node_num] = node_identity_key(node_num, node_info)
         self._tracked_identity_by_num = {
             node_num: identity_key
             for node_num, identity_key in self._tracked_identity_by_num.items()
-            if node_num in filter_node_nums
+            if node_num in filter_node_nums or identity_key in configured_identity_keys
         }
 
         return new_data
