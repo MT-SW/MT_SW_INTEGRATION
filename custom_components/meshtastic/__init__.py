@@ -179,7 +179,7 @@ async def async_setup_entry(
     ):
         await async_setup_tcp_proxy(hass, entry)
 
-   return True
+    return True
 
 
 def _migrate_filter_node_identity_keys(
@@ -205,7 +205,7 @@ def _migrate_filter_node_identity_keys(
         for el in filter_nodes
     ]
     if updated_filter_nodes != filter_nodes:
-       hass.config_entries.async_update_entry(
+        hass.config_entries.async_update_entry(
             entry, options={**entry.options, CONF_OPTION_FILTER_NODES: updated_filter_nodes}
         )
 
