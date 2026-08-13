@@ -237,10 +237,17 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             # session, same as before — it stays out of self.data until
             # it (or its new num) is seen again.
 
-        new_data = {node_num: deepcopy(node_infos[node_num]) for node_num in resolved_node_nums}
+       new_data = {node_num: deepcopy(node_infos[node_num]) for node_num in resolved_node_nums}
 
+        # merge (not replace) so a node that's simply offline this poll
+        # doesn't lose its last-known identity — only drop entries for
+        # numbers that have fallen out of the filter entirely
+        for node_num, node_info in new_data.items():
+            self._tracked_identity_by_num[node_num] = node_identity_key(node_num, node_info)
         self._tracked_identity_by_num = {
-            node_num: node_identity_key(node_num, node_info) for node_num, node_info in new_data.items()
+            node_num: identity_key
+            for node_num, identity_key in self._tracked_identity_by_num.items()
+            if node_num in filter_node_nums
         }
 
         return new_data
@@ -253,4 +260,19 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             if node_identity_key(node_num, node_data) == identity_key:
                 return node_num
         return None
+
+    def identity_key_for(self, node_id: int) -> str:
+        """
+        Return the best-known identity key for a tracked node number.
+
+        Uses live data when the node is currently online, falls back to
+        the identity it was last seen under if it's temporarily offline,
+        and otherwise falls back to the same raw-number format
+        node_identity_key() itself uses for a node we've never seen.
+        """
+        if self.data and node_id in self.data:
+            return node_identity_key(node_id, self.data[node_id])
+        if node_id in self._tracked_identity_by_num:
+            return self._tracked_identity_by_num[node_id]
+        return node_identity_key(node_id, None)
         
