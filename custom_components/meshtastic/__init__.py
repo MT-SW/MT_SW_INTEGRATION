@@ -141,9 +141,6 @@ async def async_setup_entry(
         raise ConfigEntryNotReady from e
 
     gateway_node = await client.async_get_own_node()
-    nodes = await client.async_get_all_nodes()
-    _migrate_filter_node_identity_keys(hass, entry, nodes)
-
     entry.runtime_data = MeshtasticData(
         client=client,
         integration=async_get_loaded_integration(hass, entry.domain),
@@ -180,34 +177,6 @@ async def async_setup_entry(
         await async_setup_tcp_proxy(hass, entry)
 
     return True
-
-
-def _migrate_filter_node_identity_keys(
-    hass: HomeAssistant, entry: MeshtasticConfigEntry, nodes: Mapping[int, Mapping[str, Any]]
-) -> None:
-    """
-    One-time backfill of identity_key onto filter entries created before identity-based tracking existed.
-
-    Only touches entries that are missing identity_key and are currently
-    live (so we have their node data to derive it from); anything else is
-    left alone and picked up whenever it's next seen. Called before the
-    reload-on-options-update listener is registered, so this does not
-    trigger a reload.
-    """
-    filter_nodes = entry.options.get(CONF_OPTION_FILTER_NODES, [])
-    if not any(not el.get("identity_key") for el in filter_nodes):
-        return
-
-    updated_filter_nodes = [
-        {**el, "identity_key": node_identity_key(el["id"], nodes[el["id"]])}
-        if not el.get("identity_key") and el["id"] in nodes
-        else el
-        for el in filter_nodes
-    ]
-    if updated_filter_nodes != filter_nodes:
-        hass.config_entries.async_update_entry(
-            entry, options={**entry.options, CONF_OPTION_FILTER_NODES: updated_filter_nodes}
-        )
 
 
 async def _setup_meshtastic_devices(
