@@ -210,18 +210,34 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
         resolved_node_nums = set()
-        for el in filter_nodes:
-            tracked_num = el["id"]
+        updated_filter_nodes = []
+        filter_changed = False
+        for el_config in filter_nodes:
+            tracked_num = el_config["id"]
             if tracked_num in node_infos:
                 resolved_node_nums.add(tracked_num)
+                # keep the stored identity in sync with live data — fills
+                # in a missing identity_key, and upgrades a raw-number
+                # fallback to the node's real public key as soon as it
+                # reports one (e.g. after a firmware update that enables
+                # PKI for the first time). Without this, a fallback
+                # identity is a dead end the moment the num it names is
+                # no longer live: it can never be resolved back.
+                current_identity_key = node_identity_key(tracked_num, node_infos[tracked_num])
+                updated_el = el_config
+                if el_config.get("identity_key") != current_identity_key:
+                    updated_el = {**el_config, "identity_key": current_identity_key}
+                    filter_changed = True
+                updated_filter_nodes.append(updated_el)
                 continue
 
             # not currently live under its configured number — try to
             # follow it via identity, preferring the identity stored in
             # the filter config itself (durable across HA restarts) and
             # falling back to what we've observed so far this session
-            known_identity_key = el.get("identity_key") or self._tracked_identity_by_num.get(tracked_num)
+            known_identity_key = el_config.get("identity_key") or self._tracked_identity_by_num.get(tracked_num)
             new_num = live_identity_index.get(known_identity_key) if known_identity_key else None
+            updated_el = el_config
             if new_num is not None and new_num != tracked_num:
                 self._logger.info(
                     "Node %d appears to have a new node number %d (unchanged identity %s)",
@@ -239,9 +255,21 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                         ATTR_EVENT_MESHTASTIC_IDENTITY_NEW_NODE: new_num,
                     },
                 )
-            # else: node is genuinely offline / not heard from yet this
-            # session, same as before — it stays out of self.data until
-            # it (or its new num) is seen again.
+                # self-heal the configured number so the filter (and the
+                # options UI) reflect where this node actually lives now
+                updated_el = {**el_config, "id": new_num, "identity_key": known_identity_key}
+                filter_changed = True
+            # else: node is genuinely offline, or its identity was never
+            # captured (no public key, and its old num is no longer live
+            # under any known identity) — nothing we can do automatically;
+            # it stays out of self.data until it's seen again.
+            updated_filter_nodes.append(updated_el)
+
+        if filter_changed:
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                options={**self.config_entry.options, CONF_OPTION_FILTER_NODES: updated_filter_nodes},
+            )
 
         new_data = {node_num: deepcopy(node_infos[node_num]) for node_num in resolved_node_nums}
 
