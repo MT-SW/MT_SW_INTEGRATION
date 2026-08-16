@@ -167,12 +167,13 @@ class MeshtasticTcpProxy:
             await client_connection.disconnect()
 
     async def _forward_from_radio(self) -> None:
-        try:
-            while True:
+        while True:
+            try:
                 async for packet in self._interface.from_radio_stream():
                     for queue in self._client_queues:
                         await queue.put(packet)
-        except asyncio.CancelledError:
-            pass
-        except:  # noqa: E722
-            _LOGGER.warning("Failuring during forwarding from gateway", exc_info=True)
+            except asyncio.CancelledError:
+                return
+            except:  # noqa: E722
+                _LOGGER.warning("Failure while forwarding from gateway, retrying", exc_info=True)
+                await asyncio.sleep(2)
