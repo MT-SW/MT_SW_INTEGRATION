@@ -154,7 +154,17 @@ class MeshtasticTcpProxy:
             )
 
             try:
-                await asyncio.wait([task_wait_disconnect, task_read, task_write], return_when=asyncio.FIRST_COMPLETED)
+                done, _pending = await asyncio.wait(
+                    [task_wait_disconnect, task_read, task_write], return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    if not task.cancelled() and task.exception() is not None:
+                        _LOGGER.debug(
+                            "Proxy connection %s: %s ended with an error",
+                            peer_name,
+                            task.get_name(),
+                            exc_info=task.exception(),
+                        )
             finally:
                 task_read.cancel()
                 task_write.cancel()
