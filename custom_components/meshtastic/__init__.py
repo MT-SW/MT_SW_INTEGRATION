@@ -273,10 +273,21 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     snr = node.get("snr", 0)
     # look up any device we already know for this node — by identity first
     # (survives a node-number change), falling back to the raw number for
-    # devices created by an older version of the integration
-    existing_device = device_registry.async_get_device(
-        identifiers={(DOMAIN, identity_key)}
-    ) or device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
+    # devices created by an older version of the integration, and finally
+    # to the radio's MAC address — the one identifier that survives both a
+    # node-number change *and* a node reporting a PKI public key for the
+    # first time (e.g. right after a firmware update that enables it),
+    # since in that case the old device has neither the new identity_key
+    # nor the new node number recorded yet
+    existing_device = (
+        device_registry.async_get_device(identifiers={(DOMAIN, identity_key)})
+        or device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
+        or (
+            device_registry.async_get_device(connections={(dr.CONNECTION_NETWORK_MAC, mac_address)})
+            if mac_address
+            else None
+        )
+    )
     via_device = None
     if existing_device is not None and existing_device.config_entries != {entry.entry_id}:
         # get other meshtastic connections
