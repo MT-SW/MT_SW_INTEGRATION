@@ -165,9 +165,16 @@ class MeshtasticApiClient:
     async def disconnect(self) -> None:
         try:
             self._packet_processor.cancel()
+            if self._background_tasks:
+                await asyncio.wait([asyncio.create_task(self._cancel_task(t)) for t in self._background_tasks])
             await self._interface.stop()
         except Exception as e:
             raise MeshtasticApiClientCommunicationError from e
+
+    async def _cancel_task(self, t: asyncio.Task) -> None:
+        with contextlib.suppress(asyncio.CancelledError):
+            t.cancel()
+            await t
 
     async def async_get_channels(self) -> list[Mapping[str, Any]]:
         if not await self._interface.connected_node_ready():
