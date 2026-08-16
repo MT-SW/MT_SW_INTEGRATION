@@ -102,7 +102,7 @@ async def async_setup_entry(
         elif _is_unique_id_registered(entity_registry, entity.unique_id):
             LOGGER.debug("Skipping add for %s: already registered but not live yet", entity.unique_id)
         else:
-            async_add_entities([entity]))
+            async_add_entities([entity])
     hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, _api_node_updated)
 
 
