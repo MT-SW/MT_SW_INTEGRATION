@@ -265,6 +265,53 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             # it stays out of self.data until it's seen again.
             updated_filter_nodes.append(updated_el)
 
+        # de-duplicate filter entries that ended up pointing at the same
+        # physical node. This happens when an old entry (e.g. left over
+        # from before identity-based tracking, or from an earlier node
+        # number migration) was never removed and a separate entry for
+        # the node's current number exists too — both resolve to the same
+        # identity_key, so entities get built twice under the same
+        # unique_id and the entity registry rejects the second copy.
+        # Keep whichever entry is currently live; drop the rest.
+        seen_by_identity: dict[str, dict] = {}
+        deduped_filter_nodes = []
+        for el_config in updated_filter_nodes:
+            identity_key = el_config.get("identity_key")
+            if not identity_key:
+                deduped_filter_nodes.append(el_config)
+                continue
+
+            existing = seen_by_identity.get(identity_key)
+            if existing is None:
+                seen_by_identity[identity_key] = el_config
+                deduped_filter_nodes.append(el_config)
+                continue
+
+            filter_changed = True
+            existing_live = existing["id"] in node_infos
+            current_live = el_config["id"] in node_infos
+            if current_live and not existing_live:
+                self._logger.info(
+                    "Dropping duplicate filter entry for node %d (superseded by live node %d, identity %s)",
+                    existing["id"],
+                    el_config["id"],
+                    identity_key,
+                )
+                deduped_filter_nodes.remove(existing)
+                deduped_filter_nodes.append(el_config)
+                seen_by_identity[identity_key] = el_config
+                resolved_node_nums.discard(existing["id"])
+                resolved_node_nums.add(el_config["id"])
+            else:
+                self._logger.info(
+                    "Dropping duplicate filter entry for node %d (identity %s already tracked via node %d)",
+                    el_config["id"],
+                    identity_key,
+                    existing["id"],
+                )
+                resolved_node_nums.discard(el_config["id"])
+        updated_filter_nodes = deduped_filter_nodes
+
         if filter_changed:
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
@@ -272,7 +319,6 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             )
 
         new_data = {node_num: deepcopy(node_infos[node_num]) for node_num in resolved_node_nums}
-
         # merge (not replace) so a node that's simply offline this poll
         # doesn't lose its last-known identity. Drop entries only for
         # numbers that have genuinely fallen out of the filter — checked
