@@ -95,12 +95,14 @@ async def async_setup_entry(
 
         entity = MeshtasticNodeNotify(node_id=node_id, entity_name=f"{node_info['user']['longName']}")
         existing_entity = _find_existing_entity(hass, entity.unique_id)
-        if existing_entity is None:
-            async_add_entities([entity])
-        else:
+        if existing_entity is not None:
             if existing_entity.name != entity.name:
                 existing_entity.update_from(entity)
                 entity_registry.async_update_entity(existing_entity.entity_id, name=entity.name)
+        elif _is_unique_id_registered(entity_registry, entity.unique_id):
+            LOGGER.debug("Skipping add for %s: already registered but not live yet", entity.unique_id)
+        else:
+            async_add_entities([entity]))
     hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, _api_node_updated)
 
 
@@ -123,13 +125,15 @@ async def _add_node_entities(
     new_entities = []
     for e in entities:
         existing_entity = _find_existing_entity(hass, e.unique_id)
-        if existing_entity is None:
-            new_entities.append(e)
-        else:
+        if existing_entity is not None:
             registered_entity_id = existing_entity.entity_id
             if existing_entity.name != e.name:
                 existing_entity.update_from(e)
                 entity_registry.async_update_entity(registered_entity_id, name=e.name)
+        elif _is_unique_id_registered(entity_registry, e.unique_id):
+            LOGGER.debug("Skipping add for %s: already registered but not live yet", e.unique_id)
+        else:
+            new_entities.append(e)
     if new_entities:
         async_add_entities(new_entities)
 
@@ -153,6 +157,10 @@ def _find_existing_entity(hass: HomeAssistant, unique_id: str) -> NotifyEntity |
             if entity.unique_id == unique_id:
                 return entity
     return None
+
+
+def _is_unique_id_registered(entity_registry: EntityRegistry, unique_id: str) -> bool:
+    return entity_registry.async_get_entity_id("notify", DOMAIN, unique_id) is not None
 
 async def _add_channel_entities(
     hass: HomeAssistant,
@@ -178,10 +186,12 @@ async def _add_channel_entities(
     new_entities = []
     for e in entities:
         existing_entity = _find_existing_entity(hass, e.unique_id)
-        if existing_entity is None:
-            new_entities.append(e)
-        else:
+        if existing_entity is not None:
             existing_entity.update_from(e)
+        elif _is_unique_id_registered(entity_registry, e.unique_id):
+            LOGGER.debug("Skipping add for %s: already registered but not live yet", e.unique_id)
+        else:
+            new_entities.append(e)
 
     if new_entities:
         async_add_entities(new_entities)
