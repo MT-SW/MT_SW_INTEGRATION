@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from asyncio import StreamReader, StreamWriter
 from types import TracebackType
 from typing import Self
@@ -185,5 +186,9 @@ class MeshtasticTcpProxy:
             except asyncio.CancelledError:
                 return
             except:  # noqa: E722
-                _LOGGER.warning("Failure while forwarding from gateway, retrying", exc_info=True)
+                _LOGGER.warning(
+                    "Failure while forwarding from gateway, waiting for reconnect before retrying", exc_info=True
+                )
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._interface.connected_node_ready(), timeout=30)
                 await asyncio.sleep(2)
