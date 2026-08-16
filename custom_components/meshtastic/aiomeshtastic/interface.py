@@ -327,7 +327,13 @@ class MeshInterface:
         )
 
         async def get_config() -> None:
-            await self._start_config()
+            try:
+                await self._start_config()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._logger.warning("Initial config request failed, reconnecting", exc_info=True)
+                await self._reconnect_while_running(force=True)
 
         self._add_background_task(get_config(), name="get-config")
 
