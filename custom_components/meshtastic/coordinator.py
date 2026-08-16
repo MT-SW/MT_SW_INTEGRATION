@@ -303,13 +303,27 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         """
         Return the best-known identity key for a tracked node number.
 
-        Uses live data when the node is currently online, falls back to
-        the identity it was last seen under if it's temporarily offline,
-        and otherwise falls back to the same raw-number format
+        Prefers a live/tracked identity, but only if it's the real
+        (public-key-based) one — a live snapshot that hasn't caught up
+        yet (e.g. right after a reconnect) must not downgrade a node to
+        its raw-number fallback if we already know better. Falls back
+        to the identity persisted in the filter config (durable across
+        HA restarts), and only then to the raw-number format
         node_identity_key() itself uses for a node we've never seen.
         """
+        live_identity = None
         if self.data and node_id in self.data:
-            return node_identity_key(node_id, self.data[node_id])
-        if node_id in self._tracked_identity_by_num:
-            return self._tracked_identity_by_num[node_id]
-        return node_identity_key(node_id, None)
+            live_identity = node_identity_key(node_id, self.data[node_id])
+        if live_identity and not live_identity.startswith("num_"):
+            return live_identity
+
+        tracked_identity = self._tracked_identity_by_num.get(node_id)
+        if tracked_identity and not tracked_identity.startswith("num_"):
+            return tracked_identity
+
+        if self.config_entry is not None:
+            for el_config in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []):
+                if el_config.get("id") == node_id and el_config.get("identity_key"):
+                    return el_config["identity_key"]
+
+        return live_identity or tracked_identity or node_identity_key(node_id, None)
