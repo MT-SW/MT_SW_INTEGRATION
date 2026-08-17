@@ -198,6 +198,11 @@ async def validate_input_for_connection(
         ) as client:
             gateway_node = await client.async_get_own_node()
             nodes = await client.async_get_all_nodes()
+            nodes = {
+                node_id: node_info
+                for node_id, node_info in nodes.items()
+                if node_info.get("user", {}).get("hwModel") != "UNSET"
+            }
             return gateway_node, nodes
     except IntegrationError as e:
         _LOGGER.warning("Failed to connect to meshtastic device", exc_info=True)
@@ -602,6 +607,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             and self.config_entry.runtime_data.client
         ):
             self.nodes = await self.config_entry.runtime_data.client.async_get_all_nodes()
+            self.nodes = {
+                node_id: node_info
+                for node_id, node_info in self.nodes.items()
+                if node_info.get("user", {}).get("hwModel") != "UNSET"
+            }
 
         if self.nodes is None:
             try:
