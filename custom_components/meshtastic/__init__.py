@@ -188,6 +188,7 @@ async def _setup_meshtastic_devices(
     device_registry = dr.async_get(hass)
     filter_nodes = entry.options.get(CONF_OPTION_FILTER_NODES, [])
     filter_node_nums = [el["id"] for el in filter_nodes]
+    configured_identity_keys = {el["identity_key"] for el in filter_nodes if el.get("identity_key")}
     device_hardware_names = await fetch_meshtastic_hardware_names(hass)
     for node_id, node in nodes.items():
         await _setup_meshtastic_device(
@@ -200,11 +201,18 @@ async def _setup_meshtastic_devices(
     # offline or hasn't reported yet this session would otherwise be
     # silently skipped and left as an orphaned device forever). A device
     # is only removed if NONE of the raw node numbers it has ever been
-    # seen under are in the filter — a node that changed its number after
-    # a collision is still matched via the number it used to have.
+    # seen under, AND NONE of its identity-key identifiers, are in the
+    # filter — checked separately because a raw number never parses as
+    # an identity key (pk_.../num_...) and vice versa, so a device with
+    # only one kind of identifier must still be checked against the
+    # matching kind of filter entry.
     for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
         legacy_node_ids = _legacy_node_ids_from_device(device)
-        if legacy_node_ids and legacy_node_ids.isdisjoint(filter_node_nums):
+        identity_keys = _identity_keys_from_device(device)
+        still_tracked = not legacy_node_ids.isdisjoint(filter_node_nums) or not identity_keys.isdisjoint(
+            configured_identity_keys
+        )
+        if (legacy_node_ids or identity_keys) and not still_tracked:
             await _remove_meshtastic_device(device_registry, entry, device)
 
     return gateway_node
@@ -221,6 +229,23 @@ def _legacy_node_ids_from_device(device: dr.DeviceEntry) -> set[int]:
         except ValueError:
             continue
     return node_ids
+
+
+def _identity_keys_from_device(device: dr.DeviceEntry) -> set[str]:
+    """Return every identity-key style identifier (pk_.../num_...) recorded for this device."""
+    return {identifier for domain, identifier in device.identifiers if domain == DOMAIN and not identifier.isdigit()}
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: MeshtasticConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Allow manually deleting a device from its device page, but only if it's not currently tracked."""
+    filter_nodes = config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
+    filter_node_nums = {el["id"] for el in filter_nodes}
+    configured_identity_keys = {el["identity_key"] for el in filter_nodes if el.get("identity_key")}
+    legacy_node_ids = _legacy_node_ids_from_device(device_entry)
+    identity_keys = _identity_keys_from_device(device_entry)
+    return legacy_node_ids.isdisjoint(filter_node_nums) and identity_keys.isdisjoint(configured_identity_keys)
 
 
 def _setup_device_name_sync(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> Callable[[], None]:
