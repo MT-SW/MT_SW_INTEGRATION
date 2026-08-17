@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 from datetime import timedelta
 from functools import wraps
@@ -52,7 +53,13 @@ def meshtastic_api_event_callback(f):  # noqa: ANN001, ANN201
                 return None
 
             node_id = event_data.get(ATTR_EVENT_MESHTASTIC_API_NODE, None)
-            if node_id is None or node_id not in self.data:
+            if node_id is None:
+                return None
+
+            if node_id not in self.data:
+                await self._try_recover_tracked_node(node_id)
+
+            if node_id not in self.data:
                 self._logger.debug("Node %d not in coordinator data", node_id)
                 return None
 
@@ -104,6 +111,36 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 remove_listener()
             except:  # noqa: E722
                 self._logger.debug("Could not remove event listeners", exc_info=True)
+
+    async def _try_recover_tracked_node(self, node_id: int) -> None:
+        """
+        Re-add a tracked node to coordinator.data if it fell out during an
+        unlucky hourly refresh (e.g. one that overlapped a reconnect). Without
+        this, live events for the node keep getting silently dropped until
+        the next scheduled refresh, up to update_interval later.
+        """
+        if self.config_entry is None or self.config_entry.runtime_data is None:
+            return
+
+        filter_nodes = self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
+        filter_node_nums = {el["id"] for el in filter_nodes}
+        if node_id not in filter_node_nums:
+            return
+
+        try:
+            node_infos = await asyncio.wait_for(
+                self.config_entry.runtime_data.client.async_get_all_nodes(), timeout=10
+            )
+        except (MeshtasticApiClientError, TimeoutError):
+            return
+
+        if node_id not in node_infos:
+            return
+
+        data = deepcopy(self.data)
+        data[node_id] = deepcopy(node_infos[node_id])
+        self.async_set_updated_data(data)
+        self._logger.info("Recovered tracked node %d that had fallen out of coordinator data", node_id)
 
     @meshtastic_api_event_callback
     async def _api_node_updated(self, node_id: int, node_data: Mapping[str, Any], **kwargs) -> None:  # noqa: ANN003, ARG002
