@@ -23,14 +23,15 @@ if typing.TYPE_CHECKING:
 
 def get_nodes(entry: MeshtasticConfigEntry) -> typing.Mapping[int, typing.Mapping[str, Any]]:
     filter_nodes = entry.options.get(CONF_OPTION_FILTER_NODES, [])
-    filter_node_nums = [el["id"] for el in filter_nodes]
+    filter_node_nums = {el["id"] for el in filter_nodes}
+    configured_identity_keys = {el["identity_key"] for el in filter_nodes if el.get("identity_key")}
     if not entry.runtime_data.coordinator.data:
         return {}
 
     return {
         node_num: node_info
         for node_num, node_info in entry.runtime_data.coordinator.data.items()
-        if node_num in filter_node_nums
+        if node_num in filter_node_nums or node_identity_key(node_num, node_info) in configured_identity_keys
     }
 
 
