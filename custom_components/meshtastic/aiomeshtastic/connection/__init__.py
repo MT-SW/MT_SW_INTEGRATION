@@ -166,12 +166,15 @@ class ClientApiConnection:
             self._queue_status_update.clear()
             self._logger.debug("New Queue Status: %s", repr(self._queue_status).replace("\n", ""))
 
-    async def _notify_packet_stream_listeners(self, packet: mesh_pb2.FromRadio, *, sequential: bool = False) -> None:
+        async def _notify_packet_stream_listeners(self, packet: mesh_pb2.FromRadio, *, sequential: bool = False) -> None:
         async def notify(listener: ClientApiConnectionPacketStreamListener, new_packet: mesh_pb2.FromRadio) -> None:
             try:
                 await listener.notify(new_packet)
             except:  # noqa: E722
                 self._logger.warning("Listener notify failed: %s", listener, exc_info=True)
+
+        if not self._packet_stream_listeners:
+            return
 
         if sequential:
             for listener in self._packet_stream_listeners:
