@@ -638,13 +638,13 @@ class MeshInterface:
         if packet.port_num == portnums_pb2.PortNum.TELEMETRY_APP:
             telemetry = packet.app_payload
             telemetry_info = google.protobuf.json_format.MessageToDict(telemetry)
-            if node_id in self._node_database:
-                await self._node_database_update(node_id, **telemetry_info)
+            self._get_or_create_node(node_id)
+            await self._node_database_update(node_id, **telemetry_info)
         elif packet.port_num == portnums_pb2.PortNum.POSITION_APP:
             position = packet.app_payload
             position_info = google.protobuf.json_format.MessageToDict(position)
-            if node_id in self._node_database:
-                await self._node_database_update(node_id, position=position_info)
+            self._get_or_create_node(node_id)
+            await self._node_database_update(node_id, position=position_info)
         elif packet.port_num == portnums_pb2.PortNum.NODEINFO_APP:
             node_info = packet.app_payload
             node_info_dict = google.protobuf.json_format.MessageToDict(node_info)
