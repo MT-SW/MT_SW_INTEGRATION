@@ -379,7 +379,7 @@ class ClientApiConnection:
         self._queue_status.free -= 1
         return await self._send_packet(packet)
 
-        @asynccontextmanager
+    @asynccontextmanager
     async def _ensure_processing_packets(self) -> None:
         if not self.is_connected:
             raise ClientApiNotConnectedError
