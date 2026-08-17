@@ -31,6 +31,7 @@ class ClientApiConnection:
     def __init__(self) -> None:
         self._packet_stream_listeners: list[ClientApiConnectionPacketStreamListener] = []
         self._on_demand_streaming_task: asyncio.Task | None = None
+        self._stop_on_demand_task: asyncio.Task | None = None
         self._pending_config_requests: dict[int, asyncio.Event] = {}
         self._processing_packets_consumer_count = 0
         self._processing_packets_consumer_lock = asyncio.Lock()
@@ -378,7 +379,7 @@ class ClientApiConnection:
         self._queue_status.free -= 1
         return await self._send_packet(packet)
 
-    @asynccontextmanager
+        @asynccontextmanager
     async def _ensure_processing_packets(self) -> None:
         if not self.is_connected:
             raise ClientApiNotConnectedError
@@ -388,8 +389,15 @@ class ClientApiConnection:
             await self._reconnect_completed.wait()
 
         async with self._processing_packets_consumer_lock:
+            # a new consumer showed up before the grace period below ran
+            # out — cancel the pending shutdown, the processor should keep
+            # running
+            if self._stop_on_demand_task is not None:
+                self._stop_on_demand_task.cancel()
+                self._stop_on_demand_task = None
+
             # start consuming
-            if self._processing_packets_consumer_count == 0:
+            if self._processing_packets_consumer_count == 0 and self._on_demand_streaming_task is None:
                 await self._start_on_demand_stream_processor()
 
             self._processing_packets_consumer_count += 1
@@ -399,7 +407,21 @@ class ClientApiConnection:
             async with self._processing_packets_consumer_lock:
                 self._processing_packets_consumer_count -= 1
 
-                # stop consuming when no consumer left
+                # stop consuming when no consumer left — but only after a
+                # short grace period. Tearing the on-demand task down and
+                # immediately recreating it (e.g. right between
+                # request_config() finishing and the primary listener
+                # reattaching) made a normal consumer handoff look like a
+                # lost connection and forced a full reconnect — repeatedly,
+                # in a tight loop. Waiting briefly avoids tearing it down
+                # for handoffs that reattach almost immediately.
+                if self._processing_packets_consumer_count == 0:
+                    self._stop_on_demand_task = asyncio.create_task(self._delayed_stop_on_demand_stream_processor())
+
+    async def _delayed_stop_on_demand_stream_processor(self) -> None:
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.sleep(2)
+            async with self._processing_packets_consumer_lock:
                 if self._processing_packets_consumer_count == 0:
                     await self._stop_on_demand_steaming_task()
 
