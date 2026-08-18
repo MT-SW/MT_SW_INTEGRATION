@@ -141,6 +141,19 @@ async def async_setup_entry(
         raise ConfigEntryNotReady from e
 
     gateway_node = await client.async_get_own_node()
+    if "num" not in gateway_node:
+        # connected_node_ready() can flip true slightly before the separate listener that
+        # populates our own node's info catches up with the same packet stream (a real race
+        # under rapid reconnects, e.g. right at startup). Fail cleanly here so HA retries the
+        # whole setup shortly, instead of crashing mid-setup with a raw KeyError and leaving
+        # some platforms registered and others not.
+        try:
+            await client.disconnect()
+        except Exception:  # noqa: BLE001
+            pass
+        msg = "Connected, but the gateway node's own info is not available yet"
+        raise ConfigEntryNotReady(msg)
+
     entry.runtime_data = MeshtasticData(
         client=client,
         integration=async_get_loaded_integration(hass, entry.domain),
