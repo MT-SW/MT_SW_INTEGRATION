@@ -793,7 +793,13 @@ class MeshInterface:
                         self._logger.debug("Reconnect connection succeeded, requesting config")
 
                     try:
-                        await asyncio.wait_for(self._connection.request_config(minimal=self.no_nodes), timeout=60)
+                        # Warm reconnect nie potrzebuje już pełnej bazy nodów — mamy ją
+                        # w pamięci (_node_database przetrwa reconnect, czyszczona jest
+                        # tylko raz, przy pierwszym starcie w _start_config()). Ciągnięcie
+                        # pełnego configu przy każdym reconnect niepotrzebnie obciążało
+                        # transfer, zwłaszcza po tym jak poprawki identity-key zaczęły
+                        # poprawnie trzymać pełną listę 63 nodów zamiast ich gubić.
+                        await asyncio.wait_for(self._connection.request_config(minimal=True), timeout=60)
                         if not self._connected_node_ready.is_set():
                             self._logger.debug("Completed first request config as part of reconnect")
                             self._connected_node_ready.set()
