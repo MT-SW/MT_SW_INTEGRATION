@@ -136,7 +136,15 @@ class MeshtasticTcpProxy:
                         ClientApiConnection._protobuf_log(packet[1]),  # noqa: SLF001
                     )
 
-                    await self._interface._connection._send_packet(packet[0])  # noqa: SLF001
+                    try:
+                        await self._interface._connection._send_packet(packet[0])  # noqa: SLF001
+                    except Exception:  # noqa: BLE001
+                        # A transient hiccup on the upstream connection (e.g. mid-reconnect)
+                        # shouldn't tear down this client's whole proxy session — just drop
+                        # this one forwarded packet and keep listening.
+                        _LOGGER.debug(
+                            "Failed forwarding packet from %s to gateway, dropping", peer_name, exc_info=True
+                        )
 
             async def forward_from_radio() -> None:
                 while client_connection.is_connected:
