@@ -165,6 +165,7 @@ class MeshInterface:
             defaultdict(list)
         )
         self._previous_reconnects = deque(maxlen=10)
+        self._heartbeat_consecutive_failures = 0
 
         # MQTT client for persistent connection
         self._mqtt_proxy_enabled = enable_mqtt_proxy
@@ -528,10 +529,18 @@ class MeshInterface:
                 else:
                     # use as fallback when we did not succeed to connect, and we don't have a node id
                     await self._connection.send_heartbeat()
-            except Exception:  # noqa: BLE001
-                self._logger.info("Heartbeat failed, reconnecting", exc_info=True)
-                await self._reconnect_while_running(force=True)
+            except Exception:
+                self._heartbeat_consecutive_failures += 1
+                self._logger.info(
+                    "Heartbeat failed (%d in a row)", self._heartbeat_consecutive_failures, exc_info=True
+                )
+                # jedna nieudana próba nie znaczy że połączenie jest martwe —
+                # wymuszamy reconnect dopiero po dwóch z rzędu
+                if self._heartbeat_consecutive_failures >= 2:
+                    self._logger.info("Heartbeat failed repeatedly, reconnecting")
+                    await self._reconnect_while_running(force=True)
             else:
+                self._heartbeat_consecutive_failures = 0
                 self._logger.debug("Heartbeat success")
 
     async def _process_connected_node_packets(self, packet: mesh_pb2.FromRadio) -> None:
