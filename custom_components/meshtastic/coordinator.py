@@ -327,6 +327,15 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             filter_changed = True
             existing_live = existing["id"] in node_infos
             current_live = el_config["id"] in node_infos
+            # the node database keeps old entries around after a reconnect (see the
+            # "warm reconnect" note above), so both can show up as technically
+            # "live" even when one of them is actually stale. When that happens,
+            # break the tie using whichever one has reported in more recently.
+            if existing_live and current_live:
+                existing_last_heard = node_infos[existing["id"]].get("lastHeard") or 0
+                current_last_heard = node_infos[el_config["id"]].get("lastHeard") or 0
+                current_live = current_last_heard > existing_last_heard
+                existing_live = not current_live
             if current_live and not existing_live:
                 self._logger.info(
                     "Dropping duplicate filter entry for node %d (superseded by live node %d, identity %s)",
