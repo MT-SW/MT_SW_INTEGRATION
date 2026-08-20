@@ -298,9 +298,15 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 # the dedup below over the node's real, current number. Best-effort:
                 # never let a failure here (radio asleep/busy) break the data update.
                 try:
-                    await self.config_entry.runtime_data.client.async_remove_node(tracked_num)
+                    removed = await self.config_entry.runtime_data.client.async_remove_node(tracked_num)
+                    if removed:
+                        self._logger.info("Removed stale node %d from the on-device node database", tracked_num)
+                    else:
+                        self._logger.warning(
+                            "Gateway did not confirm removing stale node %d from its node database", tracked_num
+                        )
                 except Exception:  # noqa: BLE001
-                    self._logger.debug(
+                    self._logger.warning(
                         "Failed to remove stale node %d from the on-device node database",
                         tracked_num,
                         exc_info=True,
@@ -343,7 +349,8 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             # the node database keeps old entries around after a reconnect (see the
             # "warm reconnect" note above), so both can show up as technically
             # "live" even when one of them is actually stale. When that happens,
-            # break the tie using whichever one has reported in more recently.
+            # break the tie using whichever one has reported in more recently —
+            # a safety net for entries that predate the on-device cleanup above.
             if existing_live and current_live:
                 existing_last_heard = node_infos[existing["id"]].get("lastHeard") or 0
                 current_last_heard = node_infos[el_config["id"]].get("lastHeard") or 0
@@ -362,9 +369,15 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 resolved_node_nums.discard(existing["id"])
                 resolved_node_nums.add(el_config["id"])
                 try:
-                    await self.config_entry.runtime_data.client.async_remove_node(existing["id"])
+                    removed = await self.config_entry.runtime_data.client.async_remove_node(existing["id"])
+                    if removed:
+                        self._logger.info("Removed stale node %d from the on-device node database", existing["id"])
+                    else:
+                        self._logger.warning(
+                            "Gateway did not confirm removing stale node %d from its node database", existing["id"]
+                        )
                 except Exception:  # noqa: BLE001
-                    self._logger.debug(
+                    self._logger.warning(
                         "Failed to remove stale node %d from the on-device node database",
                         existing["id"],
                         exc_info=True,
@@ -378,9 +391,15 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 )
                 resolved_node_nums.discard(el_config["id"])
                 try:
-                    await self.config_entry.runtime_data.client.async_remove_node(el_config["id"])
+                    removed = await self.config_entry.runtime_data.client.async_remove_node(el_config["id"])
+                    if removed:
+                        self._logger.info("Removed stale node %d from the on-device node database", el_config["id"])
+                    else:
+                        self._logger.warning(
+                            "Gateway did not confirm removing stale node %d from its node database", el_config["id"]
+                        )
                 except Exception:  # noqa: BLE001
-                    self._logger.debug(
+                    self._logger.warning(
                         "Failed to remove stale node %d from the on-device node database",
                         el_config["id"],
                         exc_info=True,
