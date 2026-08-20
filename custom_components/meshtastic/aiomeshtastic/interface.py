@@ -153,6 +153,15 @@ class MeshInterface:
         self._node_database: dict[int, dict[str, Any]] = {}
         self._queue: asyncio.Queue = asyncio.Queue()
 
+        # Raw FromRadio bytes captured during our own config fetch (my_info, metadata,
+        # channel, node_info, config, moduleConfig), replayed to a second proxy client's
+        # own want_config request instead of forwarding it to the device — a second full
+        # config dump is expensive for a memory-constrained device to generate twice.
+        # Stored as raw bytes (not reconstructed) so replay can't introduce any protocol
+        # mismatch versus what the device actually sent.
+        self._config_reply_cache: list[bytes] = []
+        self._config_reply_cache_complete = False
+
         self._processing_tasks: set[asyncio.Task] = set()
         self._background_tasks: set[asyncio.Task] = set()
 
@@ -608,6 +617,24 @@ class MeshInterface:
     @process_while_running
     async def _process_from_radio_packets_loop(self) -> None:
         async for from_radio in self._listen_while_running():
+            if from_radio.HasField("my_info"):
+                # a fresh config response is starting — reset the cache used to answer a
+                # second proxy client's own want_config without re-asking the device for
+                # a whole second copy of it
+                self._config_reply_cache = []
+                self._config_reply_cache_complete = False
+            if from_radio.HasField("config_complete_id"):
+                self._config_reply_cache_complete = True
+            elif (
+                from_radio.HasField("my_info")
+                or from_radio.HasField("metadata")
+                or from_radio.HasField("channel")
+                or from_radio.HasField("node_info")
+                or from_radio.HasField("config")
+                or from_radio.HasField("moduleConfig")
+            ):
+                self._config_reply_cache.append(from_radio.SerializeToString())
+
             await self._process_connected_node_packets(from_radio)
             await self._process_node_info(from_radio)
 
@@ -615,6 +642,12 @@ class MeshInterface:
                 await listener.notify(from_radio)
 
             await self._process_packet_for_app_listener(from_radio)
+
+    def get_config_reply_cache(self) -> list[bytes] | None:
+        """Return our own cached config-phase FromRadio bytes, or None if not (yet) complete."""
+        if not self._config_reply_cache_complete:
+            return None
+        return list(self._config_reply_cache)
 
     async def _process_packet_for_app_listener(self, from_radio: mesh_pb2.FromRadio) -> None:  # noqa: PLR0912
         packet = Packet(from_radio)
