@@ -161,6 +161,15 @@ async def async_setup_entry(
         gateway_node=gateway_node,
     )
 
+    # Start the TCP proxy as early as possible — it only needs entry.runtime_data
+    # (set just above), not the rest of this function. Other integrations connecting
+    # through it (e.g. a second HA integration sharing this node) shouldn't have to
+    # wait for platform/entity/device/service setup to finish before the port opens.
+    if entry.options.get(CONF_OPTION_TCP_PROXY, {}).get(
+        CONF_OPTION_TCP_PROXY_ENABLE, CONF_OPTION_TCP_PROXY_ENABLE_DEFAULT
+    ):
+        await async_setup_tcp_proxy(hass, entry)
+
     if entry.state == ConfigEntryState.SETUP_IN_PROGRESS:
         await coordinator.async_config_entry_first_refresh()
 
@@ -183,11 +192,6 @@ async def async_setup_entry(
         CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT
     ):
         await async_setup_meshtastic_web(hass)
-
-    if entry.options.get(CONF_OPTION_TCP_PROXY, {}).get(
-        CONF_OPTION_TCP_PROXY_ENABLE, CONF_OPTION_TCP_PROXY_ENABLE_DEFAULT
-    ):
-        await async_setup_tcp_proxy(hass, entry)
 
     return True
 
