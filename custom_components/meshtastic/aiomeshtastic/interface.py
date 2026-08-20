@@ -854,6 +854,12 @@ class MeshInterface:
         admin_message.set_time_only = time_secs
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
+    async def remove_node_from_database(self, node_num_to_remove: int, node: int | None = None) -> None:
+        """Ask the connected node to drop a stale entry from its own on-device node database."""
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.remove_by_nodenum = node_num_to_remove
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
     async def write_timezone_if_needed(self, node: int | None = None) -> bool:
         tz_string = await asyncio.get_running_loop().run_in_executor(None, self._get_tz_string)
         if tz_string is None:
