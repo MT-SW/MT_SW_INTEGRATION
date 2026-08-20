@@ -112,10 +112,7 @@ class MeshtasticApiClient:
             raise ValueError(msg)
 
         self._interface = AioMeshInterface(
-            # 5 minut było zbyt rzadko, by zapobiec zrywaniu połączenia przez
-            # bezczynność (obserwowane rozłączenia ~5s po connect); częstszy
-            # heartbeat utrzymuje ruch na łączu.
-            connection=connection, no_nodes=no_nodes, heartbeat_interval=timedelta(seconds=60)
+            connection=connection, no_nodes=no_nodes, heartbeat_interval=timedelta(minutes=5)
         )
         self._packet_processor: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
