@@ -843,11 +843,21 @@ class MeshInterface:
         admin_message.set_time_only = time_secs
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
-    async def remove_node_from_database(self, node_num_to_remove: int, node: int | None = None) -> None:
-        """Ask the connected node to drop a stale entry from its own on-device node database."""
+    async def remove_node_from_database(self, node_num_to_remove: int, node: int | None = None) -> bool:
+        """Ask the connected node to drop a stale entry from its own on-device node database.
+
+        Uses the ack-confirmed send (not send_admin_message_await_response with
+        expect_response=False) so a failed delivery is actually detectable instead of
+        silently doing nothing — the previous version never confirmed anything was
+        delivered.
+        """
         admin_message = admin_pb2.AdminMessage()
         admin_message.remove_by_nodenum = node_num_to_remove
-        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        if node is None:
+            await self._connected_node_ready.wait()
+            node = self._connected_node_info.my_node_num
+        result = await self.send_admin_message(node, admin_message, ack=True)
+        return result is not None
 
     async def write_timezone_if_needed(self, node: int | None = None) -> bool:
         tz_string = await asyncio.get_running_loop().run_in_executor(None, self._get_tz_string)
