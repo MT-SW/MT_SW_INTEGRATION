@@ -124,11 +124,73 @@ async def async_unload_meshtastic_web(hass: HomeAssistant) -> bool:
     else:
         return True
 
+_UNIT_MIGRATIONS: list[tuple[str, str, str]] = [
+    ("environment_current", "A", "mA"),
+    ("stats_heap_total_bytes", "B", "kB"),
+    ("stats_heap_free_bytes", "B", "kB"),
+    ("host_freemem_bytes", "B", "kB"),
+    ("host_diskfree1_bytes", "B", "kB"),
+    ("host_diskfree2_bytes", "B", "kB"),
+    ("host_diskfree3_bytes", "B", "kB"),
+]
+
+_PRECISION_MIGRATION_KEYS: set[str] = {
+    "device_voltage", "power_ch1_voltage", "power_ch1_current",
+    "power_ch2_voltage", "power_ch2_current", "power_ch3_voltage", "power_ch3_current",
+    "device_channel_utilization", "device_airtime", "node_snr",
+    "stats_heap_total_bytes", "stats_heap_free_bytes", "stats_noise_floor",
+    "environment_temperature", "environment_relative_humidity", "environment_barometric_pressure",
+    "environment_gas_resistance", "environment_distance", "environment_lux", "environment_white_lux",
+    "environment_ir_lux", "environment_uv_lux", "environment_wind_speed", "environment_wind_gust",
+    "environment_wind_lull", "environment_voltage", "environment_current",
+    "environment_rainfall1h", "environment_rainfall24h", "environment_soil_moisture",
+    "environment_soil_temperature",
+    "airquality_pm10_standard", "airquality_pm25_standard", "airquality_pm100_standard",
+    "airquality_pm10_environmental", "airquality_pm25_environmental", "airquality_pm100_environmental",
+    "airquality_particles03um", "airquality_particles05um", "airquality_particles10um",
+    "airquality_particles25um", "airquality_particles50um", "airquality_particles100um",
+    "host_load1", "host_load5", "host_load15",
+}
+
+
+def _migrate_sensor_display_options(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain != "sensor" or not reg_entry.unique_id:
+            continue
+
+        for key, old_unit, new_unit in _UNIT_MIGRATIONS:
+            if reg_entry.unique_id.endswith(f"_{key}") and reg_entry.unit_of_measurement == old_unit:
+                try:
+                    registry.async_update_entity(reg_entry.entity_id, unit_of_measurement=new_unit)
+                except Exception:  # noqa: BLE001
+                    LOGGER.warning("Failed migrating unit for %s", reg_entry.entity_id, exc_info=True)
+                break
+
+        for key in _PRECISION_MIGRATION_KEYS:
+            if not reg_entry.unique_id.endswith(f"_{key}"):
+                continue
+            sensor_options = reg_entry.options.get("sensor", {})
+            if "display_precision" in sensor_options or "suggested_display_precision" in sensor_options:
+                break
+            try:
+                registry.async_update_entity(
+                    reg_entry.entity_id,
+                    options={
+                        **reg_entry.options,
+                        "sensor": {**sensor_options, "display_precision": 2, "suggested_display_precision": 2},
+                    },
+                )
+            except Exception:  # noqa: BLE001
+                LOGGER.warning("Failed migrating precision for %s", reg_entry.entity_id, exc_info=True)
+            break
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
 ) -> bool:
+    _migrate_sensor_display_options(hass, entry)
+
     coordinator = MeshtasticDataUpdateCoordinator(hass=hass)
     if coordinator.config_entry is None:
         coordinator.config_entry = entry
