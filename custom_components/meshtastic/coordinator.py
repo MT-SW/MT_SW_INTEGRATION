@@ -292,6 +292,19 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                         ATTR_EVENT_MESHTASTIC_IDENTITY_NEW_NODE: new_num,
                     },
                 )
+                # also ask the gateway to drop the now-stale old number from its own
+                # on-device node database, so it stops being reported as "live" in
+                # future polls — this is what previously let a stale old number win
+                # the dedup below over the node's real, current number. Best-effort:
+                # never let a failure here (radio asleep/busy) break the data update.
+                try:
+                    await self.config_entry.runtime_data.client.async_remove_node(tracked_num)
+                except Exception:  # noqa: BLE001
+                    self._logger.debug(
+                        "Failed to remove stale node %d from the on-device node database",
+                        tracked_num,
+                        exc_info=True,
+                    )
                 # self-heal the configured number so the filter (and the
                 # options UI) reflect where this node actually lives now
                 updated_el = {**el_config, "id": new_num, "identity_key": known_identity_key}
