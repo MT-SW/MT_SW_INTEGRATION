@@ -153,13 +153,16 @@ class MeshInterface:
         self._node_database: dict[int, dict[str, Any]] = {}
         self._queue: asyncio.Queue = asyncio.Queue()
 
-        # Raw FromRadio bytes captured during our own config fetch (my_info, metadata,
-        # channel, node_info, config, moduleConfig), replayed to a second proxy client's
-        # own want_config request instead of forwarding it to the device — a second full
-        # config dump is expensive for a memory-constrained device to generate twice.
-        # Stored as raw bytes (not reconstructed) so replay can't introduce any protocol
-        # mismatch versus what the device actually sent.
-        self._config_reply_cache: list[bytes] = []
+        # Cached config-phase FromRadio bytes (my_info, metadata, channel, node_info,
+        # config, moduleConfig), replayed to a second proxy client's own want_config
+        # request instead of forwarding it to the device — a second full config dump is
+        # expensive for a memory-constrained device to generate twice. Keyed per logical
+        # item (e.g. per channel index / per node num) so a warm reconnect's minimal
+        # config (which doesn't resend node_info) can't wipe out entries it didn't
+        # refresh — only a full fetch (_start_config) clears this, same as
+        # _node_database. Stored as raw bytes (not reconstructed) so replay can't
+        # introduce any protocol mismatch versus what the device actually sent.
+        self._config_reply_cache: dict[tuple, bytes] = {}
         self._config_reply_cache_complete = False
 
         self._processing_tasks: set[asyncio.Task] = set()
@@ -336,13 +339,7 @@ class MeshInterface:
         )
 
         async def get_config() -> None:
-            try:
-                await self._start_config()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                self._logger.warning("Initial config request failed, reconnecting", exc_info=True)
-                await self._reconnect_while_running(force=True)
+            await self._start_config()
 
         self._add_background_task(get_config(), name="get-config")
 
@@ -617,23 +614,21 @@ class MeshInterface:
     @process_while_running
     async def _process_from_radio_packets_loop(self) -> None:
         async for from_radio in self._listen_while_running():
-            if from_radio.HasField("my_info"):
-                # a fresh config response is starting — reset the cache used to answer a
-                # second proxy client's own want_config without re-asking the device for
-                # a whole second copy of it
-                self._config_reply_cache = []
-                self._config_reply_cache_complete = False
-            if from_radio.HasField("config_complete_id"):
+            variant = from_radio.WhichOneof("payload_variant")
+            if variant == "config_complete_id":
                 self._config_reply_cache_complete = True
-            elif (
-                from_radio.HasField("my_info")
-                or from_radio.HasField("metadata")
-                or from_radio.HasField("channel")
-                or from_radio.HasField("node_info")
-                or from_radio.HasField("config")
-                or from_radio.HasField("moduleConfig")
-            ):
-                self._config_reply_cache.append(from_radio.SerializeToString())
+            elif variant == "channel":
+                self._config_reply_cache[("channel", from_radio.channel.index)] = from_radio.SerializeToString()
+            elif variant == "node_info":
+                self._config_reply_cache[("node_info", from_radio.node_info.num)] = from_radio.SerializeToString()
+            elif variant == "config":
+                sub = from_radio.config.WhichOneof("payload_variant")
+                self._config_reply_cache[("config", sub)] = from_radio.SerializeToString()
+            elif variant == "moduleConfig":
+                sub = from_radio.moduleConfig.WhichOneof("payload_variant")
+                self._config_reply_cache[("moduleConfig", sub)] = from_radio.SerializeToString()
+            elif variant in ("my_info", "metadata"):
+                self._config_reply_cache[(variant, None)] = from_radio.SerializeToString()
 
             await self._process_connected_node_packets(from_radio)
             await self._process_node_info(from_radio)
@@ -647,7 +642,7 @@ class MeshInterface:
         """Return our own cached config-phase FromRadio bytes, or None if not (yet) complete."""
         if not self._config_reply_cache_complete:
             return None
-        return list(self._config_reply_cache)
+        return list(self._config_reply_cache.values())
 
     async def _process_packet_for_app_listener(self, from_radio: mesh_pb2.FromRadio) -> None:  # noqa: PLR0912
         packet = Packet(from_radio)
@@ -826,7 +821,13 @@ class MeshInterface:
                         self._logger.debug("Reconnect connection succeeded, requesting config")
 
                     try:
-                        await asyncio.wait_for(self._connection.request_config(minimal=self.no_nodes), timeout=60)
+                        # Warm reconnect doesn't need the full node database again — we
+                        # already have it in memory (_node_database survives reconnect,
+                        # only cleared once at initial connect in _start_config()).
+                        # Pulling a full config on every reconnect is expensive for the
+                        # device to generate, and matters a lot more now that reconnects
+                        # can happen frequently.
+                        await asyncio.wait_for(self._connection.request_config(minimal=True), timeout=60)
                         if not self._connected_node_ready.is_set():
                             self._logger.debug("Completed first request config as part of reconnect")
                             self._connected_node_ready.set()
@@ -859,6 +860,8 @@ class MeshInterface:
             self._connected_node_channels: list[channel_pb2.Channel] | None = []
             self._connected_node_queue_status: mesh_pb2.QueueStatus | None = None
             self._node_database = {}
+            self._config_reply_cache = {}
+            self._config_reply_cache_complete = False
 
             await self._connection.request_config(minimal=self.no_nodes)
             self._connected_node_ready.set()
