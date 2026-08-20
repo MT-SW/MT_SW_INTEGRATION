@@ -159,13 +159,15 @@ def _migrate_sensor_display_options(hass: HomeAssistant, entry: MeshtasticConfig
         if reg_entry.domain != "sensor" or not reg_entry.unique_id:
             continue
 
-        for key, old_unit, new_unit in _UNIT_MIGRATIONS:
-            if reg_entry.unique_id.endswith(f"_{key}") and reg_entry.unit_of_measurement == old_unit:
+        for key, _old_unit, new_unit in _UNIT_MIGRATIONS:
+            if not reg_entry.unique_id.endswith(f"_{key}"):
+                continue
+            if reg_entry.unit_of_measurement != new_unit:
                 try:
                     registry.async_update_entity(reg_entry.entity_id, unit_of_measurement=new_unit)
                 except Exception:  # noqa: BLE001
                     LOGGER.warning("Failed migrating unit for %s", reg_entry.entity_id, exc_info=True)
-                break
+            break
 
         for key in _PRECISION_MIGRATION_KEYS:
             if not reg_entry.unique_id.endswith(f"_{key}"):
