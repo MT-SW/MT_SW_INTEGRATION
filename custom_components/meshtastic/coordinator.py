@@ -361,6 +361,14 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 seen_by_identity[identity_key] = el_config
                 resolved_node_nums.discard(existing["id"])
                 resolved_node_nums.add(el_config["id"])
+                try:
+                    await self.config_entry.runtime_data.client.async_remove_node(existing["id"])
+                except Exception:  # noqa: BLE001
+                    self._logger.debug(
+                        "Failed to remove stale node %d from the on-device node database",
+                        existing["id"],
+                        exc_info=True,
+                    )
             else:
                 self._logger.info(
                     "Dropping duplicate filter entry for node %d (identity %s already tracked via node %d)",
@@ -369,6 +377,14 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                     existing["id"],
                 )
                 resolved_node_nums.discard(el_config["id"])
+                try:
+                    await self.config_entry.runtime_data.client.async_remove_node(el_config["id"])
+                except Exception:  # noqa: BLE001
+                    self._logger.debug(
+                        "Failed to remove stale node %d from the on-device node database",
+                        el_config["id"],
+                        exc_info=True,
+                    )
         updated_filter_nodes = deduped_filter_nodes
 
         if filter_changed:
