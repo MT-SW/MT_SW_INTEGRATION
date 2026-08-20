@@ -109,6 +109,14 @@ class MeshtasticTcpProxy:
             self._should_stop = False
 
     async def _handle_client(self, reader: StreamReader, writer: StreamWriter) -> None:
+        # Accept the TCP connection immediately (so a client never sees "connection refused"
+        # right after startup), but hold off on actually forwarding anything until our own
+        # handshake with the gateway is fully done. Forwarding a client's packets to the same
+        # underlying connection while that handshake is still in progress races against it and
+        # can silently wedge the whole read loop.
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._interface.connected_node_ready(), timeout=60)
+
         queue = asyncio.Queue()
         self._client_queues.add(queue)
         client_connection = ClientProxyTransport(reader, writer)
