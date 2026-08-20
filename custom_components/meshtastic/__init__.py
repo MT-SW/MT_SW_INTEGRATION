@@ -159,31 +159,31 @@ def _migrate_sensor_display_options(hass: HomeAssistant, entry: MeshtasticConfig
         if reg_entry.domain != "sensor" or not reg_entry.unique_id:
             continue
 
+        sensor_options = reg_entry.options.get("sensor", {})
+        new_sensor_options = dict(sensor_options)
+
         for key, _old_unit, new_unit in _UNIT_MIGRATIONS:
-            if not reg_entry.unique_id.endswith(f"_{key}"):
-                continue
-            if reg_entry.unit_of_measurement != new_unit:
-                try:
-                    registry.async_update_entity(reg_entry.entity_id, unit_of_measurement=new_unit)
-                except Exception:  # noqa: BLE001
-                    LOGGER.warning("Failed migrating unit for %s", reg_entry.entity_id, exc_info=True)
-            break
+            if reg_entry.unique_id.endswith(f"_{key}"):
+                # SensorEntity reads a per-entity unit override from
+                # options["sensor"]["unit_of_measurement"], not from the top-level
+                # RegistryEntry.unit_of_measurement field — setting the latter (via
+                # async_update_entity(unit_of_measurement=...)) is stored but never
+                # actually read for display, so it silently does nothing.
+                new_sensor_options["unit_of_measurement"] = new_unit
+                break
 
         for key in _PRECISION_MIGRATION_KEYS:
-            if not reg_entry.unique_id.endswith(f"_{key}"):
-                continue
-            sensor_options = reg_entry.options.get("sensor", {})
-            if "display_precision" in sensor_options or "suggested_display_precision" in sensor_options:
+            if reg_entry.unique_id.endswith(f"_{key}"):
+                if "display_precision" not in sensor_options and "suggested_display_precision" not in sensor_options:
+                    new_sensor_options["display_precision"] = 2
+                    new_sensor_options["suggested_display_precision"] = 2
                 break
+
+        if new_sensor_options != sensor_options:
             try:
-                registry.async_update_entity_options(
-                    reg_entry.entity_id,
-                    "sensor",
-                    {**sensor_options, "display_precision": 2, "suggested_display_precision": 2},
-                )
+                registry.async_update_entity_options(reg_entry.entity_id, "sensor", new_sensor_options)
             except Exception:  # noqa: BLE001
-                LOGGER.warning("Failed migrating precision for %s", reg_entry.entity_id, exc_info=True)
-            break
+                LOGGER.warning("Failed migrating display options for %s", reg_entry.entity_id, exc_info=True)
 
 async def async_setup_entry(
     hass: HomeAssistant,
