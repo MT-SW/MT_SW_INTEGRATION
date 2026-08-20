@@ -174,12 +174,10 @@ def _migrate_sensor_display_options(hass: HomeAssistant, entry: MeshtasticConfig
             if "display_precision" in sensor_options or "suggested_display_precision" in sensor_options:
                 break
             try:
-                registry.async_update_entity(
+                registry.async_update_entity_options(
                     reg_entry.entity_id,
-                    options={
-                        **reg_entry.options,
-                        "sensor": {**sensor_options, "display_precision": 2, "suggested_display_precision": 2},
-                    },
+                    "sensor",
+                    {**sensor_options, "display_precision": 2, "suggested_display_precision": 2},
                 )
             except Exception:  # noqa: BLE001
                 LOGGER.warning("Failed migrating precision for %s", reg_entry.entity_id, exc_info=True)
