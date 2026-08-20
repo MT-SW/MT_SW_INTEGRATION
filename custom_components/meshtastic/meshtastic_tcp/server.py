@@ -205,6 +205,11 @@ class MeshtasticTcpProxy:
                 _LOGGER.warning(
                     "Failure while forwarding from gateway, waiting for reconnect before retrying", exc_info=True
                 )
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(self._interface.connected_node_ready(), timeout=30)
-                await asyncio.sleep(2)
+                # Retry the moment the upstream connection is ready again instead of always
+                # padding with a flat sleep on top — every client's queue sits empty for the
+                # whole recovery window, so keeping this short matters more now that the
+                # underlying connection reconnects more often.
+                try:
+                    await asyncio.wait_for(self._interface.connected_node_ready(), timeout=10)
+                except TimeoutError:
+                    await asyncio.sleep(2)
