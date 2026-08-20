@@ -29,7 +29,6 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
-    UnitOfTime,
     UnitOfVolumetricFlux,
 )
 
@@ -46,6 +45,23 @@ if TYPE_CHECKING:
     from .coordinator import MeshtasticDataUpdateCoordinator
     from .data import MeshtasticConfigEntry, MeshtasticData
 
+def _format_uptime(total_seconds: int | None) -> str | None:
+    if total_seconds is None:
+        return None
+    total_seconds = int(total_seconds)
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours or parts:
+        parts.append(f"{hours}h")
+    if minutes or parts:
+        parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+    return " ".join(parts)
 
 def _build_sensors(nodes: Mapping[int, Mapping[str, Any]], runtime_data: MeshtasticData) -> Iterable[MeshtasticSensor]:
     entities = []
@@ -228,12 +244,9 @@ def _build_device_sensors(
                 key="device_uptime",
                 name="Uptime",
                 icon="mdi:progress-clock",
-                native_unit_of_measurement=UnitOfTime.SECONDS,
-                device_class=SensorDeviceClass.DURATION,
-                state_class=SensorStateClass.TOTAL_INCREASING,
-                value_fn=lambda device: device.coordinator.data[device.node_id]
-                .get("deviceMetrics", {})
-                .get("uptimeSeconds", None),
+                value_fn=lambda device: _format_uptime(
+                    device.coordinator.data[device.node_id].get("deviceMetrics", {}).get("uptimeSeconds", None)
+                ),
             ),
             gateway=gateway,
             node_id=node_id,
@@ -749,18 +762,28 @@ def _build_host_metrics_sensors(
                 )
             )
 
+    entities += [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="host_uptime_seconds",
+                name="Uptime",
+                icon="mdi:progress-clock",
+                value_fn=lambda device: _format_uptime(
+                    device.coordinator.data[device.node_id].get("hostMetrics", {}).get("uptimeSeconds", None)
+                ),
+            ),
+            gateway=gateway,
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes_with_host_metrics.items()
+        if "uptimeSeconds" in node_info["hostMetrics"]
+    ]
+
     try:
         for node_id, node_info in nodes_with_host_metrics.items():
             add_sensor = partial(add_sensor_base, node_id, node_info)
 
-            add_sensor(
-                "uptimeSeconds",
-                SensorDeviceClass.DURATION,
-                UnitOfTime.SECONDS,
-                SensorStateClass.TOTAL_INCREASING,
-                name="Uptime",
-                suggested_display_precision=None,
-            )
             add_sensor(
                 "freememBytes",
                 SensorDeviceClass.DATA_SIZE,
