@@ -327,13 +327,7 @@ class MeshInterface:
         )
 
         async def get_config() -> None:
-            try:
-                await self._start_config()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                self._logger.warning("Initial config request failed, reconnecting", exc_info=True)
-                await self._reconnect_while_running(force=True)
+            await self._start_config()
 
         self._add_background_task(get_config(), name="get-config")
 
@@ -528,14 +522,9 @@ class MeshInterface:
                 else:
                     # use as fallback when we did not succeed to connect, and we don't have a node id
                     await self._connection.send_heartbeat()
-            except Exception:
-                # request_connection_status() okazał się niewiarygodnym sygnałem
-                # zdrowia połączenia na tym firmware — zawodzi zbyt często nawet
-                # na w pełni sprawnym łączu, by traktować to jako powód do
-                # wymuszonego reconnectu. Prawdziwe rozłączenia są i tak wykrywane
-                # przez sam strumień pakietów. Heartbeat jest teraz tylko
-                # informacyjny.
-                self._logger.info("Heartbeat failed (informational only, not forcing reconnect)", exc_info=True)
+            except Exception:  # noqa: BLE001
+                self._logger.info("Heartbeat failed, reconnecting", exc_info=True)
+                await self._reconnect_while_running(force=True)
             else:
                 self._logger.debug("Heartbeat success")
 
@@ -643,13 +632,13 @@ class MeshInterface:
         if packet.port_num == portnums_pb2.PortNum.TELEMETRY_APP:
             telemetry = packet.app_payload
             telemetry_info = google.protobuf.json_format.MessageToDict(telemetry)
-            self._get_or_create_node(node_id)
-            await self._node_database_update(node_id, **telemetry_info)
+            if node_id in self._node_database:
+                await self._node_database_update(node_id, **telemetry_info)
         elif packet.port_num == portnums_pb2.PortNum.POSITION_APP:
             position = packet.app_payload
             position_info = google.protobuf.json_format.MessageToDict(position)
-            self._get_or_create_node(node_id)
-            await self._node_database_update(node_id, position=position_info)
+            if node_id in self._node_database:
+                await self._node_database_update(node_id, position=position_info))
         elif packet.port_num == portnums_pb2.PortNum.NODEINFO_APP:
             node_info = packet.app_payload
             node_info_dict = google.protobuf.json_format.MessageToDict(node_info)
@@ -798,13 +787,7 @@ class MeshInterface:
                         self._logger.debug("Reconnect connection succeeded, requesting config")
 
                     try:
-                        # Warm reconnect nie potrzebuje już pełnej bazy nodów — mamy ją
-                        # w pamięci (_node_database przetrwa reconnect, czyszczona jest
-                        # tylko raz, przy pierwszym starcie w _start_config()). Ciągnięcie
-                        # pełnego configu przy każdym reconnect niepotrzebnie obciążało
-                        # transfer, zwłaszcza po tym jak poprawki identity-key zaczęły
-                        # poprawnie trzymać pełną listę 63 nodów zamiast ich gubić.
-                        await asyncio.wait_for(self._connection.request_config(minimal=True), timeout=60)
+                        await asyncio.wait_for(self._connection.request_config(minimal=self.no_nodes), timeout=60)
                         if not self._connected_node_ready.is_set():
                             self._logger.debug("Completed first request config as part of reconnect")
                             self._connected_node_ready.set()
