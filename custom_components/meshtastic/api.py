@@ -199,6 +199,12 @@ class MeshtasticApiClient:
             return {}
         return self.get_own_node()
 
+    async def async_remove_node(self, node_num: int) -> None:
+        """Ask the connected gateway to drop a stale node from its own on-device node database."""
+        if not await self._interface.connected_node_ready():
+            return
+        await self._interface.remove_node_from_database(node_num)
+
     def get_own_node(self) -> Mapping[str, Any]:
         return self._interface.connected_node() or {}
 
