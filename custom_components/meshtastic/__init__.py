@@ -185,6 +185,7 @@ def _migrate_sensor_display_options(hass: HomeAssistant, entry: MeshtasticConfig
             except Exception:  # noqa: BLE001
                 LOGGER.warning("Failed migrating display options for %s", reg_entry.entity_id, exc_info=True)
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
@@ -320,6 +321,35 @@ def _legacy_node_ids_from_device(device: dr.DeviceEntry) -> set[int]:
 def _identity_keys_from_device(device: dr.DeviceEntry) -> set[str]:
     """Return every identity-key style identifier (pk_.../num_...) recorded for this device."""
     return {identifier for domain, identifier in device.identifiers if domain == DOMAIN and not identifier.isdigit()}
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """
+    Clean up entities/devices when the user fully removes this integration.
+
+    This only runs on an explicit removal, never on a reload/unload — the identity-key
+    persistence that keeps entities matched across restarts and reloads (the whole point
+    of node_identity_key) is untouched by this. Some of our entities (gateway/channel)
+    are registered through a bespoke path (_add_entities_for_entry) rather than the
+    standard per-platform AddEntitiesCallback flow, which appears to bypass HA's usual
+    automatic entity/device registry cleanup on removal — so it's done explicitly here.
+    """
+    entity_registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        try:
+            entity_registry.async_remove(reg_entry.entity_id)
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Failed to remove entity %s during integration removal", reg_entry.entity_id, exc_info=True)
+
+    device_registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+        try:
+            if device.config_entries == {entry.entry_id}:
+                device_registry.async_remove_device(device.id)
+            else:
+                device_registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Failed to remove device %s during integration removal", device.id, exc_info=True)
 
 
 async def async_remove_config_entry_device(
