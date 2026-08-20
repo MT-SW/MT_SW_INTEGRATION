@@ -139,6 +139,7 @@ def _build_node_sensors(
                 native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS,
                 device_class=SensorDeviceClass.SIGNAL_STRENGTH,
                 state_class=SensorStateClass.MEASUREMENT,
+                suggested_display_precision=2,
                 value_fn=lambda device: device.coordinator.data[device.node_id].get("snr", None),
             ),
             gateway=gateway,
@@ -274,6 +275,7 @@ def _build_device_sensors(
                 native_unit_of_measurement=UnitOfElectricPotential.VOLT,
                 device_class=SensorDeviceClass.VOLTAGE,
                 state_class=SensorStateClass.MEASUREMENT,
+                suggested_display_precision=2,
                 value_fn=lambda device: device.coordinator.data[device.node_id]
                 .get("deviceMetrics", {})
                 .get("voltage", None),
@@ -292,6 +294,7 @@ def _build_device_sensors(
                 icon="mdi:signal-distance-variant",
                 native_unit_of_measurement=PERCENTAGE,
                 state_class=SensorStateClass.MEASUREMENT,
+                suggested_display_precision=2,
                 value_fn=lambda device: device.coordinator.data[device.node_id]
                 .get("deviceMetrics", {})
                 .get("channelUtilization", None),
@@ -310,6 +313,7 @@ def _build_device_sensors(
                 icon="mdi:timer",
                 native_unit_of_measurement=PERCENTAGE,
                 state_class=SensorStateClass.MEASUREMENT,
+                suggested_display_precision=2,
                 value_fn=lambda device: device.coordinator.data[device.node_id]
                 .get("deviceMetrics", {})
                 .get("airUtilTx", None),
@@ -484,6 +488,8 @@ def _build_local_stats_sensors(
                     name="Heap Total",
                     icon="mdi:memory",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+                    suggested_display_precision=2,
                     device_class=SensorDeviceClass.DATA_SIZE,
                     state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
@@ -504,6 +510,8 @@ def _build_local_stats_sensors(
                     name="Heap Free",
                     icon="mdi:memory",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+                    suggested_display_precision=2,
                     device_class=SensorDeviceClass.DATA_SIZE,
                     state_class=SensorStateClass.MEASUREMENT,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
@@ -526,6 +534,7 @@ def _build_local_stats_sensors(
                     native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS,
                     device_class=SensorDeviceClass.SIGNAL_STRENGTH,
                     state_class=SensorStateClass.MEASUREMENT,
+                    suggested_display_precision=2,
                     value_fn=lambda device: device.coordinator.data[device.node_id]
                     .get("localStats", {})
                     .get("noiseFloor", None),
@@ -574,6 +583,7 @@ def _build_power_metrics_sensors(
                                 native_unit_of_measurement=UnitOfElectricPotential.VOLT,
                                 device_class=SensorDeviceClass.VOLTAGE,
                                 state_class=SensorStateClass.MEASUREMENT,
+                                suggested_display_precision=2,
                                 value_fn=power_metrics_value_fn(voltage_key),
                             ),
                             gateway=gateway,
@@ -591,6 +601,7 @@ def _build_power_metrics_sensors(
                                 native_unit_of_measurement=UnitOfElectricCurrent.MILLIAMPERE,
                                 device_class=SensorDeviceClass.CURRENT,
                                 state_class=SensorStateClass.MEASUREMENT,
+                                suggested_display_precision=2,
                                 value_fn=power_metrics_value_fn(current_key),
                             ),
                             gateway=gateway,
@@ -627,6 +638,7 @@ def _build_environment_metrics_sensors(
         device_class: SensorDeviceClass | None,
         unit_of_measurement: str | None = None,
         state_class: SensorStateClass = SensorStateClass.MEASUREMENT,
+        suggested_display_precision: int | None = 2,
     ) -> None:
         key = "".join(["_" + c.lower() if c.isupper() else c for c in value_key]).lstrip("_")
         if value_key in node_info["environmentMetrics"]:
@@ -639,6 +651,7 @@ def _build_environment_metrics_sensors(
                         native_unit_of_measurement=unit_of_measurement,
                         device_class=device_class,
                         state_class=state_class,
+                        suggested_display_precision=suggested_display_precision,
                         value_fn=environment_metrics_value_fn(value_key),
                     ),
                     gateway=gateway,
@@ -654,7 +667,7 @@ def _build_environment_metrics_sensors(
             add_sensor("relativeHumidity", SensorDeviceClass.HUMIDITY, PERCENTAGE)
             add_sensor("barometricPressure", SensorDeviceClass.ATMOSPHERIC_PRESSURE, UnitOfPressure.HPA)
             add_sensor("gasResistance", None, UnitOfPressure.HPA)
-            add_sensor("iaq", SensorDeviceClass.AQI, None)
+            add_sensor("iaq", SensorDeviceClass.AQI, None, suggested_display_precision=None)
 
             add_sensor("distance", SensorDeviceClass.DISTANCE, UnitOfLength.MILLIMETERS)
 
@@ -663,14 +676,16 @@ def _build_environment_metrics_sensors(
             add_sensor("irLux", SensorDeviceClass.ILLUMINANCE, LIGHT_LUX)
             add_sensor("uvLux", SensorDeviceClass.ILLUMINANCE, LIGHT_LUX)
 
-            add_sensor("windDirection", SensorDeviceClass.WIND_SPEED, DEGREE)
+            add_sensor("windDirection", SensorDeviceClass.WIND_SPEED, DEGREE, suggested_display_precision=0)
             add_sensor("windSpeed", SensorDeviceClass.WIND_SPEED, UnitOfSpeed.METERS_PER_SECOND)
             add_sensor("windGust", SensorDeviceClass.WIND_SPEED, UnitOfSpeed.METERS_PER_SECOND)
             add_sensor("windLull", SensorDeviceClass.WIND_SPEED, UnitOfSpeed.METERS_PER_SECOND)
 
-            # deprecated in favor of power metrics
+            # deprecated in favor of power metrics — current here was wrongly labeled as
+            # Amperes; the firmware reports it in milliamps, same scale as power metrics'
+            # per-channel current, it just wasn't converted/labeled to match
             add_sensor("voltage", SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT)
-            add_sensor("current", SensorDeviceClass.CURRENT, UnitOfElectricCurrent.AMPERE)
+            add_sensor("current", SensorDeviceClass.CURRENT, UnitOfElectricCurrent.MILLIAMPERE)
 
             add_sensor(
                 "rainfall1h", SensorDeviceClass.PRECIPITATION_INTENSITY, UnitOfVolumetricFlux.MILLIMETERS_PER_HOUR
@@ -710,6 +725,8 @@ def _build_host_metrics_sensors(
         unit_of_measurement: str | None = None,
         state_class: SensorStateClass = SensorStateClass.MEASUREMENT,
         name: str | None = None,
+        suggested_display_precision: int | None = 2,
+        suggested_unit_of_measurement: str | None = None,
     ) -> None:
         key = "".join(["_" + c.lower() if c.isupper() else c for c in value_key]).lstrip("_")
         if value_key in node_info["hostMetrics"]:
@@ -721,8 +738,10 @@ def _build_host_metrics_sensors(
                         key="host_" + key,
                         translation_key="host_" + key,
                         native_unit_of_measurement=unit_of_measurement,
+                        suggested_unit_of_measurement=suggested_unit_of_measurement,
                         device_class=device_class,
                         state_class=state_class,
+                        suggested_display_precision=suggested_display_precision,
                         value_fn=host_metrics_value_fn(value_key),
                     ),
                     gateway=gateway,
@@ -740,15 +759,40 @@ def _build_host_metrics_sensors(
                 UnitOfTime.SECONDS,
                 SensorStateClass.TOTAL_INCREASING,
                 name="Uptime",
+                suggested_display_precision=None,
             )
-            add_sensor("freememBytes", SensorDeviceClass.DATA_SIZE, UnitOfInformation.BYTES, name="Free Memory")
-            add_sensor("diskfree1Bytes", SensorDeviceClass.DATA_SIZE, UnitOfInformation.BYTES, name="Free Disk")
-            add_sensor("diskfree2Bytes", SensorDeviceClass.DATA_SIZE, UnitOfInformation.BYTES, name="Free Disk 2")
-            add_sensor("diskfree3Bytes", SensorDeviceClass.DATA_SIZE, UnitOfInformation.BYTES, name="Free Disk 3")
+            add_sensor(
+                "freememBytes",
+                SensorDeviceClass.DATA_SIZE,
+                UnitOfInformation.BYTES,
+                name="Free Memory",
+                suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+            )
+            add_sensor(
+                "diskfree1Bytes",
+                SensorDeviceClass.DATA_SIZE,
+                UnitOfInformation.BYTES,
+                name="Free Disk",
+                suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+            )
+            add_sensor(
+                "diskfree2Bytes",
+                SensorDeviceClass.DATA_SIZE,
+                UnitOfInformation.BYTES,
+                name="Free Disk 2",
+                suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+            )
+            add_sensor(
+                "diskfree3Bytes",
+                SensorDeviceClass.DATA_SIZE,
+                UnitOfInformation.BYTES,
+                name="Free Disk 3",
+                suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+            )
             add_sensor("load1", None, PERCENTAGE, name="Load 1")
             add_sensor("load5", None, PERCENTAGE, name="Load 5")
             add_sensor("load15", None, PERCENTAGE, name="Load 15")
-            add_sensor("userString", None, None, state_class=None, name="User String")
+            add_sensor("userString", None, None, state_class=None, name="User String", suggested_display_precision=None)
 
     except:  # noqa: E722
         LOGGER.warning("Failed to create host metric entities", exc_info=True)
@@ -779,6 +823,7 @@ def _build_air_quality_metrics_sensors(
         device_class: SensorDeviceClass | None,
         unit_of_measurement: str | None = None,
         state_class: SensorStateClass = SensorStateClass.MEASUREMENT,
+        suggested_display_precision: int | None = 2,
     ) -> None:
         key = "".join(["_" + c.lower() if c.isupper() else c for c in value_key]).lstrip("_")
         if value_key in node_info["airQualityMetrics"]:
@@ -791,6 +836,7 @@ def _build_air_quality_metrics_sensors(
                         native_unit_of_measurement=unit_of_measurement,
                         device_class=device_class,
                         state_class=state_class,
+                        suggested_display_precision=suggested_display_precision,
                         value_fn=air_quality_metrics_value_fn(value_key),
                     ),
                     gateway=gateway,
