@@ -138,6 +138,26 @@ class MeshtasticTcpProxy:
                         await client_connection.disconnect()
                         continue
 
+                    if to_radio.HasField("want_config_id"):
+                        cached = self._interface.get_config_reply_cache()
+                        if cached is not None:
+                            _LOGGER.info(
+                                "Answering want_config for %s from our own cached config instead of "
+                                "asking the device for a second full copy",
+                                peer_name,
+                            )
+                            for raw in cached:
+                                from_radio = mesh_pb2.FromRadio()
+                                from_radio.ParseFromString(raw)
+                                await queue.put(from_radio)
+                            complete = mesh_pb2.FromRadio()
+                            complete.config_complete_id = to_radio.want_config_id
+                            await queue.put(complete)
+                            continue
+                        _LOGGER.debug(
+                            "No cached config yet for %s, forwarding want_config to the device as usual", peer_name
+                        )
+
                     _LOGGER.debug(
                         "Forwarding from %s to gateway: %s",
                         peer_name,
