@@ -588,7 +588,7 @@ async def async_unload_entry(
             await async_unload_meshtastic_web(hass)
 
         await meshtastic_web.async_unload_web_proxy_server(hass, entry)
-        await async_unload_tcp_proxy(hass, entry))
+        await async_unload_tcp_proxy(hass, entry)
 
     return unload_ok
 
