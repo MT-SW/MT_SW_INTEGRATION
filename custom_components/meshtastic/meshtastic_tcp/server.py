@@ -108,6 +108,10 @@ class MeshtasticTcpProxy:
             await self._interface.stop()
             self._should_stop = False
 
+    async def _wait_for_reconnect_idle(self) -> None:
+        while self._interface._reconnect_lock.locked():  # noqa: SLF001
+            await asyncio.sleep(0.05)
+
     async def _handle_client(self, reader: StreamReader, writer: StreamWriter) -> None:
         queue = asyncio.Queue()
         self._client_queues.add(queue)
@@ -162,6 +166,9 @@ class MeshtasticTcpProxy:
                         peer_name,
                         ClientApiConnection._protobuf_log(packet[1]),  # noqa: SLF001
                     )
+
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(self._wait_for_reconnect_idle(), timeout=5)
 
                     try:
                         await self._interface._connection._send_packet(packet[0])  # noqa: SLF001
