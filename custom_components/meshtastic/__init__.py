@@ -262,6 +262,7 @@ async def async_setup_entry(
         CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT
     ):
         await async_setup_meshtastic_web(hass)
+        await meshtastic_web.async_setup_web_proxy_server(hass, entry)
 
     return True
 
@@ -586,7 +587,8 @@ async def async_unload_entry(
         if not any_web_client_enabled:
             await async_unload_meshtastic_web(hass)
 
-        await async_unload_tcp_proxy(hass, entry)
+        await meshtastic_web.async_unload_web_proxy_server(hass, entry)
+        await async_unload_tcp_proxy(hass, entry))
 
     return unload_ok
 
