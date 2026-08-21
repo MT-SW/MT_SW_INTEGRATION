@@ -150,6 +150,13 @@ class MeshtasticTcpProxy:
                             "No cached config yet for %s, forwarding want_config to the device as usual", peer_name
                         )
 
+                    if to_radio.HasField("heartbeat"):
+                        _LOGGER.debug(
+                            "Answering keep-alive heartbeat for %s locally, not forwarding to the device",
+                            peer_name,
+                        )
+                        continue
+
                     _LOGGER.debug(
                         "Forwarding from %s to gateway: %s",
                         peer_name,
