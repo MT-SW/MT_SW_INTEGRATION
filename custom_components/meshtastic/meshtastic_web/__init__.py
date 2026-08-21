@@ -44,7 +44,7 @@ async def async_setup(hass: HomeAssistant) -> bool:
 
 
 async def async_setup_web_proxy_server(
-    hass: HomeAssistant,  # noqa: ARG001
+    hass: HomeAssistant,
     entry: "MeshtasticConfigEntry",
 ) -> bool:
     """Start this entry's dedicated-port HTTP proxy (see proxy_server.py for why)."""
@@ -53,7 +53,7 @@ async def async_setup_web_proxy_server(
         return False
 
     port = web_client_config.get(CONF_OPTION_WEB_CLIENT_PORT, CONF_OPTION_WEB_CLIENT_PORT_DEFAULT)
-    server = GatewayWebProxyServer(entry, port)
+    server = GatewayWebProxyServer(hass, entry, port)
     try:
         await server.start()
     except Exception:  # noqa: BLE001

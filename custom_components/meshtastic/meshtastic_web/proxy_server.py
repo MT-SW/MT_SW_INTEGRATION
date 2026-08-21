@@ -20,10 +20,18 @@ from typing import TYPE_CHECKING
 from aiohttp import web
 from google.protobuf import message
 
-from ..aiomeshtastic.protobuf import mesh_pb2  # noqa: TID252
+from ..aiomeshtastic.protobuf import mesh_pb2, portnums_pb2  # noqa: TID252
+from ..api import (  # noqa: TID252
+    ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID,
+    ATTR_EVENT_MESHTASTIC_API_DATA,
+    ATTR_EVENT_MESHTASTIC_API_NODE,
+    EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT,
+)
 from ..const import LOGGER  # noqa: TID252
 
 if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
     from ..aiomeshtastic.connection import ClientApiConnection  # noqa: TID252
     from ..aiomeshtastic.interface import MeshInterface  # noqa: TID252
     from ..data import MeshtasticConfigEntry  # noqa: TID252
@@ -56,7 +64,8 @@ async def _cors_middleware(request: web.Request, handler: web.Handler) -> web.St
 class GatewayWebProxyServer:
     """Serves the meshtastic HTTP device API for exactly one gateway config entry."""
 
-    def __init__(self, entry: MeshtasticConfigEntry, port: int) -> None:
+    def __init__(self, hass: HomeAssistant, entry: MeshtasticConfigEntry, port: int) -> None:
+        self._hass = hass
         self._entry = entry
         self._port = port
         self._runner: web.AppRunner | None = None
@@ -100,6 +109,37 @@ class GatewayWebProxyServer:
             await self._runner.cleanup()
             self._runner = None
             self._site = None
+
+    def _publish_text_message_out_event(self, to_radio: mesh_pb2.ToRadio) -> None:
+        packet = to_radio.packet
+        if packet.decoded.portnum != portnums_pb2.TEXT_MESSAGE_APP:
+            return
+
+        interface = self._get_interface()
+        if interface is None:
+            return
+        own_node = interface.connected_node()
+        if not own_node:
+            return
+        gateway_id = own_node["num"]
+
+        to_channel = packet.channel if packet.to == 0xFFFFFFFF else None  # noqa: PLR2004
+        to_node = None if to_channel is not None else packet.to
+
+        self._hass.bus.async_fire(
+            EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT,
+            {
+                ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID: self._entry.entry_id,
+                ATTR_EVENT_MESHTASTIC_API_NODE: gateway_id,
+                ATTR_EVENT_MESHTASTIC_API_DATA: {
+                    "from": gateway_id,
+                    "to": {"node": to_node, "channel": to_channel},
+                    "gateway": gateway_id,
+                    "message": packet.decoded.payload.decode("utf-8", errors="replace"),
+                },
+                "message_id": packet.id,
+            },
+        )
 
     def _get_interface(self) -> MeshInterface | None:
         runtime_data = self._entry.runtime_data
@@ -192,6 +232,8 @@ class GatewayWebProxyServer:
         response = web.Response()
         if to_radio.HasField("want_config_id"):
             self._add_session(request.remote)
+        if to_radio.HasField("packet"):
+            self._publish_text_message_out_event(to_radio)
 
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(self._wait_for_reconnect_idle(), timeout=5)
