@@ -527,16 +527,16 @@ class MeshInterface:
                     self._logger.debug("Skipping heartbeat during reconnect")
                     continue
                 self._logger.debug("Sending heartbeat")
-                if self._connected_node_ready.is_set():
-                    # perform request with an actual response from node, self._connection.send_heartbeat() does not
-                    # reliably work to detect broken connections as there is no response
-                    await self.request_connection_status()
-                else:
-                    # use as fallback when we did not succeed to connect, and we don't have a node id
-                    await self._connection.send_heartbeat()
+                # Plain, response-less heartbeat only. request_connection_status()
+                # (an AdminMessage round trip) was already tried and proved
+                # unreliable on this hardware (fix-3.13/3.14/3.15) — real
+                # disconnects are caught by the packet stream itself, this is
+                # just a keep-alive poke, not a health check.
+                await self._connection.send_heartbeat()
             except Exception:  # noqa: BLE001
-                self._logger.info("Heartbeat failed, reconnecting", exc_info=True)
-                await self._reconnect_while_running(force=True)
+                # Informational only — do not force a reconnect on a single
+                # failed heartbeat (same reasoning as fix-3.15).
+                self._logger.info("Heartbeat failed", exc_info=True)
             else:
                 self._logger.debug("Heartbeat success")
 
