@@ -11,6 +11,8 @@ from homeassistant.components.button import (
     ButtonEntityDescription,
 )
 
+from homeassistant.helpers import entity_registry as er
+
 from . import helpers
 from .entity import MeshtasticNodeEntity
 
@@ -52,6 +54,21 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     await helpers.setup_platform_entry(hass, entry, async_add_entities, _build_buttons)
+
+    # posprzątaj po starej wersji, która tworzyła przycisk reboot dla
+    # każdego węzła — te węzły nadal są na liście filtrów (więc ogólny
+    # mechanizm czyszczenia w helpers.py ich nie ruszy), ale przycisk
+    # jest teraz budowany tylko dla bramy, więc wszystkie inne to sieroty
+    gateway = entry.runtime_data.client.get_own_node()
+    gateway_node_id = gateway.get("num")
+    coordinator = entry.runtime_data.coordinator
+    gateway_identity_key = coordinator.identity_key_for(gateway_node_id) if gateway_node_id is not None else None
+    expected_unique_id = f"{entry.entry_id}_button_{gateway_identity_key}_reboot"
+
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain == "button" and reg_entry.unique_id != expected_unique_id:
+            registry.async_remove(reg_entry.entity_id)
 
 
 async def async_unload_entry(
