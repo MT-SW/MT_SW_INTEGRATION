@@ -1119,6 +1119,7 @@ class MeshInterface:
         channel_index: int | None = None,
         priority: Optional[MeshPacket.Priority] = None,  # noqa: UP045
         reply_id: int | None = None,
+        emoji: int | None = None,
         on_message_sent: Callable[[Packet], Awaitable[None]] | None = None,
     ) -> None:
         if isinstance(destination, MeshNode):
@@ -1167,6 +1168,7 @@ class MeshInterface:
             want_response=False,
             ack=want_ack,
             reply_id=reply_id,
+            emoji=emoji,
             out_callback=out_callback,
         )
 

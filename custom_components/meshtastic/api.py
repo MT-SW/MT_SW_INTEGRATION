@@ -223,12 +223,15 @@ class MeshtasticApiClient:
 
         return transformed
 
-    async def _publish_event_text_message_out(
+    async def _publish_event_text_message_out(  # noqa: PLR0913
         self,
         text: str,
         message_id: int,
         destination_id: int | str = MeshInterface.BROADCAST_ADDR,
         channel_index: int | None = None,
+        *,
+        reply_id: int = 0,
+        emoji: int = 0,
     ) -> None:
         if destination_id == MeshInterface.BROADCAST_NUM or channel_index is not None:
             to_channel = channel_index
@@ -245,13 +248,15 @@ class MeshtasticApiClient:
                 "to": {"node": to_node, "channel": to_channel},
                 "gateway": gateway_id,
                 "message": text,
+                "reply_id": reply_id,
+                "emoji": emoji,
             },
         )
 
         event_data["message_id"] = message_id
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT, event_data)
 
-    async def send_text(
+    async def send_text(  # noqa: PLR0913
         self,
         text: str,
         destination_id: int | str = MeshInterface.BROADCAST_ADDR,
@@ -259,11 +264,17 @@ class MeshtasticApiClient:
         want_ack: bool = False,
         channel_index: int | None = None,
         reply_id: int | None = None,
+        emoji: int | None = None,
     ) -> bool:
         async def _on_message_sent(packet: Packet) -> None:
             # publish event so that outgoing messages are recorded to logbook
             await self._publish_event_text_message_out(
-                text, packet.mesh_packet.id, destination_id=destination_id, channel_index=channel_index
+                text,
+                packet.mesh_packet.id,
+                destination_id=destination_id,
+                channel_index=channel_index,
+                reply_id=reply_id or 0,
+                emoji=emoji or 0,
             )
 
         try:
@@ -274,6 +285,7 @@ class MeshtasticApiClient:
                     want_ack=want_ack,
                     channel_index=channel_index,
                     reply_id=reply_id,
+                    emoji=emoji,
                     on_message_sent=_on_message_sent,
                 ),
                 timeout=30,
@@ -354,6 +366,8 @@ class MeshtasticApiClient:
                 "to": {"node": to_node, "channel": to_channel},
                 "gateway": self.get_own_node()["num"],
                 "message": packet.app_payload,
+                "reply_id": packet.data.reply_id if packet.data else 0,
+                "emoji": packet.data.emoji if packet.data else 0,
             },
         )
 
