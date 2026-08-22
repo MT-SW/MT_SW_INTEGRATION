@@ -25,7 +25,7 @@ from .proxy_server import GatewayWebProxyServer
 if TYPE_CHECKING:
     from ..data import MeshtasticConfigEntry  # noqa: TID252
 
-_LOGGER = LOGGER.getChild(__name__)
+_LOGGER = LOGGER.getChild(__name__.removeprefix(f"{LOGGER.name}."))
 
 _proxy_servers: dict[str, GatewayWebProxyServer] = {}
 

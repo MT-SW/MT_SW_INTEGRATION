@@ -103,13 +103,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_meshtastic_web(hass: HomeAssistant) -> bool:
-    if hass.data[DOMAIN].config.get("meshtastic_web_loaded", False):
-        return True
-
     try:
-        await meshtastic_web.async_setup(hass)
-        await frontend.async_register_frontend(hass)
-        hass.data[DOMAIN].config["meshtastic_web_loaded"] = True
+        # widoki HTTP/static paths nie da się zarejestrować dwa razy ani cofnąć —
+        # ta flaga jest ustawiana raz na cały proces HA i NIGDY czyszczona
+        if not hass.data[DOMAIN].config.get("meshtastic_web_views_registered", False):
+            await meshtastic_web.async_setup(hass)
+            hass.data[DOMAIN].config["meshtastic_web_views_registered"] = True
+
+        # panel we frontendzie da się dodawać/usuwać normalnie — ta flaga
+        # nadal odzwierciedla, czy jest aktualnie widoczny
+        if not hass.data[DOMAIN].config.get("meshtastic_web_loaded", False):
+            await frontend.async_register_frontend(hass)
+            hass.data[DOMAIN].config["meshtastic_web_loaded"] = True
     except:  # noqa: E722
         LOGGER.warning("Failed to setup frontend", exc_info=True)
         return False

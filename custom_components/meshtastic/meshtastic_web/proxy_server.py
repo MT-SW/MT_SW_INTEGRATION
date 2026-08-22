@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from ..aiomeshtastic.interface import MeshInterface  # noqa: TID252
     from ..data import MeshtasticConfigEntry  # noqa: TID252
 
-_LOGGER = LOGGER.getChild(__name__)
+_LOGGER = LOGGER.getChild(__name__.removeprefix(f"{LOGGER.name}."))
 
 _SESSION_IDLE_TIMEOUT = datetime.timedelta(minutes=1)
 _SESSION_SWEEP_INTERVAL_SECONDS = 30
