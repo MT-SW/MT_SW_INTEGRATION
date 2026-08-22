@@ -76,6 +76,25 @@ class MeshChannel:
     name: str
 
 
+def _normalize_user_dict(user: MutableMapping[str, Any], node_num: int) -> None:
+    """Fill in missing longName/shortName on a partial NodeInfo update.
+
+    A NodeInfo announcement doesn't always carry every user field (e.g. a
+    macaddr-only announcement from a bridge/multi-client source) - and since
+    node database merges replace the whole "user" sub-dict wholesale, an
+    incomplete update can wipe out the safe defaults _create_db_node already
+    set, leaving longName/shortName missing and crashing anything that reads
+    them directly (config_flow's node picker, find_node's MeshNode).
+    """
+    presumptive_id = f"!{node_num:08x}"
+    if not user.get("id"):
+        user["id"] = presumptive_id
+    if not user.get("shortName"):
+        user["shortName"] = user["id"][-4:]
+    if not user.get("longName"):
+        user["longName"] = f"Meshtastic {user['id'][-4:]}"
+
+
 def process_while_running(f):  # noqa: ANN001, ANN201
     @functools.wraps(f)
     async def wrapper(self: "MeshInterface") -> None:
@@ -676,6 +695,8 @@ class MeshInterface:
         elif packet.port_num == portnums_pb2.PortNum.NODEINFO_APP:
             node_info = packet.app_payload
             node_info_dict = google.protobuf.json_format.MessageToDict(node_info)
+            if "user" in node_info_dict:
+                _normalize_user_dict(node_info_dict["user"], node_info.num)
             if node_id in self._node_database:
                 await self._node_database_update(node_id, **node_info_dict)
             else:
@@ -694,6 +715,8 @@ class MeshInterface:
             node_id = node_info.num
             try:
                 node_info_dict = google.protobuf.json_format.MessageToDict(node_info)
+                if "user" in node_info_dict:
+                    _normalize_user_dict(node_info_dict["user"], node_info.num)
                 db_node = self._get_or_create_node(node_info.num)
                 db_node.update(node_info_dict)
 
