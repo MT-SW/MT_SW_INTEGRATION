@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import typing
 from typing import TYPE_CHECKING, Any
 
@@ -105,3 +106,14 @@ class MeshtasticRebootButton(MeshtasticNodeEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self._client.reboot(self._node_id)
+
+        entry_id = self.coordinator.config_entry.entry_id
+
+        async def _delayed_reload_after_reboot() -> None:
+            # firmware potrzebuje chwili na WiFi + start serwera TCP po
+            # restarcie; jeśli spróbujemy za wcześnie, ConfigEntryNotReady
+            # (fix-3.16) i tak złapie to bezpiecznie i ponowi próbę sam
+            await asyncio.sleep(45)
+            await self.hass.config_entries.async_reload(entry_id)
+
+        self.hass.async_create_task(_delayed_reload_after_reboot())
