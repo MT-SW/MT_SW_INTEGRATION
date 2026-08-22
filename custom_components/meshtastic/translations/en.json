@@ -183,6 +183,10 @@
         "reply_id": {
           "name": "Reply ID",
           "description": "A message ID to reply to."
+        },
+        "emoji": {
+          "name": "Emoji",
+          "description": "Unicode codepoint of the emoji reaction (used together with Reply ID to send a reaction)."
         }
       }
     },
@@ -273,6 +277,28 @@
         "to": {
           "name": "Device",
           "description": ""
+        }
+      }
+    },
+    "set_fixed_position": {
+      "name": "Set Fixed Position",
+      "description": "Set a static GPS position on a node, useful for a stationary gateway without its own GPS.",
+      "fields": {
+        "from": {
+          "name": "From",
+          "description": "Select the gateway node to set the position on. If not provided, the best gateway node is chosen automatically. Can be a home assistant device, meshtastic node number or meshtastic user id."
+        },
+        "latitude": {
+          "name": "Latitude",
+          "description": "Latitude in decimal degrees"
+        },
+        "longitude": {
+          "name": "Longitude",
+          "description": "Longitude in decimal degrees"
+        },
+        "altitude": {
+          "name": "Altitude",
+          "description": "Altitude in meters"
         }
       }
     }

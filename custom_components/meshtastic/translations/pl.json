@@ -1,0 +1,405 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "menu_options": {
+          "manual_tcp": "TCP/IP",
+          "manual_bluetooth": "Bluetooth",
+          "manual_serial": "Port szeregowy"
+        }
+      },
+      "manual_tcp": {
+        "description": "Połącz przez TCP/IP",
+        "data": {
+          "tcp_host": "Host",
+          "tcp_port": "Port"
+        },
+        "data_description": {
+          "tcp_host": "Adres IP lub nazwa hosta"
+        }
+      },
+      "discovery_zeroconf_confirm": {
+        "description": "Połącz przez TCP/IP",
+        "data": {
+          "tcp_host": "Host",
+          "tcp_port": "Port"
+        }
+      },
+      "manual_bluetooth": {
+        "description": "Połącz urządzenie przez Bluetooth.\n**WAŻNE**: PIN nie jest obsługiwany, najpierw go usuń.\n\nBądź cierpliwy — wstępna konfiguracja może chwilę potrwać, jeśli urządzenie ma dużą bazę węzłów",
+        "data": {
+          "bluetooth_address": "Adres Bluetooth"
+        },
+        "data_description": {
+          "bluetooth_address": "Adres urządzenia w formacie 00:11:22:33:FF:EE"
+        }
+      },
+      "discovery_bluetooth_confirm": {
+        "description": "Połącz urządzenie przez Bluetooth.\n**WAŻNE**: PIN nie jest obsługiwany, najpierw go usuń.\n\nBądź cierpliwy — wstępna konfiguracja może chwilę potrwać, jeśli urządzenie ma dużą bazę węzłów",
+        "data": {
+          "bluetooth_address": "Adres Bluetooth"
+        }
+      },
+      "manual_serial": {
+        "description": "Połącz przez port szeregowy",
+        "data": {
+          "serial_port": "Port szeregowy"
+        },
+        "data_description": {
+          "serial_port": "Ścieżka do portu szeregowego, np. /dev/ttyUSB0"
+        }
+      },
+      "discovery_usb_confirm": {
+        "description": "Połącz przez port szeregowy",
+        "data": {
+          "serial_port": "Port szeregowy"
+        },
+        "data_description": {
+          "serial_port": "Ścieżka do portu szeregowego, np. /dev/ttyUSB0"
+        }
+      },
+      "reconfigure": {
+      },
+      "node": {
+        "description": "Skonfiguruj, które węzły mają zostać zaimportowane",
+        "data": {
+          "node": "Dodaj węzeł",
+          "add_another_node": "Dodaj kolejny węzeł"
+        }
+      },
+      "notify_platform": {
+        "description": "Powiadomienie Home Assistant to zalecany sposób wysyłania wiadomości do sieci Meshtastic. Skonfiguruj, które części sieci mesh mają być reprezentowane w Home Assistant, aby ułatwić wysyłanie wiadomości.",
+        "data": {
+          "channels": "Utwórz cele powiadomień dla wszystkich kanałów",
+          "nodes": "Utwórz cele powiadomień wiadomości bezpośrednich dla"
+        },
+        "data_description": {
+          "channels": "Utwórz cel/encję dla każdego kanału",
+          "nodes": "Uwaga: wybranie wszystkich węzłów może utworzyć dziesiątki lub setki encji w Home Assistant, w zależności od wielkości sieci Meshtastic"
+        }
+      },
+      "web_client": {
+        "description": "Eksperymentalne: możesz włączyć klienta webowego Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient webowy połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. Klienta webowego możesz otworzyć z paska bocznego Meshtastic.",
+        "data": {
+          "enable": "Włącz klienta webowego",
+          "port": "Port klienta webowego"
+        }
+      },
+      "tcp_proxy": {
+        "description": "Eksperymentalne: możesz włączyć proxy TCP Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient TCP połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. W kliencie CLI Pythona użyj 'meshtastic --host homeassistant:port'",
+        "data": {
+          "enable": "Włącz proxy TCP",
+          "port": "Port TCP"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie można połączyć się z urządzeniem.",
+      "unknown": "Wystąpił nieznany błąd.",
+      "not_meshtastic_device": "To nie jest urządzenie Meshtastic",
+      "invalid_node": "Nieprawidłowy węzeł",
+      "invalid_connection_type": "Nieprawidłowy typ połączenia",
+      "reconfigure_not_possible": "Rekonfiguracja obecnie niemożliwa",
+      "port_in_use": "Port jest już zajęty"
+    },
+    "abort": {
+      "already_configured": "Urządzenie Meshtastic jest już skonfigurowane"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Skonfiguruj, które węzły mają zostać zaimportowane",
+        "data": {
+          "nodes": "Wybrane węzły",
+          "node": "Dodaj węzeł",
+          "add_another_node": "Dodaj kolejny węzeł"
+        },
+        "sections": {
+          "notify_platform": {
+            "name": "Platforma powiadomień",
+            "description": "Powiadomienie Home Assistant to zalecany sposób wysyłania wiadomości do sieci Meshtastic. Skonfiguruj, które części sieci mesh mają być reprezentowane w Home Assistant, aby ułatwić wysyłanie wiadomości.",
+            "data": {
+              "channels": "Utwórz cele powiadomień dla wszystkich kanałów",
+              "nodes": "Utwórz cele powiadomień wiadomości bezpośrednich dla"
+            },
+            "data_description": {
+              "channels": "Utwórz cel/encję dla każdego kanału",
+              "nodes": "Uwaga: wybranie wszystkich węzłów może utworzyć dziesiątki lub setki encji w Home Assistant, w zależności od wielkości sieci Meshtastic"
+            }
+          },
+          "web_client": {
+            "name": "Klient webowy Meshtastic",
+            "description": "Eksperymentalne: możesz włączyć klienta webowego Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient webowy połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. Klienta webowego możesz otworzyć z paska bocznego Meshtastic.",
+            "data": {
+              "enable": "Włącz klienta webowego",
+              "port": "Port klienta webowego"
+            }
+          },
+          "tcp_proxy": {
+            "name": "Proxy TCP Meshtastic",
+            "description": "Eksperymentalne: możesz włączyć proxy TCP Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient TCP połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. W kliencie CLI Pythona użyj 'meshtastic --host homeassistant:port'",
+            "data": {
+              "enable": "Włącz proxy TCP",
+              "port": "Port TCP"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie można połączyć się z urządzeniem.",
+      "connection": "Nie można połączyć się z urządzeniem.",
+      "unknown": "Wystąpił nieznany błąd.",
+      "option_invalid": "Nieprawidłowa konfiguracja opcji",
+      "port_in_use": "Port jest już zajęty"
+    }
+  },
+  "services": {
+    "send_text": {
+      "name": "Wyślij tekst",
+      "description": "Tylko do zaawansowanego użytku! Rozważ użycie akcji \"Wyślij wiadomość bezpośrednią\" lub \"Nadaj wiadomość na kanale\".",
+      "fields": {
+        "text": {
+          "name": "Wiadomość tekstowa",
+          "description": "Wiadomość do wysłania (maks. 200 bajtów)"
+        },
+        "from": {
+          "name": "Od",
+          "description": "Wybierz węzeł bramy, z którego ma zostać wysłana wiadomość. Jeśli nie podano, najlepszy węzeł bramy zostanie wybrany automatycznie. Może to być urządzenie Home Assistant, numer węzła Meshtastic lub identyfikator użytkownika Meshtastic."
+        },
+        "to": {
+          "name": "Do",
+          "description": "Może to być urządzenie Home Assistant, numer węzła Meshtastic lub identyfikator użytkownika Meshtastic"
+        },
+        "channel": {
+          "name": "Kanał",
+          "description": "Może to być encja kanału Home Assistant lub indeks kanału Meshtastic. WAŻNE: indeks kanału jest specyficzny dla węzła — jeśli różni się między Twoimi węzłami bramy, rozważ ustawienie pola Od."
+        },
+        "ack": {
+          "name": "Potwierdzenie",
+          "description": "Poproś o potwierdzenie odbioru"
+        },
+        "reply_id": {
+          "name": "ID odpowiedzi",
+          "description": "ID wiadomości, na którą jest to odpowiedź."
+        },
+        "emoji": {
+          "name": "Emoji",
+          "description": "Kod Unicode emotikony reakcji (używany razem z ID odpowiedzi, aby wysłać reakcję)."
+        }
+      }
+    },
+    "send_direct_message": {
+      "name": "Wyślij wiadomość bezpośrednią",
+      "description": "Wyślij wiadomość bezpośrednią do urządzenia Meshtastic. Jeśli nie skonfigurowałeś żądanego węzła, możesz zamiast tego użyć akcji \"Powiadomienia: wyślij wiadomość powiadomienia\".",
+      "fields": {
+        "message": {
+          "name": "Wiadomość tekstowa",
+          "description": "Wiadomość do wysłania (maks. 200 bajtów)"
+        },
+        "to": {
+          "name": "Urządzenie",
+          "description": ""
+        },
+        "ack": {
+          "name": "Potwierdzenie",
+          "description": "Poproś o potwierdzenie odbioru"
+        },
+        "reply_id": {
+          "name": "ID odpowiedzi",
+          "description": "ID wiadomości, na którą jest to odpowiedź."
+        },
+        "emoji": {
+          "name": "Emoji",
+          "description": "Kod Unicode emotikony reakcji (używany razem z ID odpowiedzi, aby wysłać reakcję)."
+        }
+      }
+    },
+    "broadcast_channel_message": {
+      "name": "Nadaj wiadomość na kanale",
+      "description": "Nadaj wiadomość na kanale",
+      "fields": {
+        "message": {
+          "name": "Wiadomość tekstowa",
+          "description": "Wiadomość do wysłania (maks. 200 bajtów)"
+        },
+        "channel": {
+          "name": "Kanał",
+          "description": ""
+        },
+        "ack": {
+          "name": "Potwierdzenie",
+          "description": "Poproś o potwierdzenie odbioru"
+        },
+        "reply_id": {
+          "name": "ID odpowiedzi",
+          "description": "ID wiadomości, na którą jest to odpowiedź."
+        },
+        "emoji": {
+          "name": "Emoji",
+          "description": "Kod Unicode emotikony reakcji (używany razem z ID odpowiedzi, aby wysłać reakcję)."
+        }
+      }
+    },
+    "request_telemetry": {
+      "name": "Zapytaj o telemetrię",
+      "description": "",
+      "fields": {
+        "from": {
+          "name": "Od",
+          "description": "Brama. Jeśli nie podano, najlepszy węzeł bramy zostanie wybrany automatycznie."
+        },
+        "to": {
+          "name": "Urządzenie",
+          "description": ""
+        },
+        "type": {
+          "name": "Typ telemetrii",
+          "description": ""
+        }
+      }
+    },
+    "request_position": {
+      "name": "Zapytaj o pozycję",
+      "description": "",
+      "fields": {
+        "from": {
+          "name": "Od",
+          "description": "Brama. Jeśli nie podano, najlepszy węzeł bramy zostanie wybrany automatycznie."
+        },
+        "to": {
+          "name": "Urządzenie",
+          "description": ""
+        }
+      }
+    },
+    "request_traceroute": {
+      "name": "Zapytaj o traceroute",
+      "description": "UWAGA: Traceroute jest ograniczany przez firmware Meshtastic — wysyłaj co najwyżej raz na minutę. Jeśli limit zostanie przekroczony, nie dostaniesz żadnej informacji zwrotnej.",
+      "fields": {
+        "from": {
+          "name": "Od",
+          "description": "Brama. Jeśli nie podano, najlepszy węzeł bramy zostanie wybrany automatycznie."
+        },
+        "to": {
+          "name": "Urządzenie",
+          "description": ""
+        }
+      }
+    },
+    "set_fixed_position": {
+      "name": "Ustaw stałą pozycję",
+      "description": "Ustaw stałą pozycję GPS na węźle — przydatne dla stacjonarnej bramy bez własnego GPS.",
+      "fields": {
+        "from": {
+          "name": "Od",
+          "description": "Wybierz węzeł bramy, na którym ma zostać ustawiona pozycja. Jeśli nie podano, najlepszy węzeł bramy zostanie wybrany automatycznie. Może to być urządzenie Home Assistant, numer węzła Meshtastic lub identyfikator użytkownika Meshtastic."
+        },
+        "latitude": {
+          "name": "Szerokość geograficzna",
+          "description": "Szerokość geograficzna w stopniach dziesiętnych"
+        },
+        "longitude": {
+          "name": "Długość geograficzna",
+          "description": "Długość geograficzna w stopniach dziesiętnych"
+        },
+        "altitude": {
+          "name": "Wysokość",
+          "description": "Wysokość w metrach"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": {
+        "name": "Poziom baterii"
+      },
+      "environment_temperature": { "name": "Temperatura" },
+      "environment_relative_humidity": { "name": "Wilgotność względna" },
+      "environment_barometric_pressure": { "name": "Ciśnienie atmosferyczne" },
+      "environment_gas_resistance": { "name": "Opór gazu" },
+      "environment_iaq": { "name": "Jakość powietrza w pomieszczeniu" },
+      "environment_distance": { "name": "Odległość" },
+      "environment_lux": { "name": "Natężenie oświetlenia" },
+      "environment_white_lux": { "name": "Światło białe" },
+      "environment_ir_lux": { "name": "Światło podczerwone" },
+      "environment_uv_lux": { "name": "Światło ultrafioletowe" },
+      "environment_wind_direction": { "name": "Kierunek wiatru" },
+      "environment_wind_speed": { "name": "Prędkość wiatru" },
+      "environment_wind_gust": { "name": "Poryw wiatru" },
+      "environment_wind_lull": { "name": "Cisza wiatrowa" },
+      "environment_voltage": { "name": "Napięcie" },
+      "environment_current": { "name": "Prąd" },
+      "environment_rainfall1h": { "name": "Opady (1h)" },
+      "environment_rainfall24h": { "name": "Opady (24h)" },
+      "environment_soil_moisture": { "name": "Wilgotność gleby" },
+      "environment_soil_temperature": { "name": "Temperatura gleby" },
+      "environment_radiation": { "name": "Radiacja" },
+      "airquality_pm10_standard": { "name": "PM1.0 (standardowy)" },
+      "airquality_pm25_standard": { "name": "PM2.5 (standardowy)" },
+      "airquality_pm100_standard": { "name": "PM10 (standardowy)" },
+      "airquality_pm10_environmental": { "name": "PM1.0 (środowiskowy)" },
+      "airquality_pm25_environmental": { "name": "PM2.5 (środowiskowy)" },
+      "airquality_pm100_environmental": { "name": "PM10 (środowiskowy)" },
+      "airquality_particles03um": { "name": "Cząstki >0,3µm" },
+      "airquality_particles05um": { "name": "Cząstki >0,5µm" },
+      "airquality_particles10um": { "name": "Cząstki >1,0µm" },
+      "airquality_particles25um": { "name": "Cząstki >2,5µm" },
+      "airquality_particles50um": { "name": "Cząstki >5,0µm" },
+      "airquality_particles100um": { "name": "Cząstki >10µm" }
+    },
+    "meshtastic": {
+      "channel": {
+        "name": "Kanał",
+        "state": {
+          "logging": "Rejestrowanie",
+          "logbook_missing": "Brak dziennika zdarzeń"
+        }
+      },
+      "direct_messages": {
+        "name": "Wiadomości bezpośrednie",
+        "state": {
+          "logging": "Rejestrowanie",
+          "logbook_missing": "Brak dziennika zdarzeń"
+        }
+      }
+    }
+  },
+  "selector": {
+    "telemetry_type_selector": {
+      "options": {
+        "device_metrics": "Metryki urządzenia",
+        "environment_metrics": "Metryki środowiskowe",
+        "power_metrics": "Metryki zasilania",
+        "air_quality_metrics": "Metryki jakości powietrza"
+      }
+    },
+    "option_notify_platform_node_selector": {
+      "options": {
+        "none": "Żaden z węzłów",
+        "all": "Wszystkie znane i nowo odkryte węzły",
+        "selected": "Tylko wybrane węzły"
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "message.received": "Odbiera wiadomość",
+      "direct_message.received": "Odbiera wiadomość na {entity_name}",
+      "channel_message.received": "Odbiera wiadomość na {entity_name}",
+      "message.sent": "Wysłano wiadomość",
+      "direct_message.sent": "Wysłano wiadomość do {entity_name}",
+      "channel_message.sent": "Wysłano wiadomość do {entity_name}"
+    },
+    "action_type": {
+      "send_message": "Wyślij wiadomość bezpośrednią",
+      "request_telemetry": "Zapytaj o telemetrię",
+      "request_position": "Zapytaj o pozycję"
+    }
+  },
+  "common": {
+    "service_attr_from_description": "Brama. Jeśli nie podano, najlepszy węzeł bramy zostanie wybrany automatycznie."
+  }
+}
