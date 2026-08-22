@@ -78,5 +78,13 @@ class MeshtasticRebootButton(MeshtasticNodeEntity, ButtonEntity):
     def _async_update_attrs(self) -> None:
         pass
 
+    @property
+    def available(self) -> bool:
+        # nie zależy od świeżej telemetrii w coordinator.data — to przycisk
+        # akcji na własnej bramie, nie sensor; jeśli połączenie faktycznie
+        # padło, naciśnięcie po prostu zwróci błąd zamiast fałszywie
+        # pokazywać encję jako niedostępną
+        return True
+
     async def async_press(self) -> None:
         await self._client.reboot(self._node_id)
