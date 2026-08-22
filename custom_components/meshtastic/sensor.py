@@ -124,7 +124,7 @@ def _build_node_sensors(
 
     def last_heard(device: MeshtasticNodeEntity) -> datetime.datetime | None:
         last_heard_int = device.coordinator.data[device.node_id].get("lastHeard")
-        if last_heard_int is None:
+        if last_heard_int is None or last_heard_int == 0:
             return None
         return datetime.datetime.fromtimestamp(last_heard_int, tz=datetime.UTC)
 
@@ -679,7 +679,7 @@ def _build_environment_metrics_sensors(
             add_sensor("temperature", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
             add_sensor("relativeHumidity", SensorDeviceClass.HUMIDITY, PERCENTAGE)
             add_sensor("barometricPressure", SensorDeviceClass.ATMOSPHERIC_PRESSURE, UnitOfPressure.HPA)
-            add_sensor("gasResistance", None, UnitOfPressure.HPA)
+            add_sensor("gasResistance", None, "Ω")
             add_sensor("iaq", SensorDeviceClass.AQI, None, suggested_display_precision=None)
 
             add_sensor("distance", SensorDeviceClass.DISTANCE, UnitOfLength.MILLIMETERS)

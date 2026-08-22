@@ -76,7 +76,13 @@ if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceRegistry
     from homeassistant.helpers.entity import Entity
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.DEVICE_TRACKER, Platform.NOTIFY]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.DEVICE_TRACKER,
+    Platform.NOTIFY,
+    Platform.BUTTON,
+]
 
 ENTITY_ID_FORMAT = DOMAIN + ".{}"
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA
@@ -278,6 +284,16 @@ async def _setup_meshtastic_devices(
     filter_node_nums = [el["id"] for el in filter_nodes]
     configured_identity_keys = {el["identity_key"] for el in filter_nodes if el.get("identity_key")}
     device_hardware_names = await fetch_meshtastic_hardware_names(hass)
+    # pass 1: create every device first, without via_device — guarantees every
+    # node already exists in the registry (and has recorded connections) before
+    # pass 2 tries to link via_device or compute the closest gateway
+    for node_id, node in nodes.items():
+        await _setup_meshtastic_device(
+            client, device_hardware_names, device_registry, entry, gateway_node, node, node_id,
+            ignore_via_device=True,
+        )
+
+    # pass 2: now link via_device / closest-gateway, all targets already exist
     for node_id, node in nodes.items():
         await _setup_meshtastic_device(
             client, device_hardware_names, device_registry, entry, gateway_node, node, node_id
@@ -404,6 +420,8 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     gateway_node: Mapping[str, Any],
     node: Mapping[str, Any],
     node_id: int,
+    *,
+    ignore_via_device: bool = False,
 ) -> None:
     gateway_node_id = cast("int", gateway_node["num"])
     identity_key = node_identity_key(node_id, node)
@@ -456,8 +474,11 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     else:
         via_device = (DOMAIN, str(gateway_node_id)) if gateway_node_id != node_id else None
 
-    # remove via_device when it is set to ourself
-    if (via_device is not None and int(via_device[1]) == node_id) or (gateway_node_id == node_id):
+    # remove via_device when it is set to ourself, or during the first pass where
+    # every device is created before any via_device links are resolved (see
+    # _setup_meshtastic_devices — avoids a HA device-registry race where via_device
+    # points at a node not yet created in this run)
+    if (via_device is not None and int(via_device[1]) == node_id) or (gateway_node_id == node_id) or ignore_via_device:
         via_device = None
 
     if existing_device:

@@ -879,6 +879,11 @@ class MeshInterface:
         admin_message.set_time_only = time_secs
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
+    async def reboot(self, seconds: int = 5, node: int | None = None) -> None:
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.reboot_seconds = seconds
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
     async def remove_node_from_database(self, node_num_to_remove: int, node: int | None = None) -> bool:
         """Ask the connected node to drop a stale entry from its own on-device node database.
 

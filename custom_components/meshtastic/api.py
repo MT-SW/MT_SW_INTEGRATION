@@ -27,9 +27,10 @@ from .aiomeshtastic import (
     TcpConnection as AioTcpConnection,
 )
 from .aiomeshtastic.errors import MeshRoutingError, MeshtasticError
-from .aiomeshtastic.protobuf import portnums_pb2
+from .aiomeshtastic.protobuf import mesh_pb2, portnums_pb2
 from .const import (
     CONF_CONNECTION_BLUETOOTH_ADDRESS,
+    EVENT_MESHTASTIC_MESSAGE_ACK,
     CONF_CONNECTION_SERIAL_PORT,
     CONF_CONNECTION_TCP_HOST,
     CONF_CONNECTION_TCP_PORT,
@@ -128,6 +129,9 @@ class MeshtasticApiClient:
         )
         self._interface.add_packet_app_listener(
             packet_type=portnums_pb2.PortNum.POSITION_APP, callback=self._on_position, as_dict=True
+        )
+        self._interface.add_packet_app_listener(
+            packet_type=portnums_pb2.PortNum.ROUTING_APP, callback=self._on_routing, as_packet=True
         )
 
     async def connect(self) -> None:
@@ -310,6 +314,31 @@ class MeshtasticApiClient:
 
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_NODE_UPDATED, event_data)
 
+    async def _on_routing(self, node: MeshNode, packet: Packet) -> None:
+        routing = packet.app_payload
+        if routing is None or not routing.HasField("error_reason"):
+            return
+
+        gateway_node_id = self.get_own_node()["num"]
+        from_node_id = packet.from_id or 0
+        # pomiń niejawny ACK od własnej bramy — interesują nas tylko
+        # potwierdzenia faktycznie nadesłane przez węzeł docelowy
+        if from_node_id == gateway_node_id:
+            return
+
+        error = routing.error_reason
+        event_data = {
+            "message_id": packet.mesh_packet.id if packet.mesh_packet else 0,
+            "request_id": packet.data.request_id if packet.data else 0,
+            "from_node": from_node_id,
+            "to_node": packet.to_id or 0,
+            "ack_type": "ACK" if error == mesh_pb2.Routing.Error.NONE else "NAK",
+        }
+        if error != mesh_pb2.Routing.Error.NONE:
+            event_data["error"] = mesh_pb2.Routing.Error.Name(error)
+
+        self._hass.bus.async_fire(EVENT_MESHTASTIC_MESSAGE_ACK, event_data)
+
     async def _on_text_message(self, node: MeshNode, packet: Packet) -> None:
         if packet.to_id == MeshInterface.BROADCAST_NUM:
             to_channel = packet.channel_index
@@ -329,6 +358,8 @@ class MeshtasticApiClient:
         )
 
         event_data["message_id"] = packet.mesh_packet.id
+        if packet.mesh_packet and packet.mesh_packet.hop_start > 0:
+            event_data["hops_away"] = packet.mesh_packet.hop_start - packet.mesh_packet.hop_limit
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TEXT_MESSAGE, event_data)
 
     async def _on_telemetry(self, node: MeshNode, telemetry: dict[str, Any]) -> None:
@@ -412,6 +443,12 @@ class MeshtasticApiClient:
         except MeshRoutingError as e:
             msg = f"No response for {telemetry_type}"
             raise MeshtasticApiClientError(msg) from e
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def reboot(self, node: int, seconds: int = 5) -> None:
+        try:
+            await self._interface.reboot(seconds=seconds, node=node)
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 
