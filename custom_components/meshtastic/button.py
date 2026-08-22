@@ -29,15 +29,20 @@ def _build_buttons(
 ) -> Iterable[MeshtasticRebootButton]:
     coordinator = runtime_data.coordinator
     gateway = runtime_data.client.get_own_node()
+    gateway_node_id = gateway.get("num")
+    # ograniczone tylko do lokalnie podłączonego węzła — reboot() wysyła
+    # AdminMessage po mesh do wskazanego node_id, więc przycisk na cudzym
+    # węźle próbowałby realnie zrestartować urządzenie kogoś innego w sieci
+    if gateway_node_id not in nodes:
+        return []
     return [
         MeshtasticRebootButton(
             coordinator=coordinator,
             entity_description=ButtonEntityDescription(key="reboot", name="Reboot", icon="mdi:restart"),
             gateway=gateway,
-            node_id=node_id,
+            node_id=gateway_node_id,
             client=runtime_data.client,
         )
-        for node_id in nodes
     ]
 
 
