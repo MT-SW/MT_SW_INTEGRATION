@@ -68,6 +68,7 @@ def _build_sensors(nodes: Mapping[int, Mapping[str, Any]], runtime_data: Meshtas
     entities += _build_node_sensors(nodes, runtime_data)
     entities += _build_device_sensors(nodes, runtime_data)
     entities += _build_local_stats_sensors(nodes, runtime_data)
+    entities += _build_local_stats_extended_sensors(nodes, runtime_data)
     entities += _build_power_metrics_sensors(nodes, runtime_data)
     entities += _build_environment_metrics_sensors(nodes, runtime_data)
     entities += _build_air_quality_metrics_sensors(nodes, runtime_data)
@@ -562,6 +563,172 @@ def _build_local_stats_sensors(
 
     return entities
 
+def _build_local_stats_extended_sensors(
+    nodes: Mapping[int, Mapping[str, Any]], runtime_data: MeshtasticData
+) -> Iterable[MeshtasticSensor]:
+    coordinator = runtime_data.coordinator
+    gateway = runtime_data.client.get_own_node()
+    nodes_with_local_stats_extended = {
+        node_id: node_info for node_id, node_info in nodes.items() if "localStatsExtended" in node_info
+    }
+
+    entities = []
+    try:
+        entities += [
+            MeshtasticSensor(
+                coordinator=coordinator,
+                entity_description=MeshtasticSensorEntityDescription(
+                    key="stats_ext_cpu_usage",
+                    name="CPU Usage",
+                    icon="mdi:cpu-64-bit",
+                    native_unit_of_measurement=PERCENTAGE,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    suggested_display_precision=0,
+                    value_fn=lambda device: device.coordinator.data[device.node_id]
+                    .get("localStatsExtended", {})
+                    .get("cpuUsagePercent", None),
+                ),
+                gateway=gateway,
+                node_id=node_id,
+            )
+            for node_id, node_info in nodes_with_local_stats_extended.items()
+        ]
+
+        entities += [
+            MeshtasticSensor(
+                coordinator=coordinator,
+                entity_description=MeshtasticSensorEntityDescription(
+                    key="stats_ext_heap_free",
+                    name="Extended Heap Free",
+                    icon="mdi:memory",
+                    native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+                    suggested_display_precision=2,
+                    device_class=SensorDeviceClass.DATA_SIZE,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    value_fn=lambda device: device.coordinator.data[device.node_id]
+                    .get("localStatsExtended", {})
+                    .get("memoryFreeCheap", None),
+                ),
+                gateway=gateway,
+                node_id=node_id,
+            )
+            for node_id, node_info in nodes_with_local_stats_extended.items()
+        ]
+
+        entities += [
+            MeshtasticSensor(
+                coordinator=coordinator,
+                entity_description=MeshtasticSensorEntityDescription(
+                    key="stats_ext_heap_total",
+                    name="Extended Heap Total",
+                    icon="mdi:memory",
+                    native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
+                    suggested_display_precision=2,
+                    device_class=SensorDeviceClass.DATA_SIZE,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    value_fn=lambda device: device.coordinator.data[device.node_id]
+                    .get("localStatsExtended", {})
+                    .get("memoryTotal", None),
+                ),
+                gateway=gateway,
+                node_id=node_id,
+            )
+            for node_id, node_info in nodes_with_local_stats_extended.items()
+        ]
+
+        entities += [
+            MeshtasticSensor(
+                coordinator=coordinator,
+                entity_description=MeshtasticSensorEntityDescription(
+                    key="stats_ext_flash_used",
+                    name="Flash Used",
+                    icon="mdi:harddisk",
+                    native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
+                    suggested_display_precision=2,
+                    device_class=SensorDeviceClass.DATA_SIZE,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    value_fn=lambda device: device.coordinator.data[device.node_id]
+                    .get("localStatsExtended", {})
+                    .get("flashUsedBytes", None),
+                ),
+                gateway=gateway,
+                node_id=node_id,
+            )
+            for node_id, node_info in nodes_with_local_stats_extended.items()
+        ]
+
+        entities += [
+            MeshtasticSensor(
+                coordinator=coordinator,
+                entity_description=MeshtasticSensorEntityDescription(
+                    key="stats_ext_flash_total",
+                    name="Flash Total",
+                    icon="mdi:harddisk",
+                    native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
+                    suggested_display_precision=2,
+                    device_class=SensorDeviceClass.DATA_SIZE,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    value_fn=lambda device: device.coordinator.data[device.node_id]
+                    .get("localStatsExtended", {})
+                    .get("flashTotalBytes", None),
+                ),
+                gateway=gateway,
+                node_id=node_id,
+            )
+            for node_id, node_info in nodes_with_local_stats_extended.items()
+        ]
+
+        entities += [
+            MeshtasticSensor(
+                coordinator=coordinator,
+                entity_description=MeshtasticSensorEntityDescription(
+                    key="stats_ext_psram_free",
+                    name="PSRAM Free",
+                    icon="mdi:memory",
+                    native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
+                    suggested_display_precision=2,
+                    device_class=SensorDeviceClass.DATA_SIZE,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    value_fn=lambda device: device.coordinator.data[device.node_id]
+                    .get("localStatsExtended", {})
+                    .get("memoryPsramFree", None),
+                ),
+                gateway=gateway,
+                node_id=node_id,
+            )
+            for node_id, node_info in nodes_with_local_stats_extended.items()
+        ]
+
+        entities += [
+            MeshtasticSensor(
+                coordinator=coordinator,
+                entity_description=MeshtasticSensorEntityDescription(
+                    key="stats_ext_psram_total",
+                    name="PSRAM Total",
+                    icon="mdi:memory",
+                    native_unit_of_measurement=UnitOfInformation.BYTES,
+                    suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
+                    suggested_display_precision=2,
+                    device_class=SensorDeviceClass.DATA_SIZE,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    value_fn=lambda device: device.coordinator.data[device.node_id]
+                    .get("localStatsExtended", {})
+                    .get("memoryPsramTotal", None),
+                ),
+                gateway=gateway,
+                node_id=node_id,
+            )
+            for node_id, node_info in nodes_with_local_stats_extended.items()
+        ]
+    except:  # noqa: E722
+        LOGGER.warning("Failed to create extended local stats entities", exc_info=True)
+
+    return entities
 
 def _build_power_metrics_sensors(
     nodes: Mapping[int, Mapping[str, Any]], runtime_data: MeshtasticData

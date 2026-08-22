@@ -71,6 +71,7 @@ ATTR_EVENT_MESHTASTIC_API_NODE_INFO = "node_info"
 class EventMeshtasticApiTelemetryType(StrEnum):
     DEVICE_METRICS = "device_metrics"
     LOCAL_STATS = "local_stats"
+    LOCAL_STATS_EXTENDED = "local_stats_extended"
     ENVIRONMENT_METRICS = "environment_metrics"
     POWER_METRICS = "power_metrics"
     HOST_METRICS = "host_metrics"
@@ -380,6 +381,7 @@ class MeshtasticApiClient:
     async def _on_telemetry(self, node: MeshNode, telemetry: dict[str, Any]) -> None:
         device_metrics = telemetry.get("deviceMetrics")
         local_stats = telemetry.get("localStats")
+        local_stats_extended = telemetry.get("localStatsExtended")
         environment_metrics = telemetry.get("environmentMetrics")
         power_metrics = telemetry.get("powerMetrics")
         host_metrics = telemetry.get("hostMetrics")
@@ -395,6 +397,12 @@ class MeshtasticApiClient:
             event_data = self._build_event_data(node.id, local_stats)
             event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
             event_data[ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE] = EventMeshtasticApiTelemetryType.LOCAL_STATS
+            self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TELEMETRY, event_data)
+
+        if local_stats_extended:
+            event_data = self._build_event_data(node.id, local_stats_extended)
+            event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = node_info
+            event_data[ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE] = EventMeshtasticApiTelemetryType.LOCAL_STATS_EXTENDED
             self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TELEMETRY, event_data)
 
         if environment_metrics:

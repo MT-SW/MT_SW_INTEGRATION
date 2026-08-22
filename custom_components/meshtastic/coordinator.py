@@ -162,6 +162,8 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             metric_type = "deviceMetrics"
         elif telemetry_type == EventMeshtasticApiTelemetryType.LOCAL_STATS:
             metric_type = "localStats"
+        elif telemetry_type == EventMeshtasticApiTelemetryType.LOCAL_STATS_EXTENDED:
+            metric_type = "localStatsExtended"
         elif telemetry_type == EventMeshtasticApiTelemetryType.POWER_METRICS:
             metric_type = "powerMetrics"
         elif telemetry_type == EventMeshtasticApiTelemetryType.ENVIRONMENT_METRICS:
