@@ -27,7 +27,7 @@ from .aiomeshtastic import (
     TcpConnection as AioTcpConnection,
 )
 from .aiomeshtastic.errors import MeshRoutingError, MeshtasticError
-from .aiomeshtastic.protobuf import mesh_pb2, portnums_pb2
+from .aiomeshtastic.protobuf import admin_pb2, mesh_pb2, portnums_pb2
 from .const import (
     CONF_CONNECTION_BLUETOOTH_ADDRESS,
     EVENT_MESHTASTIC_MESSAGE_ACK,
@@ -360,6 +360,7 @@ class MeshtasticApiClient:
         event_data["message_id"] = packet.mesh_packet.id
         if packet.mesh_packet and packet.mesh_packet.hop_start > 0:
             event_data["hops_away"] = packet.mesh_packet.hop_start - packet.mesh_packet.hop_limit
+        event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = {"name": node.long_name}
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TEXT_MESSAGE, event_data)
 
     async def _on_telemetry(self, node: MeshNode, telemetry: dict[str, Any]) -> None:
@@ -458,6 +459,30 @@ class MeshtasticApiClient:
             return self._message_to_dict(response)
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
+
+    async def set_fixed_position(self, latitude: float, longitude: float, altitude: float = 0) -> Mapping[str, Any]:
+        import time
+
+        position = mesh_pb2.Position()
+        position.latitude_i = round(latitude * 10**7)
+        position.longitude_i = round(longitude * 10**7)
+        position.altitude = round(altitude)
+        position.time = int(time.time())
+        position.location_source = mesh_pb2.Position.LocSource.LOC_MANUAL
+        position.altitude_source = mesh_pb2.Position.AltSource.ALT_MANUAL
+        position.precision_bits = 24
+
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.set_fixed_position.CopyFrom(position)
+
+        try:
+            await self._interface.send_admin_message_await_response(
+                node=None, message=admin_message, expect_response=False
+            )
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+        return {"latitude": latitude, "longitude": longitude, "altitude": round(altitude), "time": position.time}
 
     async def request_traceroute(self, node: int) -> Mapping[str, Any]:
         try:
