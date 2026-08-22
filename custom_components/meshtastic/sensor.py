@@ -598,50 +598,6 @@ def _build_local_stats_extended_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_ext_heap_free",
-                    name="Extended Heap Free",
-                    icon="mdi:memory",
-                    native_unit_of_measurement=UnitOfInformation.BYTES,
-                    suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
-                    suggested_display_precision=2,
-                    device_class=SensorDeviceClass.DATA_SIZE,
-                    state_class=SensorStateClass.MEASUREMENT,
-                    value_fn=lambda device: device.coordinator.data[device.node_id]
-                    .get("localStatsExtended", {})
-                    .get("memoryFreeCheap", None),
-                ),
-                gateway=gateway,
-                node_id=node_id,
-            )
-            for node_id, node_info in nodes_with_local_stats_extended.items()
-        ]
-
-        entities += [
-            MeshtasticSensor(
-                coordinator=coordinator,
-                entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_ext_heap_total",
-                    name="Extended Heap Total",
-                    icon="mdi:memory",
-                    native_unit_of_measurement=UnitOfInformation.BYTES,
-                    suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
-                    suggested_display_precision=2,
-                    device_class=SensorDeviceClass.DATA_SIZE,
-                    state_class=SensorStateClass.MEASUREMENT,
-                    value_fn=lambda device: device.coordinator.data[device.node_id]
-                    .get("localStatsExtended", {})
-                    .get("memoryTotal", None),
-                ),
-                gateway=gateway,
-                node_id=node_id,
-            )
-            for node_id, node_info in nodes_with_local_stats_extended.items()
-        ]
-
-        entities += [
-            MeshtasticSensor(
-                coordinator=coordinator,
-                entity_description=MeshtasticSensorEntityDescription(
                     key="stats_ext_flash_used",
                     name="Flash Used",
                     icon="mdi:harddisk",
