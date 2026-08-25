@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import time
 import typing
 from collections import defaultdict
 
+import aiohttp
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -146,13 +148,41 @@ async def async_unload_entry(
     return True
 
 
+_hardware_names_cache: typing.Mapping[str, str] | None = None
+_hardware_names_cache_at: float = 0.0
+_HARDWARE_NAMES_TTL_SECONDS = 24 * 60 * 60
+
+
 async def fetch_meshtastic_hardware_names(hass: HomeAssistant) -> typing.Mapping[str, str]:
+    """
+    Fetch the hwModel -> display name mapping from api.meshtastic.org.
+
+    Cached for _HARDWARE_NAMES_TTL_SECONDS — this list changes rarely, if
+    ever, during a running session. Without this cache, every call to
+    _setup_meshtastic_devices() (including every live node-filter change,
+    not just initial setup) would wait on an external HTTP call just to
+    build the device registry, even though everything else it needs is
+    already available locally.
+    """
+    global _hardware_names_cache, _hardware_names_cache_at  # noqa: PLW0603
+
+    now = time.monotonic()
+    if _hardware_names_cache is not None and (now - _hardware_names_cache_at) < _HARDWARE_NAMES_TTL_SECONDS:
+        return _hardware_names_cache
+
     try:
         session = async_get_clientsession(hass)
-        async with session.get("https://api.meshtastic.org/resource/deviceHardware", raise_for_status=True) as response:
+        async with session.get(
+            "https://api.meshtastic.org/resource/deviceHardware",
+            raise_for_status=True,
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
             response_json = await response.json()
             device_hardware_names = {h["hwModelSlug"]: h["displayName"] for h in response_json}
     except Exception:  # noqa: BLE001
         LOGGER.info("Failed to fetch meshtastic hardware infos", exc_info=True)
-        device_hardware_names = {}
+        return _hardware_names_cache or {}
+
+    _hardware_names_cache = device_hardware_names
+    _hardware_names_cache_at = now
     return device_hardware_names

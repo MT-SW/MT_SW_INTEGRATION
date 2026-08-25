@@ -661,10 +661,11 @@ async def _async_apply_node_filter_change(hass: HomeAssistant, entry: Meshtastic
     filter — both of those already exist as idempotent, re-runnable
     functions used at normal setup time.
     """
-    coordinator = entry.runtime_data.coordinator
-    await coordinator.async_request_refresh()
-    await _setup_meshtastic_devices(hass, entry, entry.runtime_data.client)
-    await async_prune_stale_node_entities(hass, entry)
+    async with _reload_lock:
+        coordinator = entry.runtime_data.coordinator
+        await coordinator.async_request_refresh()
+        await _setup_meshtastic_devices(hass, entry, entry.runtime_data.client)
+        await async_prune_stale_node_entities(hass, entry)
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
