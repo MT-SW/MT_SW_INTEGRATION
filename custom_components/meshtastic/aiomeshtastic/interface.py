@@ -892,8 +892,13 @@ class MeshInterface:
     def _add_background_task(self, coro: Awaitable[None], name: str | None = None) -> asyncio.Task:
         task = asyncio.create_task(coro, name=name)
         self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+        task.add_done_callback(self._on_background_task_done)
         return task
+
+    def _on_background_task_done(self, task: asyncio.Task) -> None:
+        self._background_tasks.discard(task)
+        if not task.cancelled() and (exc := task.exception()) is not None:
+            self._logger.debug("Background task %s failed", task.get_name(), exc_info=exc)
 
     async def send_time(self, node: int | None = None) -> None:
         now = datetime.datetime.now(tz=datetime.UTC)

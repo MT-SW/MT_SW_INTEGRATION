@@ -693,6 +693,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             for node_id in removed_node_ids:
                 updated_filter_node_option = [e for e in updated_filter_node_option if e["id"] != node_id]
 
+            if (
+                removed_node_ids
+                and hasattr(self.config_entry, "runtime_data")
+                and self.config_entry.runtime_data
+                and self.config_entry.runtime_data.coordinator
+            ):
+                coordinator = self.config_entry.runtime_data.coordinator
+                for node_id in removed_node_ids:
+                    await coordinator.async_request_node_removal(node_id)
+
             if user_input.get(CONF_OPTION_NODE):
                 # Add the new node
                 new_node_id = int(user_input[CONF_OPTION_NODE])

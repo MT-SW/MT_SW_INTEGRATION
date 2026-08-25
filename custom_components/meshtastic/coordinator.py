@@ -96,6 +96,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self._logger = LOGGER.getChild(self.__class__.__name__)
         self._tracked_identity_by_num: dict[int, str] = {}
+        self._pending_removals: set[int] = set()
         self._remove_event_listeners = []
         self._remove_event_listeners.append(
             hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, self._api_node_updated)
@@ -141,6 +142,56 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         data[node_id] = deepcopy(node_infos[node_id])
         self.async_set_updated_data(data)
         self._logger.info("Recovered tracked node %d that had fallen out of coordinator data", node_id)
+
+    async def _attempt_remove_node(self, node_num: int, *, quick_retries: int = 0) -> bool:
+        """
+        Best-effort removal of a node from the gateway's on-device node
+        database. On failure the node is added to _pending_removals so
+        every future coordinator refresh keeps retrying it, instead of
+        losing the removal for good the moment it lands during a brief
+        connection hiccup. Pass quick_retries when an immediate answer
+        matters (e.g. right after the user removes a node in the options
+        flow) — it retries a few times a few seconds apart before falling
+        back to the passive retry-on-next-refresh path.
+        """
+        if self.config_entry is None or self.config_entry.runtime_data is None:
+            self._pending_removals.add(node_num)
+            return False
+
+        client = self.config_entry.runtime_data.client
+        for attempt in range(quick_retries + 1):
+            try:
+                removed = await client.async_remove_node(node_num)
+            except Exception:  # noqa: BLE001
+                removed = False
+                self._logger.debug(
+                    "Failed to remove stale node %d from the on-device node database (attempt %d/%d)",
+                    node_num,
+                    attempt + 1,
+                    quick_retries + 1,
+                    exc_info=True,
+                )
+            if removed:
+                self._logger.info("Removed stale node %d from the on-device node database", node_num)
+                self._pending_removals.discard(node_num)
+                return True
+            if attempt < quick_retries:
+                await asyncio.sleep(3)
+
+        self._logger.warning(
+            "Could not remove stale node %d from the on-device node database yet — will keep retrying", node_num
+        )
+        self._pending_removals.add(node_num)
+        return False
+
+    async def async_request_node_removal(self, node_num: int) -> None:
+        """
+        Called when a node is dropped from the tracked filter list (e.g.
+        via the options flow) — tries removal right away with a few quick
+        retries, instead of waiting for the coordinator's normal (hourly)
+        refresh cycle to get to it.
+        """
+        await self._attempt_remove_node(node_num, quick_retries=3)
 
     @meshtastic_api_event_callback
     async def _api_node_updated(self, node_id: int, node_data: Mapping[str, Any], **kwargs) -> None:  # noqa: ANN003, ARG002
@@ -234,6 +285,10 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         except MeshtasticApiClientError as exception:
             raise UpdateFailed(exception) from exception
 
+        if self._pending_removals:
+            for node_num in list(self._pending_removals):
+                await self._attempt_remove_node(node_num)
+
         filter_nodes = self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
         filter_node_nums = [el["id"] for el in filter_nodes]
         configured_identity_keys = {el["identity_key"] for el in filter_nodes if el.get("identity_key")}
@@ -299,20 +354,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 # future polls — this is what previously let a stale old number win
                 # the dedup below over the node's real, current number. Best-effort:
                 # never let a failure here (radio asleep/busy) break the data update.
-                try:
-                    removed = await self.config_entry.runtime_data.client.async_remove_node(tracked_num)
-                    if removed:
-                        self._logger.info("Removed stale node %d from the on-device node database", tracked_num)
-                    else:
-                        self._logger.warning(
-                            "Gateway did not confirm removing stale node %d from its node database", tracked_num
-                        )
-                except Exception:  # noqa: BLE001
-                    self._logger.warning(
-                        "Failed to remove stale node %d from the on-device node database",
-                        tracked_num,
-                        exc_info=True,
-                    )
+                await self._attempt_remove_node(tracked_num)
                 # self-heal the configured number so the filter (and the
                 # options UI) reflect where this node actually lives now
                 updated_el = {**el_config, "id": new_num, "identity_key": known_identity_key}
@@ -370,20 +412,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 seen_by_identity[identity_key] = el_config
                 resolved_node_nums.discard(existing["id"])
                 resolved_node_nums.add(el_config["id"])
-                try:
-                    removed = await self.config_entry.runtime_data.client.async_remove_node(existing["id"])
-                    if removed:
-                        self._logger.info("Removed stale node %d from the on-device node database", existing["id"])
-                    else:
-                        self._logger.warning(
-                            "Gateway did not confirm removing stale node %d from its node database", existing["id"]
-                        )
-                except Exception:  # noqa: BLE001
-                    self._logger.warning(
-                        "Failed to remove stale node %d from the on-device node database",
-                        existing["id"],
-                        exc_info=True,
-                    )
+                await self._attempt_remove_node(existing["id"])
             else:
                 self._logger.info(
                     "Dropping duplicate filter entry for node %d (identity %s already tracked via node %d)",
@@ -392,20 +421,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                     existing["id"],
                 )
                 resolved_node_nums.discard(el_config["id"])
-                try:
-                    removed = await self.config_entry.runtime_data.client.async_remove_node(el_config["id"])
-                    if removed:
-                        self._logger.info("Removed stale node %d from the on-device node database", el_config["id"])
-                    else:
-                        self._logger.warning(
-                            "Gateway did not confirm removing stale node %d from its node database", el_config["id"]
-                        )
-                except Exception:  # noqa: BLE001
-                    self._logger.warning(
-                        "Failed to remove stale node %d from the on-device node database",
-                        el_config["id"],
-                        exc_info=True,
-                    )
+                await self._attempt_remove_node(el_config["id"])
         updated_filter_nodes = deduped_filter_nodes
 
         if filter_changed:
