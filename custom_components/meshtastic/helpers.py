@@ -106,6 +106,34 @@ async def setup_platform_entry(
     _remove_listeners[platform.domain][entry.entry_id].append(remove_listener)
 
 
+_NODE_SCOPED_DOMAINS = ("sensor", "binary_sensor", "device_tracker", "button")
+
+
+async def async_prune_stale_node_entities(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """
+    Remove entities for nodes that are no longer in the tracked filter list.
+
+    Mirrors the per-platform cleanup already done once at initial setup
+    inside setup_platform_entry(), but callable on demand — e.g. right
+    after the filter option changes, without a full integration reload —
+    and across all node-scoped platforms in a single registry pass.
+    """
+    registry = er.async_get(hass)
+    filter_nodes = entry.options.get(CONF_OPTION_FILTER_NODES, [])
+    allowed_node_ids = {el["id"] for el in filter_nodes}
+    coordinator = entry.runtime_data.coordinator
+    allowed_identity_keys = {coordinator.identity_key_for(node_id) for node_id in allowed_node_ids}
+
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain not in _NODE_SCOPED_DOMAINS:
+            continue
+        allowed_prefixes = tuple(
+            f"{entry.entry_id}_{reg_entry.domain}_{identity_key}_" for identity_key in allowed_identity_keys
+        )
+        if not reg_entry.unique_id.startswith(allowed_prefixes):
+            registry.async_remove(reg_entry.entity_id)
+
+
 async def async_unload_entry(
     hass: HomeAssistant,  # noqa: ARG001
     entry: MeshtasticConfigEntry,

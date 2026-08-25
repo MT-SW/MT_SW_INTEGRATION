@@ -65,7 +65,7 @@ from .entity import (
     GatewayEntity,
     MeshtasticEntity,
 )
-from .helpers import fetch_meshtastic_hardware_names, node_identity_key
+from .helpers import async_prune_stale_node_entities, fetch_meshtastic_hardware_names, node_identity_key
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
 
@@ -91,6 +91,8 @@ SCAN_INTERVAL = datetime.timedelta(hours=1)
 
 
 _remove_listeners: MutableMapping[str, list[Callable[[], None]]] = defaultdict(list)
+_last_non_filter_options: dict[str, dict[str, Any]] = {}
+_filter_apply_in_progress: set[str] = set()
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -255,7 +257,7 @@ async def async_setup_entry(
         await coordinator.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     await _setup_meshtastic_devices(hass, entry, client)
     await _setup_meshtastic_entities(hass, entry, client)
@@ -274,6 +276,8 @@ async def async_setup_entry(
     ):
         await async_setup_meshtastic_web(hass)
         await meshtastic_web.async_setup_web_proxy_server(hass, entry)
+
+    _last_non_filter_options[entry.entry_id] = _non_filter_options(entry)
 
     return True
 
@@ -602,6 +606,8 @@ async def async_unload_entry(
         for remove_listener in _remove_listeners.pop(entry.entry_id, []):
             remove_listener()
 
+        _last_non_filter_options.pop(entry.entry_id, None)
+
         active_entries = hass.config_entries.async_entries(DOMAIN, include_ignore=False, include_disabled=False)
         any_web_client_enabled = any(
             e.options.get(CONF_OPTION_WEB_CLIENT, {}).get(
@@ -636,6 +642,72 @@ async def async_reload_entry(
         finally:
             if token:
                 config_entries.current_entry.reset(token)
+
+
+def _non_filter_options(entry: MeshtasticConfigEntry) -> dict[str, Any]:
+    return {k: v for k, v in entry.options.items() if k != CONF_OPTION_FILTER_NODES}
+
+
+async def _async_apply_node_filter_change(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """
+    Apply a change to the tracked node filter live, without reconnecting or
+    reloading the whole config entry.
+
+    Newly added nodes get their entities created automatically once
+    coordinator.data is refreshed, via the listener already registered in
+    helpers.setup_platform_entry() for every node-scoped platform. This
+    only needs to additionally (re)build devices for the new/changed set
+    of nodes and prune entities/devices for nodes that dropped out of the
+    filter — both of those already exist as idempotent, re-runnable
+    functions used at normal setup time.
+    """
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_request_refresh()
+    await _setup_meshtastic_devices(hass, entry, entry.runtime_data.client)
+    await async_prune_stale_node_entities(hass, entry)
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """
+    Update listener for the config entry's options.
+
+    If only the tracked node filter changed (nothing that affects the
+    connection itself, like host/port or the TCP proxy/web client
+    settings), apply it live instead of doing a full unload+setup reload —
+    avoids disconnecting the gateway connection and briefly marking every
+    entity unavailable just because a node was added or removed. Any other
+    kind of options change still gets a full reload, same as before.
+    """
+    non_filter_options = _non_filter_options(entry)
+    previous = _last_non_filter_options.get(entry.entry_id)
+    _last_non_filter_options[entry.entry_id] = non_filter_options
+
+    can_apply_live = (
+        previous is not None and previous == non_filter_options and entry.state == ConfigEntryState.LOADED
+    )
+
+    if can_apply_live:
+        if entry.entry_id in _filter_apply_in_progress:
+            # A filter-apply is already running for this entry. The most
+            # likely reason we got called again is that run's own
+            # coordinator refresh self-healing a migrated/deduped node
+            # number back into options (see _async_update_data) — that
+            # in-progress run will already pick up the fully-resolved
+            # state once it gets to rebuilding devices/entities, so
+            # there is nothing extra to do here. Without this guard, a
+            # migration detected during the live-apply path would
+            # recursively re-enter this listener while still running.
+            return
+        _filter_apply_in_progress.add(entry.entry_id)
+        try:
+            await _async_apply_node_filter_change(hass, entry)
+            return
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Failed to apply node filter change live, falling back to a full reload", exc_info=True)
+        finally:
+            _filter_apply_in_progress.discard(entry.entry_id)
+
+    await async_reload_entry(hass, entry)
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: MeshtasticConfigEntry) -> bool:
