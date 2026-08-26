@@ -300,9 +300,21 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         # everything currently visible on the mesh so a tracked node
         # whose num just changed can still be found via the identity
         # (public key) it had the last time we saw it.
-        live_identity_index = {
-            node_identity_key(node_num, node_info): node_num for node_num, node_info in node_infos.items()
-        }
+        #
+        # The gateway's own node table can briefly hold both an old and a
+        # new entry for the same identity after a "warm reconnect" (see
+        # the dedup step below) — a plain dict comprehension would pick
+        # whichever happens to land last in iteration order, which is not
+        # necessarily the current one. Keep whichever has the more recent
+        # lastHeard instead, same tie-breaker the dedup step already uses.
+        live_identity_index: dict[str, int] = {}
+        live_identity_last_heard: dict[str, int] = {}
+        for node_num, node_info in node_infos.items():
+            identity_key = node_identity_key(node_num, node_info)
+            last_heard = node_info.get("lastHeard") or 0
+            if identity_key not in live_identity_index or last_heard > live_identity_last_heard[identity_key]:
+                live_identity_index[identity_key] = node_num
+                live_identity_last_heard[identity_key] = last_heard
 
         resolved_node_nums = set()
         updated_filter_nodes = []
