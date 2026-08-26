@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024-2025 Pascal Brogle @broglep
+#
+# SPDX-License-Identifier: MIT
+
 """Meshtastic web client: static bundle serving + per-gateway connect page."""
 
 import html
