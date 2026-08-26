@@ -1,13 +1,13 @@
-# Meshtastic_S+ — opis / description
+# MT_SW — opis / description
 
-Repo: https://github.com/Meshtastic-Swietokrzyskie/meshtastic_s_home-assistant
+Repo: https://github.com/MT-SW/meshtastic_s_home-assistant
 
 
 ===========================================
 PL — WERSJA POLSKA
 ===========================================
 
-## Meshtastic_S+ — fork integracji Meshtastic dla Home Assistant
+## MT_SW — fork integracji Meshtastic dla Home Assistant
 
 Fork oficjalnej integracji meshtastic/home-assistant, rozwijany dla sieci mesh Świętokrzyskie.
 
@@ -41,7 +41,7 @@ W planach:
 EN — ENGLISH VERSION
 ===========================================
 
-## Meshtastic_S+ — Meshtastic integration fork for Home Assistant
+## MT_SW — Meshtastic integration fork for Home Assistant
 
 A fork of the official meshtastic/home-assistant integration, maintained for the Świętokrzyskie mesh network.
 
