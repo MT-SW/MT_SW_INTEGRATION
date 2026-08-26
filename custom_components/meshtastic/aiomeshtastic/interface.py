@@ -926,7 +926,18 @@ class MeshInterface:
             await self._connected_node_ready.wait()
             node = self._connected_node_info.my_node_num
         result = await self.send_admin_message(node, admin_message, ack=True)
-        return result is not None
+        removed = result is not None
+        if removed:
+            # The device only confirmed removing this from its own on-device
+            # database — our local _node_database (built up client-side from
+            # NodeInfo/position/telemetry packets received over time) is a
+            # separate cache that never gets told about it. Without this,
+            # async_get_all_nodes() (and anything reading from it, like the
+            # "add a node" picker in the options flow) would keep offering
+            # this node forever, even though it's genuinely gone from the
+            # device's own node database.
+            self._node_database.pop(node_num_to_remove, None)
+        return removed
 
     async def write_timezone_if_needed(self, node: int | None = None) -> bool:
         tz_string = await asyncio.get_running_loop().run_in_executor(None, self._get_tz_string)
