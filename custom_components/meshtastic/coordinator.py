@@ -144,6 +144,8 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         self.async_set_updated_data(data)
         self._logger.info("Recovered tracked node %d that had fallen out of coordinator data", node_id)
 
+    _REMOVE_NODE_TIMEOUT_SECONDS = 20
+
     async def _attempt_remove_node(self, node_num: int, *, quick_retries: int = 0) -> bool:
         """
         Best-effort removal of a node from the gateway's on-device node
@@ -154,6 +156,15 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         matters (e.g. right after the user removes a node in the options
         flow) — it retries a few times a few seconds apart before falling
         back to the passive retry-on-next-refresh path.
+
+        The underlying admin-message call has no timeout of its own — if
+        the gateway never acks the remove request, it would otherwise
+        hang forever, blocking this entire coordinator refresh (including
+        the very first one during setup, which can then take down the
+        whole integration's startup with it — seen in practice as Home
+        Assistant's own bootstrap-stage-2 timeout forcibly cancelling
+        setup after several minutes). Bounded here so a single
+        unresponsive removal can only ever cost a few seconds.
         """
         if self.config_entry is None or self.config_entry.runtime_data is None:
             self._pending_removals.add(node_num)
@@ -162,7 +173,9 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         client = self.config_entry.runtime_data.client
         for attempt in range(quick_retries + 1):
             try:
-                removed = await client.async_remove_node(node_num)
+                removed = await asyncio.wait_for(
+                    client.async_remove_node(node_num), timeout=self._REMOVE_NODE_TIMEOUT_SECONDS
+                )
             except Exception:  # noqa: BLE001
                 removed = False
                 self._logger.debug(
