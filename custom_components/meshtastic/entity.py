@@ -287,11 +287,22 @@ class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):
         computed in __init__, but coordinator.data (and therefore
         availability/state lookups) is keyed by the node's live number,
         which can change after a Meshtastic node-number collision. If our
-        cached number is no longer present, ask the coordinator whether
-        our identity is now live under a different number and follow it.
+        cached number is no longer present, first try the coordinator's
+        direct old-number -> new-number lineage — this still works even
+        if our own cached identity_key has gone stale (e.g. it was
+        captured as a raw-number fallback before the node ever exchanged
+        its PKI public key, and later migrations were matched by the
+        coordinator using that newer, better identity instead). Fall back
+        to an identity_key lookup for any case the lineage doesn't cover.
         """
         if self.coordinator.data and self._node_id in self.coordinator.data:
             return
+
+        resolved = self.coordinator.resolve_migrated_node_id(self._node_id)
+        if resolved != self._node_id and resolved in self.coordinator.data:
+            self._node_id = resolved
+            return
+
         resolved = self.coordinator.resolve_node_id(self._identity_key)
         if resolved is not None and resolved != self._node_id:
             self._node_id = resolved

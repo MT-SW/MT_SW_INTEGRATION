@@ -97,6 +97,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         self._logger = LOGGER.getChild(self.__class__.__name__)
         self._tracked_identity_by_num: dict[int, str] = {}
         self._pending_removals: set[int] = set()
+        self._node_id_migrations: dict[int, int] = {}
         self._remove_event_listeners = []
         self._remove_event_listeners.append(
             hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, self._api_node_updated)
@@ -340,6 +341,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                     known_identity_key,
                 )
                 resolved_node_nums.add(new_num)
+                self._node_id_migrations[tracked_num] = new_num
                 self.hass.bus.async_fire(
                     EVENT_MESHTASTIC_NODE_IDENTITY_MIGRATED,
                     {
@@ -412,6 +414,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 seen_by_identity[identity_key] = el_config
                 resolved_node_nums.discard(existing["id"])
                 resolved_node_nums.add(el_config["id"])
+                self._node_id_migrations[existing["id"]] = el_config["id"]
                 await self._attempt_remove_node(existing["id"])
             else:
                 self._logger.info(
@@ -421,6 +424,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                     existing["id"],
                 )
                 resolved_node_nums.discard(el_config["id"])
+                self._node_id_migrations[el_config["id"]] = existing["id"]
                 await self._attempt_remove_node(el_config["id"])
         updated_filter_nodes = deduped_filter_nodes
 
@@ -447,6 +451,26 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
         return new_data
+
+    def resolve_migrated_node_id(self, node_id: int) -> int:
+        """
+        Follow this node number through any migrations/dedups we've
+        recorded, to whatever number it currently lives under.
+
+        Unlike resolve_node_id(), this doesn't depend on identity_key
+        string matching at all — it's a direct old-number -> new-number
+        lineage, so it still works even if an entity's cached identity_key
+        (captured once, at creation) has since gone stale, e.g. because
+        the node only exchanged its PKI public key after the entity was
+        first created. Bounded against cycles/self-loops.
+        """
+        seen = {node_id}
+        while node_id in self._node_id_migrations:
+            node_id = self._node_id_migrations[node_id]
+            if node_id in seen:
+                break
+            seen.add(node_id)
+        return node_id
 
     def resolve_node_id(self, identity_key: str) -> int | None:
         """Return the current node number for a known identity key, if any."""
