@@ -34,7 +34,7 @@
     "submit": "Enviar"
   },
   "app": {
-    "title": "Meshtastic",
+    "title": "MT_SW",
     "fullTitle": "Cliente Web Meshtastic"
   },
   "loading": "Cargando...",

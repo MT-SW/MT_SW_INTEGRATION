@@ -87,7 +87,7 @@ def _render_connect_instructions_html(*, connection_value: str, client_url: str)
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Connect Meshtastic Web Client</title>
+<title>Connect MT_SW_Web_Client</title>
 <style>
   body {{ font-family: system-ui, sans-serif; max-width: 640px; margin: 3rem auto; padding: 0 1rem; }}
   code {{
@@ -103,7 +103,7 @@ def _render_connect_instructions_html(*, connection_value: str, client_url: str)
 </style>
 </head>
 <body>
-<h1>Connect the Meshtastic Web Client</h1>
+<h1>Connect the MT_SW_Web_Client</h1>
 <p>The web client's "Connections" page needs this address entered manually - it does not auto-fill.</p>
 <ol>
   <li>Open the web client (button below), then <strong>Add connection</strong> &rarr; <strong>Network</strong>.</li>
@@ -118,7 +118,7 @@ def _render_connect_instructions_html(*, connection_value: str, client_url: str)
     open the web client via <code>http://</code> (not <code>https://</code>) instead.</li>
   <li>Save the connection.</li>
 </ol>
-<a class="button" href="{safe_client_url}">Open Meshtastic Web Client</a>
+<a class="button" href="{safe_client_url}">Open MT_SW_Web_Client</a>
 <script>
 function copyValue() {{
   var el = document.getElementById("value");

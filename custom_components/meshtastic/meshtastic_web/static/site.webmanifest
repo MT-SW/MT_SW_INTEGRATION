@@ -1,16 +1,14 @@
 {
-	"name": "Meshtastic",
-	"short_name": "Web Client",
+	"name": "MT_SW",
+	"short_name": "MT_SW",
 	"start_url": ".",
-	"description": "Meshtastic Web App",
+	"description": "MT_SW_Web_App",
 	"icons": [
-		{
-			"src": "/logo.svg",
-			"sizes": "any",
-			"type": "image/svg+xml"
-		}
+		{ "src": "/meshtastic/web/logo.svg", "sizes": "any", "type": "image/svg+xml" },
+		{ "src": "/meshtastic/web/icon-192.png", "sizes": "192x192", "type": "image/png" },
+		{ "src": "/meshtastic/web/icon-512.png", "sizes": "512x512", "type": "image/png" }
 	],
-	"theme_color": "#67ea94",
-	"background_color": "#67ea94",
+	"theme_color": "#F5C839",
+	"background_color": "#F5C839",
 	"display": "standalone"
 }
