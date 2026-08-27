@@ -79,14 +79,14 @@
         }
       },
       "web_client": {
-        "description": "Eksperymentalne: możesz włączyć klienta webowego Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient webowy połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. Klienta webowego możesz otworzyć z paska bocznego Meshtastic.",
+        "description": "Eksperymentalne: możesz włączyć klienta webowego MT_SW, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient webowy połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. Klienta webowego możesz otworzyć z paska bocznego Meshtastic.",
         "data": {
           "enable": "Włącz klienta webowego",
           "port": "Port klienta webowego"
         }
       },
       "tcp_proxy": {
-        "description": "Eksperymentalne: możesz włączyć proxy TCP Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient TCP połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. W kliencie CLI Pythona użyj 'meshtastic --host homeassistant:port'",
+        "description": "Eksperymentalne: możesz włączyć proxy TCP MT_SW, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient TCP połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. W kliencie CLI Pythona użyj 'meshtastic --host homeassistant:port'",
         "data": {
           "enable": "Włącz proxy TCP",
           "port": "Port TCP"
@@ -130,7 +130,7 @@
           },
           "web_client": {
             "name": "Klient webowy MT_SW",
-            "description": "Eksperymentalne: możesz włączyć klienta webowego Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient webowy połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. Klienta webowego możesz otworzyć z paska bocznego MT_SW_INTEGRATION.",
+            "description": "Eksperymentalne: możesz włączyć klienta webowego MT_SW, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient webowy połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. Klienta webowego możesz otworzyć z paska bocznego MT_SW_INTEGRATION.",
             "data": {
               "enable": "Włącz klienta webowego",
               "port": "Port klienta webowego"
@@ -138,7 +138,7 @@
           },
           "tcp_proxy": {
             "name": "Proxy TCP MT_SW",
-            "description": "Eksperymentalne: możesz włączyć proxy TCP Meshtastic, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient TCP połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. W kliencie CLI Pythona użyj 'meshtastic --host homeassistant:port'",
+            "description": "Eksperymentalne: możesz włączyć proxy TCP MT_SW, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient TCP połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. W kliencie CLI Pythona użyj 'meshtastic --host homeassistant:port'",
             "data": {
               "enable": "Włącz proxy TCP",
               "port": "Port TCP"

@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from homeassistant.components.frontend import (
@@ -17,6 +19,8 @@ from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN, URL_BASE
 from .ha_frontend import locate_dir
+
+_INTEGRATION_VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -42,7 +46,8 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
                     "name": "meshtastic-frontend",
                     "embed_iframe": False,
                     "trust_external": False,
-                    "module_url": f"{URL_BASE}/frontend/panel.js" + (f"?{time.time()}" if _DEBUG else ""),
+                    "module_url": f"{URL_BASE}/frontend/panel.js?v={_INTEGRATION_VERSION}"
+                    + (f"&t={time.time()}" if _DEBUG else ""),
                 }
             },
             require_admin=True,
