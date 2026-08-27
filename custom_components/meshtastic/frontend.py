@@ -34,7 +34,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         async_register_built_in_panel(
             hass,
             component_name="custom",
-            sidebar_title="Meshtastic",
+            sidebar_title="MT_SW_INTEGRATION",
             sidebar_icon="mdi:radio-handheld",
             frontend_url_path=DOMAIN,
             config={

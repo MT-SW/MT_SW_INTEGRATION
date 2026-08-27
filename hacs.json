@@ -1,5 +1,5 @@
 {
-    "name": "MT_SW",
+    "name": "MT_SW_INTEGRATION",
     "hide_default_branch": true,
     "homeassistant": "2024.11.0",
     "render_readme": true

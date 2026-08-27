@@ -1,6 +1,6 @@
 # MT_SW — opis / description
 
-Repo: https://github.com/MT-SW/meshtastic_s_home-assistant
+Repo: https://github.com/MT-SW/MT_SW_INTEGRATION
 
 
 ===========================================
