@@ -36,7 +36,7 @@ class MeshtasticPanel extends LitElement {
             .hass=${this.hass}
             .narrow=${this.narrow}
         ></ha-menu-button>
-        <div slot="title">Meshtastic</div>
+        <div slot="title">MT_SW_INTEGRATION</div>
         
         <div class="">
           <h1>Web Client</h1>
@@ -44,9 +44,8 @@ class MeshtasticPanel extends LitElement {
             ${gateway_info.map((gateway) => html`
               <ha-card outlined>
                 <div class="card-content">
-                  <img alt="" crossorigin="anonymous" referrerpolicy="no-referrer"
-                       src="https://brands.home-assistant.io/meshtastic/dark_icon.png"
-                       style="visibility: initial;">
+                  <img alt="" style="visibility: initial;"
+                       src="/meshtastic/web/icon.svg">
                   <h2>${gateway.name || gateway.entity}</h2>
                   <h3>&nbsp;</h3>
                   <div class="card-actions">
