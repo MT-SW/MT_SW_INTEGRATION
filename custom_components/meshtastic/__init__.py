@@ -383,16 +383,24 @@ async def async_remove_entry(hass: HomeAssistant, entry: MeshtasticConfigEntry) 
 
 
 async def async_remove_config_entry_device(
-    hass: HomeAssistant, config_entry: MeshtasticConfigEntry, device_entry: dr.DeviceEntry
+    hass: HomeAssistant,  # noqa: ARG001
+    config_entry: MeshtasticConfigEntry,  # noqa: ARG001
+    device_entry: dr.DeviceEntry,  # noqa: ARG001
 ) -> bool:
-    """Allow manually deleting a device from its device page, but only if it's not currently tracked."""
-    filter_nodes = config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
-    filter_node_nums = {el["id"] for el in filter_nodes}
-    configured_identity_keys = {el["identity_key"] for el in filter_nodes if el.get("identity_key")}
-    legacy_node_ids = _legacy_node_ids_from_device(device_entry)
-    identity_keys = _identity_keys_from_device(device_entry)
-    return legacy_node_ids.isdisjoint(filter_node_nums) and identity_keys.isdisjoint(configured_identity_keys)
+    """
+    Always allow manually deleting a device from its device page.
 
+    Poprzednio blokowało to kasowanie, gdy identyfikatory urządzenia
+    pokrywały się z listą śledzonych węzłów — miało chronić przed
+    przypadkowym skasowaniem żywego węzła. W praktyce ta ochrona potrafi
+    utknąć na stałe: identyfikatory narastają na urządzeniu z czasem (zob.
+    poprawka MAC-only-match w 1.0.10), a urządzenie sklejone jeszcze przed
+    tą poprawką nigdy nie spełni tego warunku, nawet po usunięciu z filtra.
+    Skasowanie węzła wciąż faktycznie śledzonego jest nieszkodliwe i
+    samonaprawcze — _setup_meshtastic_devices() odtworzy je od nowa,
+    czysto, przy najbliższym odświeżeniu.
+    """
+    return True
 
 def _setup_device_name_sync(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> Callable[[], None]:
     @callback

@@ -281,6 +281,16 @@ class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):
     @callback
     def _handle_coordinator_update(self) -> None:
         self._resync_node_id()
+        if not self.coordinator.data or self.node_id not in self.coordinator.data:
+            # Węzeł faktycznie zniknął z coordinator.data (usunięty z filtra,
+            # nie tylko zmigrowany na nowy numer — to już próbował załatwić
+            # _resync_node_id() powyżej). `available` już to poprawnie
+            # odzwierciedla, ale każda implementacja _async_update_attrs()
+            # czyta coordinator.data[node_id] wprost, więc jej wywołanie tutaj
+            # skończyłoby się KeyError zamiast po prostu oznaczeniem encji
+            # jako niedostępnej.
+            self.async_write_ha_state()
+            return
         super()._handle_coordinator_update()
 
     def _resync_node_id(self) -> None:
