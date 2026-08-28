@@ -329,6 +329,17 @@ async def _setup_meshtastic_devices(
         still_tracked = not legacy_node_ids.isdisjoint(filter_node_nums) or not identity_keys.isdisjoint(
             configured_identity_keys
         )
+        LOGGER.debug(
+            "Device cleanup check: %s (id=%s) legacy_node_ids=%s identity_keys=%s "
+            "still_tracked=%s filter_node_nums=%s configured_identity_keys=%s",
+            device.name,
+            device.id,
+            legacy_node_ids,
+            identity_keys,
+            still_tracked,
+            filter_node_nums,
+            configured_identity_keys,
+        )
         if (legacy_node_ids or identity_keys) and not still_tracked:
             await _remove_meshtastic_device(device_registry, entry, device)
 
