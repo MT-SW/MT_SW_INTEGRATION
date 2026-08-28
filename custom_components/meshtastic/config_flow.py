@@ -705,7 +705,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ):
                 coordinator = self.config_entry.runtime_data.coordinator
                 for node_id in removed_node_ids:
-                    await coordinator.async_request_node_removal(node_id)
+                    self.hass.async_create_task(coordinator.async_request_node_removal(node_id))
 
             if user_input.get(CONF_OPTION_NODE):
                 # Add the new node
