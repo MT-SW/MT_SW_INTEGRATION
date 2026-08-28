@@ -329,17 +329,6 @@ async def _setup_meshtastic_devices(
         still_tracked = not legacy_node_ids.isdisjoint(filter_node_nums) or not identity_keys.isdisjoint(
             configured_identity_keys
         )
-        LOGGER.debug(
-            "Device cleanup check: %s (id=%s) legacy_node_ids=%s identity_keys=%s "
-            "still_tracked=%s filter_node_nums=%s configured_identity_keys=%s",
-            device.name,
-            device.id,
-            legacy_node_ids,
-            identity_keys,
-            still_tracked,
-            filter_node_nums,
-            configured_identity_keys,
-        )
         if (legacy_node_ids or identity_keys) and not still_tracked:
             await _remove_meshtastic_device(device_registry, entry, device)
 
@@ -463,15 +452,19 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     # first time (e.g. right after a firmware update that enables it),
     # since in that case the old device has neither the new identity_key
     # nor the new node number recorded yet
-    existing_device = (
-        device_registry.async_get_device(identifiers={(DOMAIN, identity_key)})
-        or device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
-        or (
-            device_registry.async_get_device(connections={(dr.CONNECTION_NETWORK_MAC, mac_address)})
-            if mac_address
-            else None
-        )
-    )
+    existing_device = device_registry.async_get_device(identifiers={(DOMAIN, identity_key)})
+    existing_device_is_same_identity = existing_device is not None
+    if existing_device is None:
+        existing_device = device_registry.async_get_device(identifiers={(DOMAIN, str(node_id))})
+        existing_device_is_same_identity = existing_device is not None
+    if existing_device is None and mac_address:
+        # MAC-only match: ten sam fizyczny sprzęt, ale NIE wiadomo czy to ta sama
+        # logiczna tożsamość węzła (np. po regeneracji ID/klucza na tym samym
+        # radiu). Nadal przydatne niżej do via_device/connections, ale nie wolno
+        # z niego dziedziczyć starych identyfikatorów — inaczej zregenerowany
+        # węzeł zlewa się na stałe z poprzednikiem i nigdy nie da się go usunąć.
+        existing_device = device_registry.async_get_device(connections={(dr.CONNECTION_NETWORK_MAC, mac_address)})
+        existing_device_is_same_identity = False
     via_device = None
     if existing_device is not None and existing_device.config_entries != {entry.entry_id}:
         # get other meshtastic connections
@@ -524,7 +517,7 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     # it, and (b) a future node-number change is still recognised as the
     # same device.
     identifiers = {(DOMAIN, identity_key), (DOMAIN, str(node_id))}
-    if existing_device is not None:
+    if existing_device is not None and existing_device_is_same_identity:
         identifiers |= {(d, i) for d, i in existing_device.identifiers if d == DOMAIN}
 
     d = device_registry.async_get_or_create(
