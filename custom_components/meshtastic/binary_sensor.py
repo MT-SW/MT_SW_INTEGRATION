@@ -40,7 +40,8 @@ def _build_binary_sensors(
         MeshtasticBinarySensor(
             coordinator=coordinator,
             entity_description=MeshtasticBinarySensorEntityDescription(
-                                translation_key="device_powered",
+                key="device_powered",
+                translation_key="device_powered",
                 name="Powered",
                 icon="mdi:power-plug",
                 device_class=BinarySensorDeviceClass.POWER,
@@ -63,7 +64,8 @@ def _build_binary_sensors(
         MeshtasticBinarySensor(
             coordinator=coordinator,
             entity_description=MeshtasticBinarySensorEntityDescription(
-                                translation_key="node_is_muted",
+                key="node_is_muted",
+                translation_key="node_is_muted",
                 name="Muted",
                 icon="mdi:volume-off",
                 exists_fn=lambda device: True,
@@ -79,7 +81,8 @@ def _build_binary_sensors(
         MeshtasticBinarySensor(
             coordinator=coordinator,
             entity_description=MeshtasticBinarySensorEntityDescription(
-                                translation_key="node_has_xeddsa_signed",
+                key="node_has_xeddsa_signed",
+                translation_key="node_has_xeddsa_signed",
                 name="Signs Packets (XEdDSA)",
                 icon="mdi:shield-check",
                 exists_fn=lambda device: True,
@@ -95,7 +98,8 @@ def _build_binary_sensors(
         MeshtasticBinarySensor(
             coordinator=coordinator,
             entity_description=MeshtasticBinarySensorEntityDescription(
-                                translation_key="node_heard_on_current_lora",
+                key="node_heard_on_current_lora",
+                translation_key="node_heard_on_current_lora",
                 name="Heard on Current LoRa Config",
                 icon="mdi:radio-tower",
                 device_class=BinarySensorDeviceClass.CONNECTIVITY,
