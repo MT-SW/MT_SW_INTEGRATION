@@ -340,7 +340,45 @@
       "airquality_particles10um": { "name": "Particles >1.0µm" },
       "airquality_particles25um": { "name": "Particles >2.5µm" },
       "airquality_particles50um": { "name": "Particles >5.0µm" },
-      "airquality_particles100um": { "name": "Particles >10µm" }
+      "airquality_particles100um": { "name": "Particles >10µm" },
+      "node_last_heard": { "name": "Last Heard" },
+      "node_snr": { "name": "Signal to Noise Ratio" },
+      "node_hops_away": { "name": "Hops Away" },
+      "node_role": { "name": "Role" },
+      "node_short_name": { "name": "Short Name" },
+      "node_long_name": { "name": "Long Name" },
+      "device_uptime": { "name": "Uptime" },
+      "device_battery_level": { "name": "Battery Level" },
+      "device_voltage": { "name": "Voltage" },
+      "device_channel_utilization": { "name": "Channel Utilization" },
+      "device_airtime": { "name": "Airtime" },
+      "stats_packets_tx": { "name": "Packets Sent" },
+      "stats_packets_rx": { "name": "Packets Received" },
+      "stats_packets_rx_bad": { "name": "Malformed Packets Received" },
+      "stats_packets_rx_duplicate": { "name": "Duplicate Packets Received" },
+      "stats_packets_tx_relayed": { "name": "Packets Relayed" },
+      "stats_packets_tx_relay_cancelled": { "name": "Packets Relay Canceled" },
+      "stats_nodes_online": { "name": "Online Nodes" },
+      "stats_nodes_total": { "name": "Total Nodes" },
+      "stats_heap_total_bytes": { "name": "Heap Total" },
+      "stats_heap_free_bytes": { "name": "Heap Free" },
+      "stats_noise_floor": { "name": "Noise Floor" },
+      "stats_ext_cpu_usage": { "name": "CPU Usage" },
+      "stats_ext_flash_used": { "name": "Flash Used" },
+      "stats_ext_flash_total": { "name": "Flash Total" },
+      "stats_ext_psram_free": { "name": "PSRAM Free" },
+      "stats_ext_psram_total": { "name": "PSRAM Total" },
+      "power_channel_voltage": { "name": "Channel {channel} Voltage" },
+      "power_channel_current": { "name": "Channel {channel} Current" },
+      "host_uptime_seconds": { "name": "Uptime" },
+      "host_freemem_bytes": { "name": "Free Memory" },
+      "host_diskfree1_bytes": { "name": "Free Disk" },
+      "host_diskfree2_bytes": { "name": "Free Disk 2" },
+      "host_diskfree3_bytes": { "name": "Free Disk 3" },
+      "host_load1": { "name": "Load 1" },
+      "host_load5": { "name": "Load 5" },
+      "host_load15": { "name": "Load 15" },
+      "host_user_string": { "name": "User String" }
     },
     "meshtastic": {
       "channel": {
@@ -357,6 +395,12 @@
           "logbook_missing": "Logbook missing"
         }
       }
+    },
+    "binary_sensor": {
+      "device_powered": { "name": "Powered" },
+      "node_is_muted": { "name": "Muted" },
+      "node_has_xeddsa_signed": { "name": "Signs Packets (XEdDSA)" },
+      "node_heard_on_current_lora": { "name": "Heard on Current LoRa Config" }
     }
   },
   "selector": {

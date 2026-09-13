@@ -137,7 +137,7 @@ def _build_node_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="node_last_heard",
+                                translation_key="node_last_heard",
                 name="Last Heard",
                 icon="mdi:timeline-clock",
                 device_class=SensorDeviceClass.TIMESTAMP,
@@ -154,7 +154,7 @@ def _build_node_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="node_snr",
+                                translation_key="node_snr",
                 name="Signal to Noise Ratio",
                 icon="mdi:signal",
                 native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS,
@@ -174,7 +174,7 @@ def _build_node_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="node_hops_away",
+                                translation_key="node_hops_away",
                 name="Hops away",
                 icon="mdi:rabbit",
                 state_class=SensorStateClass.MEASUREMENT,
@@ -191,7 +191,7 @@ def _build_node_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="node_role",
+                                translation_key="node_role",
                 name="Role",
                 icon="mdi:card-account-details",
                 value_fn=lambda device: device.coordinator.data[device.node_id].get("user", {}).get("role", None),
@@ -206,7 +206,7 @@ def _build_node_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="node_short_name",
+                                translation_key="node_short_name",
                 name="Short Name",
                 icon="mdi:card-account-details",
                 value_fn=lambda device: device.coordinator.data[device.node_id].get("user", {}).get("shortName", None),
@@ -221,7 +221,7 @@ def _build_node_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="node_long_name",
+                                translation_key="node_long_name",
                 name="Long Name",
                 icon="mdi:card-account-details",
                 value_fn=lambda device: device.coordinator.data[device.node_id].get("user", {}).get("longName", None),
@@ -246,7 +246,7 @@ def _build_device_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="device_uptime",
+                                translation_key="device_uptime",
                 name="Uptime",
                 icon="mdi:progress-clock",
                 value_fn=lambda device: _format_uptime(
@@ -269,7 +269,7 @@ def _build_device_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="device_battery_level",
+                                translation_key="device_battery_level",
                 name="Battery Level",
                 icon="mdi:battery",
                 native_unit_of_measurement=PERCENTAGE,
@@ -287,7 +287,7 @@ def _build_device_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="device_voltage",
+                                translation_key="device_voltage",
                 name="Voltage",
                 icon="mdi:lightning-bolt",
                 native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -307,7 +307,7 @@ def _build_device_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="device_channel_utilization",
+                                translation_key="device_channel_utilization",
                 name="Channel Utilization",
                 icon="mdi:signal-distance-variant",
                 native_unit_of_measurement=PERCENTAGE,
@@ -326,7 +326,7 @@ def _build_device_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="device_airtime",
+                                translation_key="device_airtime",
                 name="Airtime",
                 icon="mdi:timer",
                 native_unit_of_measurement=PERCENTAGE,
@@ -358,7 +358,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_packets_tx",
+                                        translation_key="stats_packets_tx",
                     name="Packets sent",
                     icon="mdi:call-made",
                     state_class=SensorStateClass.MEASUREMENT,
@@ -376,7 +376,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_packets_rx",
+                                        translation_key="stats_packets_rx",
                     name="Packets received",
                     icon="mdi:call-received",
                     state_class=SensorStateClass.MEASUREMENT,
@@ -394,7 +394,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_packets_rx_bad",
+                                        translation_key="stats_packets_rx_bad",
                     name="Malformed Packets received",
                     icon="mdi:call-missed",
                     state_class=SensorStateClass.MEASUREMENT,
@@ -412,7 +412,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_packets_rx_duplicate",
+                                        translation_key="stats_packets_rx_duplicate",
                     name="Duplicate Packets received",
                     icon="mdi:call-split",
                     state_class=SensorStateClass.MEASUREMENT,
@@ -430,7 +430,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_packets_tx_relayed",
+                                        translation_key="stats_packets_tx_relayed",
                     name="Packets relayed",
                     icon="mdi:call-missed",
                     state_class=SensorStateClass.MEASUREMENT,
@@ -448,7 +448,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_packets_tx_relay_cancelled",
+                                        translation_key="stats_packets_tx_relay_cancelled",
                     name="Packets relay canceled",
                     icon="mdi:call-missed",
                     state_class=SensorStateClass.MEASUREMENT,
@@ -466,7 +466,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_nodes_online",
+                                        translation_key="stats_nodes_online",
                     name="Online Nodes",
                     icon="mdi:radio-handheld",
                     state_class=SensorStateClass.TOTAL,
@@ -484,7 +484,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_nodes_total",
+                                        translation_key="stats_nodes_total",
                     name="Total Nodes",
                     icon="mdi:radio-handheld",
                     state_class=SensorStateClass.TOTAL,
@@ -502,7 +502,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_heap_total_bytes",
+                                        translation_key="stats_heap_total_bytes",
                     name="Heap Total",
                     icon="mdi:memory",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -524,7 +524,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_heap_free_bytes",
+                                        translation_key="stats_heap_free_bytes",
                     name="Heap Free",
                     icon="mdi:memory",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -546,7 +546,7 @@ def _build_local_stats_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_noise_floor",
+                                        translation_key="stats_noise_floor",
                     name="Noise Floor",
                     icon="mdi:signal-off",
                     native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS,
@@ -582,7 +582,7 @@ def _build_local_stats_extended_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_ext_cpu_usage",
+                                        translation_key="stats_ext_cpu_usage",
                     name="CPU Usage",
                     icon="mdi:cpu-64-bit",
                     native_unit_of_measurement=PERCENTAGE,
@@ -602,7 +602,7 @@ def _build_local_stats_extended_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_ext_flash_used",
+                                        translation_key="stats_ext_flash_used",
                     name="Flash Used",
                     icon="mdi:harddisk",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -624,7 +624,7 @@ def _build_local_stats_extended_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_ext_flash_total",
+                                        translation_key="stats_ext_flash_total",
                     name="Flash Total",
                     icon="mdi:harddisk",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -646,7 +646,7 @@ def _build_local_stats_extended_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_ext_psram_free",
+                                        translation_key="stats_ext_psram_free",
                     name="PSRAM Free",
                     icon="mdi:memory",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -668,7 +668,7 @@ def _build_local_stats_extended_sensors(
             MeshtasticSensor(
                 coordinator=coordinator,
                 entity_description=MeshtasticSensorEntityDescription(
-                    key="stats_ext_psram_total",
+                                        translation_key="stats_ext_psram_total",
                     name="PSRAM Total",
                     icon="mdi:memory",
                     native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -718,7 +718,7 @@ def _build_power_metrics_sensors(
                             coordinator=coordinator,
                             entity_description=MeshtasticSensorEntityDescription(
                                 key=f"power_ch{channel}_voltage",
-                                name=f"Channel {channel} Voltage",
+                                                                translation_placeholders={"channel": str(channel)},                               translation_key="power_channel_voltage",
                                 icon="mdi:lightning-bolt",
                                 native_unit_of_measurement=UnitOfElectricPotential.VOLT,
                                 device_class=SensorDeviceClass.VOLTAGE,
@@ -736,7 +736,7 @@ def _build_power_metrics_sensors(
                             coordinator=coordinator,
                             entity_description=MeshtasticSensorEntityDescription(
                                 key=f"power_ch{channel}_current",
-                                name=f"Channel {channel} Current",
+                                                                translation_placeholders={"channel": str(channel)},                               translation_key="power_channel_current",
                                 icon="mdi:current-dc",
                                 native_unit_of_measurement=UnitOfElectricCurrent.MILLIAMPERE,
                                 device_class=SensorDeviceClass.CURRENT,
@@ -894,7 +894,7 @@ def _build_host_metrics_sensors(
         MeshtasticSensor(
             coordinator=coordinator,
             entity_description=MeshtasticSensorEntityDescription(
-                key="host_uptime_seconds",
+                                translation_key="host_uptime_seconds",
                 name="Uptime",
                 icon="mdi:progress-clock",
                 value_fn=lambda device: _format_uptime(

@@ -348,7 +348,45 @@
       "airquality_particles10um": { "name": "Cząstki >1,0µm" },
       "airquality_particles25um": { "name": "Cząstki >2,5µm" },
       "airquality_particles50um": { "name": "Cząstki >5,0µm" },
-      "airquality_particles100um": { "name": "Cząstki >10µm" }
+      "airquality_particles100um": { "name": "Cząstki >10µm" },
+      "node_last_heard": { "name": "Ostatnio widziany" },
+      "node_snr": { "name": "SNR" },
+      "node_hops_away": { "name": "Liczba skoków" },
+      "node_role": { "name": "Rola urządzenia" },
+      "node_short_name": { "name": "Krótka nazwa" },
+      "node_long_name": { "name": "Długa nazwa" },
+      "device_uptime": { "name": "Czas pracy" },
+      "device_battery_level": { "name": "Poziom baterii" },
+      "device_voltage": { "name": "Napięcie" },
+      "device_channel_utilization": { "name": "Wykorzystanie kanału" },
+      "device_airtime": { "name": "Czas nadawania" },
+      "stats_packets_tx": { "name": "Wysłane pakiety" },
+      "stats_packets_rx": { "name": "Odebrane pakiety" },
+      "stats_packets_rx_bad": { "name": "Odebrane błędne pakiety" },
+      "stats_packets_rx_duplicate": { "name": "Odebrane duplikaty pakietów" },
+      "stats_packets_tx_relayed": { "name": "Przekazane pakiety" },
+      "stats_packets_tx_relay_cancelled": { "name": "Anulowane przekazania pakietów" },
+      "stats_nodes_online": { "name": "Węzły online" },
+      "stats_nodes_total": { "name": "Węzły łącznie" },
+      "stats_heap_total_bytes": { "name": "Sterta łącznie" },
+      "stats_heap_free_bytes": { "name": "Sterta wolna" },
+      "stats_noise_floor": { "name": "Szum tła" },
+      "stats_ext_cpu_usage": { "name": "Obciążenie CPU" },
+      "stats_ext_flash_used": { "name": "Pamięć flash (zajęta)" },
+      "stats_ext_flash_total": { "name": "Pamięć flash (łącznie)" },
+      "stats_ext_psram_free": { "name": "PSRAM (wolna)" },
+      "stats_ext_psram_total": { "name": "PSRAM (łącznie)" },
+      "power_channel_voltage": { "name": "Napięcie – kanał {channel}" },
+      "power_channel_current": { "name": "Prąd – kanał {channel}" },
+      "host_uptime_seconds": { "name": "Czas pracy" },
+      "host_freemem_bytes": { "name": "Wolna pamięć" },
+      "host_diskfree1_bytes": { "name": "Wolne miejsce na dysku" },
+      "host_diskfree2_bytes": { "name": "Wolne miejsce na dysku 2" },
+      "host_diskfree3_bytes": { "name": "Wolne miejsce na dysku 3" },
+      "host_load1": { "name": "Obciążenie (1 min)" },
+      "host_load5": { "name": "Obciążenie (5 min)" },
+      "host_load15": { "name": "Obciążenie (15 min)" },
+      "host_user_string": { "name": "Tekst użytkownika" }
     },
     "meshtastic": {
       "channel": {
@@ -365,6 +403,12 @@
           "logbook_missing": "Brak dziennika zdarzeń"
         }
       }
+    },
+    "binary_sensor": {
+      "device_powered": { "name": "Zasilanie" },
+      "node_is_muted": { "name": "Wyciszony" },
+      "node_has_xeddsa_signed": { "name": "Podpisuje pakiety (XEdDSA)" },
+      "node_heard_on_current_lora": { "name": "Słyszany w bieżącej konfiguracji LoRa" }
     }
   },
   "selector": {
