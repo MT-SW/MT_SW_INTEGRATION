@@ -99,6 +99,7 @@ async def async_unload_entry(
 @dataclass(kw_only=True)
 class MeshtasticSensorEntityDescription(SensorEntityDescription):
     exists_fn: Callable[[MeshtasticSensor], bool] = lambda _: True
+    extra_attributes_fn: Callable[[MeshtasticSensor], dict[str, Any]] | None = None
     value_fn: Callable[[MeshtasticSensor], StateType]
 
 
@@ -119,6 +120,8 @@ class MeshtasticSensor(MeshtasticNodeEntity, SensorEntity):
         LOGGER.debug("Updating sensor attributes: %s", self)
         self._attr_native_value = self.entity_description.value_fn(self)
         self._attr_available = self._attr_native_value is not None
+        if self.entity_description.extra_attributes_fn is not None:
+            self._attr_extra_state_attributes = self.entity_description.extra_attributes_fn(self)
 
 
 def _build_node_sensors(
@@ -1063,6 +1066,28 @@ def _build_neighbor_info_sensors(
     if not nodes_with_neighbor_info:
         return []
 
+    def neighbor_list_attrs(device: MeshtasticSensor) -> dict[str, Any]:
+        neighbors = device.coordinator.data[device.node_id].get("neighborInfo", {}).get("neighbors", [])
+        neighbor_list = []
+        for neighbor in neighbors:
+            neighbor_id = neighbor.get("nodeId")
+            neighbor_node = coordinator.data.get(neighbor_id, {}) if neighbor_id is not None else {}
+            name = neighbor_node.get("user", {}).get("longName") or (
+                f"!{neighbor_id:08x}" if neighbor_id is not None else "unknown"
+            )
+            last_rx = neighbor.get("lastRxTime")
+            neighbor_list.append(
+                {
+                    "name": name,
+                    "node_id": neighbor_id,
+                    "snr": neighbor.get("snr"),
+                    "last_heard": datetime.datetime.fromtimestamp(last_rx, tz=datetime.UTC).isoformat()
+                    if last_rx
+                    else None,
+                }
+            )
+        return {"neighbors": neighbor_list}
+
     return [
         MeshtasticSensor(
             coordinator=coordinator,
@@ -1075,6 +1100,7 @@ def _build_neighbor_info_sensors(
                 value_fn=lambda device: len(
                     device.coordinator.data[device.node_id].get("neighborInfo", {}).get("neighbors", [])
                 ),
+                extra_attributes_fn=neighbor_list_attrs,
             ),
             gateway=gateway,
             node_id=node_id,
