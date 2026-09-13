@@ -383,21 +383,7 @@
     },
     "meshtastic": {
       "channel": {
-              "name": "Channel {channel_name}",
-        "state": {
-          "logging": "Logging",
-          "logbook_missing": "Logbook missing"
-        }
-      },
-      "channel_primary": {
-        "name": "Primary Channel",
-        "state": {
-          "logging": "Logging",
-          "logbook_missing": "Logbook missing"
-        }
-      },
-      "channel_secondary": {
-        "name": "Secondary Channel",
+              "name": "Channel",
         "state": {
           "logging": "Logging",
           "logbook_missing": "Logbook missing"
@@ -408,6 +394,12 @@
         "state": {
           "logging": "Logging",
           "logbook_missing": "Logbook missing"
+        }
+      },
+      "gateway": {
+        "state": {
+          "Connected": "Connected",
+          "Disconnected": "Disconnected"
         }
       }
     },

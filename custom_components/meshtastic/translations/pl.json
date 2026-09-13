@@ -391,21 +391,7 @@
     },
     "meshtastic": {
       "channel": {
-                "name": "Kanał {channel_name}",
-        "state": {
-          "logging": "Rejestrowanie",
-          "logbook_missing": "Brak dziennika zdarzeń"
-        }
-      },
-      "channel_primary": {
-        "name": "Kanał główny",
-        "state": {
-          "logging": "Rejestrowanie",
-          "logbook_missing": "Brak dziennika zdarzeń"
-        }
-      },
-      "channel_secondary": {
-        "name": "Kanał dodatkowy",
+                "name": "Kanał",
         "state": {
           "logging": "Rejestrowanie",
           "logbook_missing": "Brak dziennika zdarzeń"
@@ -416,6 +402,12 @@
         "state": {
           "logging": "Rejestrowanie",
           "logbook_missing": "Brak dziennika zdarzeń"
+        }
+      },
+      "gateway": {
+        "state": {
+          "Connected": "Połączono",
+          "Disconnected": "Rozłączono"
         }
       }
     },

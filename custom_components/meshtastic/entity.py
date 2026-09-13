@@ -86,6 +86,7 @@ class GatewayEntity(MeshtasticEntity):
 
         self._attr_name = None
         self._attr_has_entity_name = True
+        self._attr_translation_key = "gateway"
 
         def flatten(
             dictionary: dict[str, typing.Any], parent_key: str = "", separator: str = "_"
@@ -144,15 +145,19 @@ class GatewayChannelEntity(MeshtasticEntity):
         self._settings = settings
         self._gateway_suggested_id = gateway_entity.suggested_object_id
         self._attr_unique_id = self.build_unique_id(config_entry_id, gateway_node, index)
-        self._attr_has_entity_name = True
+        self._attr_translation_key = "channel"
 
         if name:
-            self._attr_translation_key = "channel"
-            self._attr_translation_placeholders = {"channel_name": name}
+            self._attr_has_entity_name = True
+            self._attr_name = name
         elif primary:
-            self._attr_translation_key = "channel_primary"
+            self._attr_has_entity_name = True
+            self._attr_name = "Primary"
         elif secondary:
-            self._attr_translation_key = "channel_secondary"
+            self._attr_has_entity_name = True
+            self._attr_name = "Secondary"
+
+        self._attr_name = "Channel " + self._attr_name
 
         if has_logbook:
             self._attr_state = "logging"
@@ -178,6 +183,7 @@ class GatewayChannelEntity(MeshtasticEntity):
 
 class GatewayDirectMessageEntity(MeshtasticEntity):
     _attr_icon = "mdi:message-lock"
+    _attr_name = "Direct Messages"
     _attr_translation_key = "direct_messages"
     _attr_has_entity_name = True
     _attr_should_poll = False
