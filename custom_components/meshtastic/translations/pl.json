@@ -386,7 +386,8 @@
       "host_load1": { "name": "Obciążenie (1 min)" },
       "host_load5": { "name": "Obciążenie (5 min)" },
       "host_load15": { "name": "Obciążenie (15 min)" },
-      "host_user_string": { "name": "Tekst użytkownika" }
+      "host_user_string": { "name": "Tekst użytkownika" },
+      "node_neighbor_count": { "name": "Liczba sąsiadów" }
     },
     "meshtastic": {
       "channel": {

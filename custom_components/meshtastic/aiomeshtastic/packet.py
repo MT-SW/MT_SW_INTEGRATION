@@ -83,6 +83,10 @@ class Packet[T]:
             route_discovery = mesh_pb2.RouteDiscovery()
             route_discovery.ParseFromString(payload)
             return route_discovery
+        if port_num == portnums_pb2.PortNum.NEIGHBORINFO_APP:
+            neighbor_info = mesh_pb2.NeighborInfo()
+            neighbor_info.ParseFromString(payload)
+            return neighbor_info
         self._logger.debug("Unhandled portnum %s", port_num)
         return None
 

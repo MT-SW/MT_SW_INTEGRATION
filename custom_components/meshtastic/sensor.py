@@ -77,6 +77,7 @@ def _build_sensors(nodes: Mapping[int, Mapping[str, Any]], runtime_data: Meshtas
     entities += _build_environment_metrics_sensors(nodes, runtime_data)
     entities += _build_air_quality_metrics_sensors(nodes, runtime_data)
     entities += _build_host_metrics_sensors(nodes, runtime_data)
+    entities += _build_neighbor_info_sensors(nodes, runtime_data)
     return entities
 
 
@@ -1049,3 +1050,34 @@ def _build_air_quality_metrics_sensors(
         LOGGER.warning("Failed to create air quality metric entities", exc_info=True)
 
     return entities
+
+
+def _build_neighbor_info_sensors(
+    nodes: Mapping[int, Mapping[str, Any]], runtime_data: MeshtasticData
+) -> Iterable[MeshtasticSensor]:
+    coordinator = runtime_data.coordinator
+    gateway = runtime_data.client.get_own_node()
+    nodes_with_neighbor_info = {
+        node_id: node_info for node_id, node_info in nodes.items() if "neighborInfo" in node_info
+    }
+    if not nodes_with_neighbor_info:
+        return []
+
+    return [
+        MeshtasticSensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticSensorEntityDescription(
+                key="node_neighbor_count",
+                translation_key="node_neighbor_count",
+                name="Neighbor Count",
+                icon="mdi:radio-tower",
+                state_class=SensorStateClass.MEASUREMENT,
+                value_fn=lambda device: len(
+                    device.coordinator.data[device.node_id].get("neighborInfo", {}).get("neighbors", [])
+                ),
+            ),
+            gateway=gateway,
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes_with_neighbor_info.items()
+    ]

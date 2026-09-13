@@ -378,7 +378,8 @@
       "host_load1": { "name": "Load 1" },
       "host_load5": { "name": "Load 5" },
       "host_load15": { "name": "Load 15" },
-      "host_user_string": { "name": "User String" }
+      "host_user_string": { "name": "User String" },
+      "node_neighbor_count": { "name": "Neighbor Count" }
     },
     "meshtastic": {
       "channel": {

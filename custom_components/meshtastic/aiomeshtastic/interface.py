@@ -708,6 +708,11 @@ class MeshInterface:
                 await self._notify_node_update(node_id)
         elif packet.port_num == portnums_pb2.PortNum.TRACEROUTE_APP:
             pass
+        elif packet.port_num == portnums_pb2.PortNum.NEIGHBORINFO_APP:
+            neighbor_info = packet.app_payload
+            neighbor_info_dict = google.protobuf.json_format.MessageToDict(neighbor_info)
+            if node_id in self._node_database:
+                await self._node_database_update(node_id, neighborInfo=neighbor_info_dict)
 
         for listener in self._app_listeners[packet.port_num]:
             self._add_background_task(listener(node, packet), name=f"app-listener-{packet.port_num}")
