@@ -172,6 +172,7 @@ class GatewayChannelEntity(MeshtasticEntity):
             "psk": self._settings["psk"],
             "uplink_enabled": self._settings["uplinkEnabled"],
             "downlink_enabled": self._settings["downlinkEnabled"],
+            "use_aead": self._settings["useAead"],
         }
 
     @property

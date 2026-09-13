@@ -59,6 +59,55 @@ def _build_binary_sensors(
         for node_id, node_info in nodes.items()
     ]
 
+    entities += [
+        MeshtasticBinarySensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticBinarySensorEntityDescription(
+                key="node_is_muted",
+                name="Muted",
+                icon="mdi:volume-off",
+                exists_fn=lambda device: True,
+                value_fn=lambda device: device.coordinator.data[device.node_id].get("isMuted", False),
+            ),
+            gateway=gateway,
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+    ]
+
+    entities += [
+        MeshtasticBinarySensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticBinarySensorEntityDescription(
+                key="node_has_xeddsa_signed",
+                name="Signs Packets (XEdDSA)",
+                icon="mdi:shield-check",
+                exists_fn=lambda device: True,
+                value_fn=lambda device: device.coordinator.data[device.node_id].get("hasXeddsaSigned", False),
+            ),
+            gateway=gateway,
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+    ]
+
+    entities += [
+        MeshtasticBinarySensor(
+            coordinator=coordinator,
+            entity_description=MeshtasticBinarySensorEntityDescription(
+                key="node_heard_on_current_lora",
+                name="Heard on Current LoRa Config",
+                icon="mdi:radio-tower",
+                device_class=BinarySensorDeviceClass.CONNECTIVITY,
+                exists_fn=lambda device: True,
+                value_fn=lambda device: device.coordinator.data[device.node_id].get("heardOnCurrentLora", False),
+            ),
+            gateway=gateway,
+            node_id=node_id,
+        )
+        for node_id, node_info in nodes.items()
+    ]
+
     return entities
 
 
