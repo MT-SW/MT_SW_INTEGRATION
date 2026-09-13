@@ -41,7 +41,7 @@ def _build_buttons(
     return [
         MeshtasticRebootButton(
             coordinator=coordinator,
-            entity_description=ButtonEntityDescription(key="reboot", name="Reboot", icon="mdi:restart"),
+            entity_description=ButtonEntityDescription(key="reboot", translation_key="reboot", name="Reboot", icon="mdi:restart"),
             gateway=gateway,
             node_id=gateway_node_id,
             client=runtime_data.client,

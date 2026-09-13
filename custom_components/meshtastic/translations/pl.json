@@ -391,7 +391,21 @@
     },
     "meshtastic": {
       "channel": {
-        "name": "Kanał",
+                "name": "Kanał {channel_name}",
+        "state": {
+          "logging": "Rejestrowanie",
+          "logbook_missing": "Brak dziennika zdarzeń"
+        }
+      },
+      "channel_primary": {
+        "name": "Kanał główny",
+        "state": {
+          "logging": "Rejestrowanie",
+          "logbook_missing": "Brak dziennika zdarzeń"
+        }
+      },
+      "channel_secondary": {
+        "name": "Kanał dodatkowy",
         "state": {
           "logging": "Rejestrowanie",
           "logbook_missing": "Brak dziennika zdarzeń"
@@ -410,6 +424,9 @@
       "node_is_muted": { "name": "Wyciszony" },
       "node_has_xeddsa_signed": { "name": "Podpisuje pakiety (XEdDSA)" },
       "node_heard_on_current_lora": { "name": "Słyszany w bieżącej konfiguracji LoRa" }
+    },
+    "button": {
+      "reboot": { "name": "Uruchom ponownie" }
     }
   },
   "selector": {

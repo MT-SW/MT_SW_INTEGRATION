@@ -383,7 +383,21 @@
     },
     "meshtastic": {
       "channel": {
-        "name": "Channel",
+              "name": "Channel {channel_name}",
+        "state": {
+          "logging": "Logging",
+          "logbook_missing": "Logbook missing"
+        }
+      },
+      "channel_primary": {
+        "name": "Primary Channel",
+        "state": {
+          "logging": "Logging",
+          "logbook_missing": "Logbook missing"
+        }
+      },
+      "channel_secondary": {
+        "name": "Secondary Channel",
         "state": {
           "logging": "Logging",
           "logbook_missing": "Logbook missing"
@@ -402,6 +416,9 @@
       "node_is_muted": { "name": "Muted" },
       "node_has_xeddsa_signed": { "name": "Signs Packets (XEdDSA)" },
       "node_heard_on_current_lora": { "name": "Heard on Current LoRa Config" }
+    },
+    "button": {
+      "reboot": { "name": "Reboot" }
     }
   },
   "selector": {
