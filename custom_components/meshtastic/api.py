@@ -64,6 +64,7 @@ EVENT_MESHTASTIC_API_PACKET = EVENT_MESHTASTIC_API_BASE + "_packet"
 EVENT_MESHTASTIC_API_TEXT_MESSAGE = EVENT_MESHTASTIC_API_BASE + "_text_message"
 EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT = EVENT_MESHTASTIC_API_BASE + "_text_message_out"
 EVENT_MESHTASTIC_API_POSITION = EVENT_MESHTASTIC_API_BASE + "_position"
+EVENT_MESHTASTIC_API_NEIGHBOR_INFO = EVENT_MESHTASTIC_API_BASE + "_neighbor_info"
 
 ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_EVENT_MESHTASTIC_API_NODE = "node"
@@ -134,6 +135,9 @@ class MeshtasticApiClient:
         )
         self._interface.add_packet_app_listener(
             packet_type=portnums_pb2.PortNum.POSITION_APP, callback=self._on_position, as_dict=True
+        )
+        self._interface.add_packet_app_listener(
+            packet_type=portnums_pb2.PortNum.NEIGHBORINFO_APP, callback=self._on_neighbor_info, as_dict=True
         )
         self._interface.add_packet_app_listener(
             packet_type=portnums_pb2.PortNum.ROUTING_APP, callback=self._on_routing, as_packet=True
@@ -213,6 +217,16 @@ class MeshtasticApiClient:
 
     def get_own_node(self) -> Mapping[str, Any]:
         return self._interface.connected_node() or {}
+
+    def get_all_nodes_sync(self) -> Mapping[int, Mapping[str, Any]]:
+        """Migawka pełnej lokalnej bazy węzłów bramy, bez await.
+
+        coordinator.data zawiera wyłącznie węzły z listy filtrów, więc nie
+        nadaje się do rozwiązywania nazw węzłów spoza niej (np. sąsiadów
+        z ramki NeighborInfo). Tutaj mamy wszystko, co brama kiedykolwiek
+        usłyszała, a _normalize_user_dict gwarantuje obecność shortName.
+        """
+        return self._interface.nodes()
 
     def get_node_info(self, node_id: int) -> MeshNode | None:
         return self._interface.find_node(node_id=node_id)
@@ -330,6 +344,14 @@ class MeshtasticApiClient:
             self._modify_position(position)
 
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_NODE_UPDATED, event_data)
+
+    async def _on_neighbor_info(self, node: MeshNode, neighbor_info: dict[str, Any]) -> None:
+        # własne zdarzenie zamiast drogi przez NodeInfo: _notify_node_update()
+        # pakuje wpis węzła z powrotem w protobuf NodeInfo, który nie ma pola
+        # neighbor_info, a ParseDict(..., ignore_unknown_fields=True) po cichu
+        # je wyrzuca — dane nigdy nie docierały do koordynatora
+        event_data = self._build_event_data(node.id, neighbor_info)
+        self._hass.bus.async_fire(EVENT_MESHTASTIC_API_NEIGHBOR_INFO, event_data)
 
     async def _on_routing(self, node: MeshNode, packet: Packet) -> None:
         routing = packet.app_payload
@@ -479,6 +501,13 @@ class MeshtasticApiClient:
     async def reboot(self, node: int, seconds: int = 5) -> None:
         try:
             await self._interface.reboot(seconds=seconds, node=node)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def request_neighbor_info(self, node: int) -> Mapping[str, Any]:
+        try:
+            response = await self._interface.request_neighbor_info(node)
+            return self._message_to_dict(response)
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 

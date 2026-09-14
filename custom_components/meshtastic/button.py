@@ -29,24 +29,46 @@ if TYPE_CHECKING:
 
 def _build_buttons(
     nodes: Mapping[int, Mapping[str, Any]], runtime_data: MeshtasticData
-) -> Iterable[MeshtasticRebootButton]:
+) -> Iterable[MeshtasticNodeEntity]:
     coordinator = runtime_data.coordinator
     gateway = runtime_data.client.get_own_node()
     gateway_node_id = gateway.get("num")
     # ograniczone tylko do lokalnie podłączonego węzła — reboot() wysyła
     # AdminMessage po mesh do wskazanego node_id, więc przycisk na cudzym
     # węźle próbowałby realnie zrestartować urządzenie kogoś innego w sieci
-    if gateway_node_id not in nodes:
-        return []
-    return [
-        MeshtasticRebootButton(
+    buttons: list[MeshtasticNodeEntity] = []
+    if gateway_node_id in nodes:
+        buttons.append(
+            MeshtasticRebootButton(
+                coordinator=coordinator,
+                entity_description=ButtonEntityDescription(
+                    key="reboot", translation_key="reboot", name="Reboot", icon="mdi:restart"
+                ),
+                gateway=gateway,
+                node_id=gateway_node_id,
+                client=runtime_data.client,
+            )
+        )
+
+    # w odróżnieniu od reboota to zapytanie wyłącznie do odczytu, więc może
+    # istnieć dla każdego śledzonego węzła — ramki NeighborInfo przychodzą
+    # rzadko, a tak można o nie poprosić od ręki
+    buttons.extend(
+        MeshtasticRequestNeighborsButton(
             coordinator=coordinator,
-            entity_description=ButtonEntityDescription(key="reboot", translation_key="reboot", name="Reboot", icon="mdi:restart"),
+            entity_description=ButtonEntityDescription(
+                key="request_neighbors",
+                translation_key="request_neighbors",
+                name="Request Neighbors",
+                icon="mdi:radio-tower",
+            ),
             gateway=gateway,
-            node_id=gateway_node_id,
+            node_id=node_id,
             client=runtime_data.client,
         )
-    ]
+        for node_id in nodes
+    )
+    return buttons
 
 
 async def async_setup_entry(
@@ -68,7 +90,13 @@ async def async_setup_entry(
 
     registry = er.async_get(hass)
     for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-        if reg_entry.domain == "button" and reg_entry.unique_id != expected_unique_id:
+        # zawężone do samych przycisków reboot — inaczej to sprzątanie kasowałoby
+        # każdy nowy typ przycisku (np. "Pobierz sąsiadów") tuż po jego utworzeniu
+        if (
+            reg_entry.domain == "button"
+            and reg_entry.unique_id.endswith("_reboot")
+            and reg_entry.unique_id != expected_unique_id
+        ):
             registry.async_remove(reg_entry.entity_id)
 
 
@@ -117,3 +145,31 @@ class MeshtasticRebootButton(MeshtasticNodeEntity, ButtonEntity):
             await self.hass.config_entries.async_reload(entry_id)
 
         self.hass.async_create_task(_delayed_reload_after_reboot())
+
+
+class MeshtasticRequestNeighborsButton(MeshtasticNodeEntity, ButtonEntity):
+    entity_description: ButtonEntityDescription
+
+    def __init__(
+        self,
+        coordinator: MeshtasticDataUpdateCoordinator,
+        entity_description: ButtonEntityDescription,
+        gateway: typing.Mapping[str, typing.Any],
+        node_id: int,
+        client,
+    ) -> None:
+        super().__init__(coordinator, gateway, node_id, BUTTON_DOMAIN, entity_description)
+        self._client = client
+
+    def _async_update_attrs(self) -> None:
+        pass
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    async def async_press(self) -> None:
+        # odpowiedź wraca zwykłą drogą pakietową (NEIGHBORINFO_APP -> zdarzenie
+        # -> koordynator), więc nie ma tu nic do zrobienia z wynikiem. Węzły na
+        # firmware bez obsługi want_response po prostu nie odpowiedzą i wyjdzie timeout.
+        await self._client.request_neighbor_info(self._node_id)

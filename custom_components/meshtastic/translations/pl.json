@@ -397,6 +397,12 @@
           "logbook_missing": "Brak dziennika zdarzeń"
         }
       },
+      "channel_primary": {
+        "name": "Główny"
+      },
+      "channel_secondary": {
+        "name": "Zapasowy"
+      },
       "direct_messages": {
         "name": "Wiadomości bezpośrednie",
         "state": {
@@ -418,7 +424,8 @@
       "node_heard_on_current_lora": { "name": "Słyszany w bieżącej konfiguracji LoRa" }
     },
     "button": {
-      "reboot": { "name": "Uruchom ponownie" }
+      "reboot": { "name": "Uruchom ponownie" },
+      "request_neighbors": { "name": "Pobierz sąsiadów" }
     }
   },
   "selector": {

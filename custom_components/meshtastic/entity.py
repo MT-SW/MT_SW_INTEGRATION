@@ -137,6 +137,7 @@ class GatewayChannelEntity(MeshtasticEntity):
         primary: bool = False,  # noqa: FBT001, FBT002
         secondary: bool = False,  # noqa: FBT001, FBT002
         has_logbook: bool = True,  # noqa: FBT001, FBT002
+        labels: typing.Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(config_entry_id, gateway_node, MeshtasticDeviceClass.CHANNEL, index)
 
@@ -147,17 +148,24 @@ class GatewayChannelEntity(MeshtasticEntity):
         self._attr_unique_id = self.build_unique_id(config_entry_id, gateway_node, index)
         self._attr_translation_key = "channel"
 
-        if name:
-            self._attr_has_entity_name = True
-            self._attr_name = name
-        elif primary:
-            self._attr_has_entity_name = True
-            self._attr_name = "Primary"
-        elif secondary:
-            self._attr_has_entity_name = True
-            self._attr_name = "Secondary"
+        # Te encje siedzą na własnym EntityComponent, a nie na prawdziwej
+        # platformie HA, więc automatyczne tłumaczenie nazwy przez translation_key
+        # nic nie zwraca (v1.2.0: nazwa schodziła do None i zostawała sama nazwa
+        # urządzenia). Działa wyłącznie _attr_name, więc przetłumaczone napisy
+        # wczytujemy sami w __init__.py i dostajemy je tutaj gotowe.
+        labels = labels or {}
+        prefix = labels.get("channel", "Channel")
 
-        self._attr_name = "Channel " + self._attr_name
+        self._attr_has_entity_name = True
+        if name:
+            self._attr_name = f"{prefix} {name}"
+        elif primary:
+            self._attr_name = f"{prefix} {labels.get('channel_primary', 'Primary')}"
+        elif secondary:
+            self._attr_name = f"{prefix} {labels.get('channel_secondary', 'Secondary')}"
+        else:
+            # kanał bez nazwy i bez roli — wcześniej wywalało się tu AttributeError
+            self._attr_name = f"{prefix} {index}"
 
         if has_logbook:
             self._attr_state = "logging"
@@ -279,6 +287,16 @@ class MeshtasticNodeEntity(MeshtasticCoordinatorEntity, ABC):
             f"{coordinator.config_entry.entry_id}_{platform}_{self._identity_key}_{self.entity_description.key}"
         )
         self._attr_has_entity_name = True
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # CoordinatorEntity nie wypełnia atrybutów przy dodaniu — robi to dopiero
+        # przy następnej aktualizacji koordynatora. Encje tworzone dynamicznie
+        # (np. licznik sąsiadów, powstający dokładnie w chwili przyjścia pierwszej
+        # ramki NeighborInfo) byłyby do tego czasu puste. Ten sam strażnik co
+        # niżej: między zbudowaniem encji a jej dodaniem węzeł może wypaść z filtra.
+        if self.coordinator.data and self.node_id in self.coordinator.data:
+            self._async_update_attrs()
 
     @callback
     def _handle_coordinator_update(self) -> None:

@@ -1238,6 +1238,19 @@ class MeshInterface:
         await self._notify_node_update(node_id)
         return True
 
+    async def request_neighbor_info(self, node: int | MeshNode, timeout: float = UNDEFINED) -> mesh_pb2.NeighborInfo:  # noqa: ASYNC109
+        neighbor_info = mesh_pb2.NeighborInfo()
+
+        response = await self._send_message_await_response(
+            node=node.id if isinstance(node, MeshNode) else node,
+            message=neighbor_info,
+            port_num=portnums_pb2.PortNum.NEIGHBORINFO_APP,
+            want_response=True,
+            timeout=timeout,
+        )
+
+        return response.app_payload
+
     async def request_traceroute(self, node: int | MeshNode, timeout: float = UNDEFINED) -> mesh_pb2.RouteDiscovery:  # noqa: ASYNC109
         route_discovery = mesh_pb2.RouteDiscovery()
 

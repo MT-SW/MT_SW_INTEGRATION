@@ -16,6 +16,7 @@ from .api import (
     ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID,
     ATTR_EVENT_MESHTASTIC_API_DATA,
     ATTR_EVENT_MESHTASTIC_API_NODE,
+    EVENT_MESHTASTIC_API_NEIGHBOR_INFO,
     EVENT_MESHTASTIC_API_NODE_UPDATED,
     EVENT_MESHTASTIC_API_POSITION,
     EVENT_MESHTASTIC_API_TELEMETRY,
@@ -108,6 +109,9 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self._remove_event_listeners.append(hass.bus.async_listen(EVENT_MESHTASTIC_API_TELEMETRY, self._api_telemetry))
         self._remove_event_listeners.append(hass.bus.async_listen(EVENT_MESHTASTIC_API_POSITION, self._api_position))
+        self._remove_event_listeners.append(
+            hass.bus.async_listen(EVENT_MESHTASTIC_API_NEIGHBOR_INFO, self._api_neighbor_info)
+        )
 
     async def async_shutdown(self) -> None:
         await super().async_shutdown()
@@ -269,6 +273,22 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         data = deepcopy(self.data)
         data[node_id]["position"] = new_position
         self.async_set_updated_data(data)
+
+    @meshtastic_api_event_callback
+    async def _api_neighbor_info(
+        self,
+        node_id: int,
+        data: Mapping[str, Any],
+        **kwargs,  # noqa: ANN003, ARG002
+    ) -> None:
+        existing = self.data[node_id].get("neighborInfo", {})
+        if existing == data:
+            self._logger.debug("Received neighbor info identical to existing one, ignoring event")
+            return
+
+        new_data = deepcopy(self.data)
+        new_data[node_id]["neighborInfo"] = data
+        self.async_set_updated_data(new_data)
 
     async def _node_updated(self, event: Event) -> None:
         if self.config_entry is None:

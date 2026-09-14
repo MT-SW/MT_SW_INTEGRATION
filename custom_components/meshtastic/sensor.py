@@ -1067,26 +1067,46 @@ def _build_neighbor_info_sensors(
         return []
 
     def neighbor_list_attrs(device: MeshtasticSensor) -> dict[str, Any]:
-        neighbors = device.coordinator.data[device.node_id].get("neighborInfo", {}).get("neighbors", [])
+        neighbor_info = device.coordinator.data[device.node_id].get("neighborInfo", {})
+        neighbors = neighbor_info.get("neighbors", [])
+
+        # pełna baza węzłów bramy, a nie coordinator.data — to drugie zawiera
+        # wyłącznie węzły z listy filtrów, a sąsiad prawie nigdy na niej nie jest,
+        # więc nazwy wychodziłyby jako surowe ID
+        try:
+            all_nodes = runtime_data.client.get_all_nodes_sync()
+        except Exception:  # noqa: BLE001
+            all_nodes = {}
+
         neighbor_list = []
         for neighbor in neighbors:
             neighbor_id = neighbor.get("nodeId")
-            neighbor_node = coordinator.data.get(neighbor_id, {}) if neighbor_id is not None else {}
-            name = neighbor_node.get("user", {}).get("longName") or (
-                f"!{neighbor_id:08x}" if neighbor_id is not None else "unknown"
-            )
+            if neighbor_id is None:
+                continue
+
+            hex_id = f"!{neighbor_id:08x}"
+            user = (all_nodes.get(neighbor_id) or coordinator.data.get(neighbor_id) or {}).get("user", {})
             last_rx = neighbor.get("lastRxTime")
             neighbor_list.append(
                 {
-                    "name": name,
+                    "short_name": user.get("shortName") or hex_id[-4:],
+                    "long_name": user.get("longName") or f"Meshtastic {hex_id[-4:]}",
+                    "id": hex_id,
                     "node_id": neighbor_id,
-                    "snr": neighbor.get("snr"),
+                    # MessageToDict pomija domyślne wartości proto3, więc SNR
+                    # równy dokładnie 0 nie pojawiłby się w słowniku wcale
+                    "snr": neighbor.get("snr", 0.0),
                     "last_heard": datetime.datetime.fromtimestamp(last_rx, tz=datetime.UTC).isoformat()
                     if last_rx
                     else None,
                 }
             )
-        return {"neighbors": neighbor_list}
+
+        neighbor_list.sort(key=lambda n: n["snr"] or 0.0, reverse=True)
+        return {
+            "neighbors": neighbor_list,
+            "broadcast_interval_secs": neighbor_info.get("nodeBroadcastIntervalSecs"),
+        }
 
     return [
         MeshtasticSensor(

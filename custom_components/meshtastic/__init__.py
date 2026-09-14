@@ -33,6 +33,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceConnectionCollisionError
 from homeassistant.helpers.entity_component import EntityComponent
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.typing import UNDEFINED, ConfigType
 from homeassistant.loader import async_get_loaded_integration
 
@@ -578,6 +579,19 @@ async def _setup_meshtastic_entities(
         local_config=local_config,
         module_config=module_config,
     )
+    # Nazwy kanałów: automatyczne tłumaczenie nazw encji nie działa dla encji
+    # na własnym EntityComponent, więc wczytujemy napisy sami i przekazujemy je
+    # gotowe do GatewayChannelEntity, które ustawia je wprost jako _attr_name.
+    channel_labels: dict[str, str] = {}
+    try:
+        translations = await async_get_translations(hass, hass.config.language, "entity", {DOMAIN})
+        for key in ("channel", "channel_primary", "channel_secondary"):
+            value = translations.get(f"component.{DOMAIN}.entity.{DOMAIN}.{key}.name")
+            if value:
+                channel_labels[key] = value
+    except Exception:  # noqa: BLE001
+        LOGGER.debug("Could not load channel name translations, falling back to English", exc_info=True)
+
     has_logbook = LOGBOOK_DOMAIN in hass.config.all_components
     gateway_direct_message = GatewayDirectMessageEntity(
         config_entry_id=entry.entry_id,
@@ -599,6 +613,7 @@ async def _setup_meshtastic_entities(
             secondary=channel["role"] == "SECONDARY",
             settings=channel["settings"],
             has_logbook=has_logbook,
+            labels=channel_labels,
         )
         for channel in channels
         if channel["role"] != "DISABLED"

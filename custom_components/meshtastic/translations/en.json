@@ -389,6 +389,12 @@
           "logbook_missing": "Logbook missing"
         }
       },
+      "channel_primary": {
+        "name": "Primary"
+      },
+      "channel_secondary": {
+        "name": "Secondary"
+      },
       "direct_messages": {
         "name": "Direct Messages",
         "state": {
@@ -410,7 +416,8 @@
       "node_heard_on_current_lora": { "name": "Heard on Current LoRa Config" }
     },
     "button": {
-      "reboot": { "name": "Reboot" }
+      "reboot": { "name": "Reboot" },
+      "request_neighbors": { "name": "Request Neighbors" }
     }
   },
   "selector": {
