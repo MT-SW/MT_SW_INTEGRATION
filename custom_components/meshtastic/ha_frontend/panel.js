@@ -70,7 +70,7 @@ class MeshtasticPanel extends LitElement {
 
           <h1>Sąsiedzi</h1>
           ${neighbor_nodes.length === 0 ? html`
-            <div class="empty">Żadem śledzony węzeł nie zgłosił jeszcze sąsiadów.</div>
+            <div class="empty">Żaden śledzony węzeł nie zgłosił jeszcze sąsiadów.</div>
           ` : html`
             <div class="neighbor-container">
               ${neighbor_nodes.map((node) => html`
