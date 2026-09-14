@@ -130,3 +130,18 @@ class MeshtasticDomainMessageLogEventData(TypedDict):
 EVENT_MESHTASTIC_DOMAIN_MESSAGE_LOG: EventType[MeshtasticDomainMessageLogEventData] = EventType(f"{DOMAIN}_message_log")
 
 URL_BASE = "/meshtastic"
+
+# Nazwy kanału domyślnego wyliczane przez firmware z presetu LoRa
+# (DisplayFormatters::getModemPresetDisplayName) — używane, gdy kanał nie ma
+# własnej nazwy, żeby integracja pokazywała to samo co aplikacja Meshtastic.
+MODEM_PRESET_CHANNEL_NAMES = {
+    "SHORT_TURBO": "ShortTurbo",
+    "SHORT_SLOW": "ShortSlow",
+    "SHORT_FAST": "ShortFast",
+    "MEDIUM_SLOW": "MediumSlow",
+    "MEDIUM_FAST": "MediumFast",
+    "LONG_SLOW": "LongSlow",
+    "LONG_FAST": "LongFast",
+    "LONG_TURBO": "LongTurbo",
+    "LONG_MODERATE": "LongMod",
+}

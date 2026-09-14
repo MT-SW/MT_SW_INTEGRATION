@@ -1115,7 +1115,7 @@ def _build_neighbor_info_sensors(
                 key="node_neighbor_count",
                 translation_key="node_neighbor_count",
                 name="Neighbor Count",
-                icon="mdi:radio-tower",
+                icon="mdi:account-multiple",
                 state_class=SensorStateClass.MEASUREMENT,
                 value_fn=lambda device: len(
                     device.coordinator.data[device.node_id].get("neighborInfo", {}).get("neighbors", [])

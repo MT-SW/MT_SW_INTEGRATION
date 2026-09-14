@@ -29,6 +29,15 @@ class MeshtasticPanel extends LitElement {
       "unavailable": this.hass.states[e.entity_id].state === "unavailable"
     }));
 
+    const neighbor_nodes = Object.values(this.hass.states)
+      .filter(s => s.entity_id.startsWith("sensor.") && Array.isArray(s.attributes.neighbors))
+      .map(s => ({
+        "name": s.attributes.friendly_name || s.entity_id,
+        "count": s.state,
+        "neighbors": s.attributes.neighbors,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     return html`
       <ha-top-app-bar-fixed>
         <ha-menu-button
@@ -39,7 +48,7 @@ class MeshtasticPanel extends LitElement {
         <div slot="title">MT_SW_INTEGRATION</div>
         
         <div class="">
-          <h1>Web Client</h1>
+          <h1>Klient WWW</h1>
           <div class="container">
             ${gateway_info.map((gateway) => html`
               <ha-card outlined>
@@ -58,6 +67,49 @@ class MeshtasticPanel extends LitElement {
               </ha-card>
             `)}
           </div>
+
+          <h1>Sąsiedzi</h1>
+          ${neighbor_nodes.length === 0 ? html`
+            <div class="empty">Żadem śledzony węzeł nie zgłosił jeszcze sąsiadów.</div>
+          ` : html`
+            <div class="neighbor-container">
+              ${neighbor_nodes.map((node) => html`
+                <ha-card outlined>
+                  <div class="card-header">
+                    <span class="node-name">${node.name}</span>
+                    <span class="node-count">${node.count}</span>
+                  </div>
+                  ${node.neighbors.length === 0 ? html`
+                    <div class="empty">Brak sąsiadów w ostatniej ramce.</div>
+                  ` : html`
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Sąsiad</th>
+                          <th>ID</th>
+                          <th class="num">SNR</th>
+                          <th>Ostatnio słyszany</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${node.neighbors.map((n) => html`
+                          <tr>
+                            <td>
+                              <span class="short">${n.short_name}</span>
+                              <span class="long">${n.long_name}</span>
+                            </td>
+                            <td><code>${n.id}</code></td>
+                            <td class="num">${Number(n.snr ?? 0).toFixed(2)} dB</td>
+                            <td>${n.last_heard ? new Date(n.last_heard).toLocaleString() : "—"}</td>
+                          </tr>
+                        `)}
+                      </tbody>
+                    </table>
+                  `}
+                </ha-card>
+              `)}
+            </div>
+          `}
       </ha-top-app-bar-fixed>
     `;
   }
@@ -125,6 +177,74 @@ class MeshtasticPanel extends LitElement {
       .card-content img {
         width: 40px;
         height: 40px;
+      }
+
+      .neighbor-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+        gap: 8px;
+        padding: 8px 16px 16px;
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px 4px;
+      }
+
+      .node-name {
+        font-size: 16px;
+        font-weight: 500;
+      }
+
+      .node-count {
+        font-size: 13px;
+        color: var(--secondary-text-color);
+      }
+
+      .empty {
+        padding: 8px 16px 16px;
+        color: var(--secondary-text-color);
+        font-size: 14px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th, td {
+        text-align: left;
+        padding: 6px 16px;
+        border-top: 1px solid var(--divider-color);
+      }
+
+      th {
+        font-weight: 500;
+        color: var(--secondary-text-color);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      td.num, th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .short {
+        font-weight: 500;
+      }
+
+      .long {
+        color: var(--secondary-text-color);
+        margin-inline-start: 8px;
+      }
+
+      code {
+        font-family: var(--code-font-family, monospace);
+        color: var(--secondary-text-color);
       }
 
       .card-actions {

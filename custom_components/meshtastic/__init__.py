@@ -60,6 +60,7 @@ from .const import (
     CURRENT_CONFIG_VERSION_MINOR,
     DOMAIN,
     LOGGER,
+    MODEM_PRESET_CHANNEL_NAMES,
     ConnectionType,
 )
 from .coordinator import MeshtasticDataUpdateCoordinator
@@ -585,12 +586,21 @@ async def _setup_meshtastic_entities(
     channel_labels: dict[str, str] = {}
     try:
         translations = await async_get_translations(hass, hass.config.language, "entity", {DOMAIN})
-        for key in ("channel", "channel_primary", "channel_secondary"):
+        for key in ("channel", "channel_primary", "channel_secondary", "direct_messages"):
             value = translations.get(f"component.{DOMAIN}.entity.{DOMAIN}.{key}.name")
             if value:
                 channel_labels[key] = value
     except Exception:  # noqa: BLE001
         LOGGER.debug("Could not load channel name translations, falling back to English", exc_info=True)
+
+    # Nazwa domyślna kanału bez własnej nazwy, odtworzona dokładnie tak jak w
+    # firmware (Channels::getName + DisplayFormatters::getModemPresetDisplayName),
+    # żeby zgadzała się z tym, co pokazuje aplikacja Meshtastic.
+    lora_config = (local_config or {}).get("lora", {})
+    if lora_config.get("usePreset", True):
+        channel_default_name = MODEM_PRESET_CHANNEL_NAMES.get(lora_config.get("modemPreset", "LONG_FAST"), "Invalid")
+    else:
+        channel_default_name = "Custom"
 
     has_logbook = LOGBOOK_DOMAIN in hass.config.all_components
     gateway_direct_message = GatewayDirectMessageEntity(
@@ -598,6 +608,7 @@ async def _setup_meshtastic_entities(
         gateway_node=gateway_node["num"],
         gateway_entity=gateway_node_entity,
         has_logbook=has_logbook,
+        labels=channel_labels,
     )
 
     await _add_entities_for_entry(hass, [gateway_node_entity, gateway_direct_message], entry)
@@ -614,6 +625,7 @@ async def _setup_meshtastic_entities(
             settings=channel["settings"],
             has_logbook=has_logbook,
             labels=channel_labels,
+            default_name=channel_default_name,
         )
         for channel in channels
         if channel["role"] != "DISABLED"

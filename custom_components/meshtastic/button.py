@@ -60,7 +60,7 @@ def _build_buttons(
                 key="request_neighbors",
                 translation_key="request_neighbors",
                 name="Request Neighbors",
-                icon="mdi:radio-tower",
+                icon="mdi:account-search",
             ),
             gateway=gateway,
             node_id=node_id,

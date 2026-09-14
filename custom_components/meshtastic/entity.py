@@ -138,6 +138,7 @@ class GatewayChannelEntity(MeshtasticEntity):
         secondary: bool = False,  # noqa: FBT001, FBT002
         has_logbook: bool = True,  # noqa: FBT001, FBT002
         labels: typing.Mapping[str, str] | None = None,
+        default_name: str | None = None,
     ) -> None:
         super().__init__(config_entry_id, gateway_node, MeshtasticDeviceClass.CHANNEL, index)
 
@@ -156,16 +157,24 @@ class GatewayChannelEntity(MeshtasticEntity):
         labels = labels or {}
         prefix = labels.get("channel", "Channel")
 
-        self._attr_has_entity_name = True
+        # Kanał bez własnej nazwy bierze ją z presetu LoRa urządzenia — dokładnie
+        # tak jak firmware w Channels::getName(), więc nazwa zgadza się z tym, co
+        # pokazuje aplikacja (np. "LongFast"). Etykiety ról zostają wyłącznie jako
+        # zabezpieczenie, gdyby preset nie był dostępny.
         if name:
-            self._attr_name = f"{prefix} {name}"
+            channel_name = name
+        elif default_name:
+            channel_name = default_name
         elif primary:
-            self._attr_name = f"{prefix} {labels.get('channel_primary', 'Primary')}"
+            channel_name = labels.get("channel_primary", "Primary")
         elif secondary:
-            self._attr_name = f"{prefix} {labels.get('channel_secondary', 'Secondary')}"
+            channel_name = labels.get("channel_secondary", "Secondary")
         else:
             # kanał bez nazwy i bez roli — wcześniej wywalało się tu AttributeError
-            self._attr_name = f"{prefix} {index}"
+            channel_name = str(index)
+
+        self._attr_has_entity_name = True
+        self._attr_name = f"{prefix} {channel_name}"
 
         if has_logbook:
             self._attr_state = "logging"
@@ -191,7 +200,6 @@ class GatewayChannelEntity(MeshtasticEntity):
 
 class GatewayDirectMessageEntity(MeshtasticEntity):
     _attr_icon = "mdi:message-lock"
-    _attr_name = "Direct Messages"
     _attr_translation_key = "direct_messages"
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -208,10 +216,14 @@ class GatewayDirectMessageEntity(MeshtasticEntity):
         gateway_node: int,
         gateway_entity: GatewayEntity,
         has_logbook: bool = True,  # noqa: FBT001, FBT002
+        labels: typing.Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(config_entry_id, gateway_node, MeshtasticDeviceClass.MESSAGES, "dm")
         self._gateway_suggested_id = gateway_entity.suggested_object_id
         self._attr_unique_id = self.build_unique_id(config_entry_id, gateway_node)
+        # ta sama droga co przy kanałach — automatyczne tłumaczenie nazwy nie działa
+        # dla encji na własnym EntityComponent, więc napis dostajemy gotowy
+        self._attr_name = (labels or {}).get("direct_messages", "Direct Messages")
 
         if has_logbook:
             self._attr_state = "logging"

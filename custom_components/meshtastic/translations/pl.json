@@ -401,7 +401,7 @@
         "name": "Główny"
       },
       "channel_secondary": {
-        "name": "Zapasowy"
+        "name": "Dodatkowy"
       },
       "direct_messages": {
         "name": "Wiadomości bezpośrednie",
