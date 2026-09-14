@@ -74,6 +74,7 @@ from .entity import (
 from .helpers import async_prune_stale_node_entities, fetch_meshtastic_hardware_names, node_identity_key
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
+from .websocket_api import async_register_websocket_api
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, MutableMapping
@@ -106,6 +107,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     await component.async_setup(config)
     await services.async_setup_services(hass)
+    async_register_websocket_api(hass)
 
     return True
 
