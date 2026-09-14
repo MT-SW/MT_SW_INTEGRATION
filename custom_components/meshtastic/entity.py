@@ -84,7 +84,7 @@ class GatewayEntity(MeshtasticEntity):
         self._long_name = long_name
         self._short_name = short_name
 
-        self._attr_name = None
+        self._attr_name = "Status połączenia"
         self._attr_has_entity_name = True
         self._attr_translation_key = "gateway"
 
