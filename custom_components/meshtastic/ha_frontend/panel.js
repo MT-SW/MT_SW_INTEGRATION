@@ -13,10 +13,12 @@ import { t } from "./i18n.js";
 
 import "./views.js";
 import "./messages.js";
+import "./nodes.js";
+import "./map.js";
 import "./neighbors.js";
 
 const POLL_MS = 10000;
-const TABS = ["radio", "messages", "neighbors"];
+const TABS = ["radio", "messages", "nodes", "map", "neighbors"];
 
 function tabFromPath() {
   const parts = location.pathname.replace(/\/+$/, "").split("/");
@@ -38,6 +40,7 @@ class MeshtasticPanel extends LitElement {
       _nodes: { type: Array },
       _messages: { type: Array },
       _timeseries: { type: Array },
+      _selectedEntryId: { type: String },
     };
   }
 
@@ -50,6 +53,7 @@ class MeshtasticPanel extends LitElement {
     this._nodes = [];
     this._messages = [];
     this._timeseries = [];
+    this._selectedEntryId = null;
     this._pollTimer = null;
     this._unsubscribe = null;
     this._subscribedEntryId = null;
@@ -79,10 +83,14 @@ class MeshtasticPanel extends LitElement {
     }
   }
 
-  /* Wpis, którego dotyczą wiadomości i wykresy.
-     Przy kilku bramkach bierzemy pierwszą — wybór bramki dojdzie później. */
+  /* Wpis, którego dotyczą wiadomości, węzły, mapa i wykresy.
+     Wybór użytkownika wygrywa; gdy wybrana bramka zniknie, wracamy do pierwszej. */
   get _primaryEntryId() {
-    return this._gateways.length ? this._gateways[0].entry_id : null;
+    if (!this._gateways.length) {
+      return null;
+    }
+    const chosen = this._gateways.find((g) => g.entry_id === this._selectedEntryId);
+    return chosen ? chosen.entry_id : this._gateways[0].entry_id;
   }
 
   _startPolling() {
@@ -238,6 +246,10 @@ class MeshtasticPanel extends LitElement {
           .nodes=${this._nodes}
           .channels=${entryId ? this._channels[entryId] || [] : []}
         ></mesh-messages-tab>`;
+      case "nodes":
+        return html`<mesh-nodes-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-nodes-tab>`;
+      case "map":
+        return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
       case "neighbors":
         return html`<mesh-neighbors-tab .hass=${this.hass}></mesh-neighbors-tab>`;
       case "radio":
@@ -260,6 +272,25 @@ class MeshtasticPanel extends LitElement {
       <ha-top-app-bar-fixed>
         <ha-menu-button slot="navigationIcon" .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
         <div slot="title">${t(this.hass, "panel.title")}</div>
+        ${this._gateways.length > 1
+          ? html`<select
+              slot="actionItems"
+              class="gateway-select"
+              @change=${(e) => {
+                this._selectedEntryId = e.target.value;
+                this._refresh();
+              }}
+            >
+              ${this._gateways.map(
+                (gateway) => html`<option
+                  value=${gateway.entry_id}
+                  ?selected=${gateway.entry_id === this._primaryEntryId}
+                >
+                  ${gateway.long_name || gateway.title}
+                </option>`
+              )}
+            </select>`
+          : ""}
         <ha-icon-button
           slot="actionItems"
           .label=${t(this.hass, "common.refresh")}
@@ -325,6 +356,17 @@ class MeshtasticPanel extends LitElement {
       .tab.active {
         color: var(--primary-color);
         border-bottom-color: var(--primary-color);
+      }
+
+      .gateway-select {
+        margin-inline-end: 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid var(--divider-color);
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-family: inherit;
+        font-size: 13px;
       }
     `;
   }

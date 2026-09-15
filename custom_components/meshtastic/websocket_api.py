@@ -191,16 +191,52 @@ async def ws_nodes(
         connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
         return
 
+    gateway_node = entry.runtime_data.gateway_node or {}
+    gateway_id = gateway_node.get("num")
+
     nodes = []
     for node_id, node in (entry.runtime_data.coordinator.data or {}).items():
         user = node.get("user", {}) or {}
+        position = node.get("position", {}) or {}
+        device_metrics = node.get("deviceMetrics", {}) or {}
+        environment_metrics = node.get("environmentMetrics", {}) or {}
+        neighbor_info = node.get("neighborInfo", {}) or {}
+
+        neighbors = [
+            {
+                "node_id": neighbor.get("nodeId"),
+                "snr": _as_float(neighbor.get("snr")),
+            }
+            for neighbor in (neighbor_info.get("neighbors") or [])
+            if neighbor.get("nodeId") is not None
+        ]
+
         nodes.append(
             {
                 "node_id": node_id,
                 "node_hex": f"!{node_id:08x}" if isinstance(node_id, int) else None,
                 "long_name": user.get("longName"),
                 "short_name": user.get("shortName"),
+                "hw_model": user.get("hwModel"),
+                "role": user.get("role"),
+                "is_gateway": node_id == gateway_id,
                 "last_heard": node.get("lastHeard"),
+                "snr": _as_float(node.get("snr")),
+                "hops_away": _as_int(node.get("hopsAway")),
+                "via_mqtt": bool(node.get("viaMqtt")),
+                "latitude": position.get("latitude"),
+                "longitude": position.get("longitude"),
+                "altitude": _as_int(position.get("altitude")),
+                "position_time": position.get("time"),
+                "battery_level": _as_int(device_metrics.get("batteryLevel")),
+                "voltage": _as_float(device_metrics.get("voltage")),
+                "channel_utilization": _as_float(device_metrics.get("channelUtilization")),
+                "air_util_tx": _as_float(device_metrics.get("airUtilTx")),
+                "uptime_seconds": _as_int(device_metrics.get("uptimeSeconds")),
+                "temperature": _as_float(environment_metrics.get("temperature")),
+                "humidity": _as_float(environment_metrics.get("relativeHumidity")),
+                "pressure": _as_float(environment_metrics.get("barometricPressure")),
+                "neighbors": neighbors,
             }
         )
     nodes.sort(key=lambda n: (n["long_name"] or n["node_hex"] or "").lower())

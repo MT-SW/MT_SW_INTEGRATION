@@ -21,6 +21,8 @@ const STRINGS = {
 
     "tab.radio": "Radio",
     "tab.messages": "Wiadomości",
+    "tab.nodes": "Węzły",
+    "tab.map": "Mapa",
     "tab.neighbors": "Sąsiedzi",
 
     "common.unknown": "—",
@@ -98,6 +100,25 @@ const STRINGS = {
     "radio.chart.rx": "Odebrane",
     "radio.chart.rx_bad": "Błędne",
 
+    "nodes.empty": "Brak węzłów spełniających kryteria.",
+    "nodes.filter": "Filtruj po nazwie, ID lub roli…",
+    "nodes.count": "{n} węzłów",
+    "nodes.gateway": "Bramka",
+    "nodes.col.name": "Nazwa",
+    "nodes.col.id": "ID",
+    "nodes.col.snr": "SNR",
+    "nodes.col.hops": "Przeskoki",
+    "nodes.col.battery": "Bateria",
+    "nodes.col.last_heard": "Ostatnio słyszany",
+    "nodes.temperature": "Temperatura",
+    "nodes.humidity": "Wilgotność",
+    "nodes.pressure": "Ciśnienie",
+    "nodes.position": "Pozycja",
+
+    "map.show_links": "Pokaż połączenia",
+    "map.count": "{n} z {total} węzłów ma pozycję",
+    "map.load_failed": "Nie udało się wczytać mapy.",
+
     "neighbors.empty": "Żaden śledzony węzeł nie zgłosił jeszcze sąsiadów.",
     "neighbors.none_in_frame": "Brak sąsiadów w ostatniej ramce.",
     "neighbors.col.neighbor": "Sąsiad",
@@ -117,6 +138,8 @@ const STRINGS = {
 
     "tab.radio": "Radio",
     "tab.messages": "Messages",
+    "tab.nodes": "Nodes",
+    "tab.map": "Map",
     "tab.neighbors": "Neighbors",
 
     "common.unknown": "—",
@@ -193,6 +216,25 @@ const STRINGS = {
     "radio.chart.tx": "Sent",
     "radio.chart.rx": "Received",
     "radio.chart.rx_bad": "Bad",
+
+    "nodes.empty": "No nodes match the filter.",
+    "nodes.filter": "Filter by name, ID or role…",
+    "nodes.count": "{n} nodes",
+    "nodes.gateway": "Gateway",
+    "nodes.col.name": "Name",
+    "nodes.col.id": "ID",
+    "nodes.col.snr": "SNR",
+    "nodes.col.hops": "Hops",
+    "nodes.col.battery": "Battery",
+    "nodes.col.last_heard": "Last heard",
+    "nodes.temperature": "Temperature",
+    "nodes.humidity": "Humidity",
+    "nodes.pressure": "Pressure",
+    "nodes.position": "Position",
+
+    "map.show_links": "Show links",
+    "map.count": "{n} of {total} nodes have a position",
+    "map.load_failed": "Could not load the map.",
 
     "neighbors.empty": "No tracked node has reported neighbors yet.",
     "neighbors.none_in_frame": "No neighbors in the last frame.",

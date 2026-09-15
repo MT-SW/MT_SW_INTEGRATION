@@ -349,7 +349,7 @@
       "pid": "802A"
     }
   ],
-  "version": "2.1.0",
+  "version": "2.2.0",
   "zeroconf": [
     "_meshtastic._tcp.local.",
     "_http._tcp.local."
