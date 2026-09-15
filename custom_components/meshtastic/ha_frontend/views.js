@@ -152,7 +152,7 @@ class MeshRadioTab extends LitElement {
 
   _renderCharts() {
     const points = this.timeseries || [];
-    const empty = html`<span slot="empty">${t(this.hass, "radio.chart.empty")}</span>`;
+    const empty = t(this.hass, "radio.chart.empty");
 
     return html`
       <div class="section-title">${t(this.hass, "radio.chart.airtime")}</div>
@@ -161,13 +161,12 @@ class MeshRadioTab extends LitElement {
           .points=${points}
           .language=${this.hass.language}
           unit=" %"
+          .emptyLabel=${empty}
           .series=${[
             { key: "channel_utilization", label: t(this.hass, "radio.chart.chutil"), color: "#F5C839" },
             { key: "air_util_tx", label: t(this.hass, "radio.chart.airutil"), color: "#4FC3F7" },
           ]}
-        >
-          ${empty}
-        </mesh-line-chart>
+        ></mesh-line-chart>
       </div>
 
       <div class="section-title">${t(this.hass, "radio.chart.packets")}</div>
@@ -176,14 +175,13 @@ class MeshRadioTab extends LitElement {
           derivative
           .points=${points}
           .language=${this.hass.language}
+          .emptyLabel=${empty}
           .series=${[
             { key: "packets_tx", label: t(this.hass, "radio.chart.tx"), color: "#81C784" },
             { key: "packets_rx", label: t(this.hass, "radio.chart.rx"), color: "#9575CD" },
             { key: "packets_rx_bad", label: t(this.hass, "radio.chart.rx_bad"), color: "#E57373" },
           ]}
-        >
-          ${empty}
-        </mesh-line-chart>
+        ></mesh-line-chart>
       </div>
     `;
   }

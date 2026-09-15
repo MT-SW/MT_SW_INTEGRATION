@@ -7,11 +7,27 @@
  *
  * Świadomie bez D3 — rysowanie kilku linii na siatce nie jest warte 276 KB
  * zależności. Komponent przyjmuje surowe punkty z magazynu i sam liczy skalę.
+ *
+ * Uwaga implementacyjna: zvendorowana paczka Lita eksportuje wyłącznie
+ * LitElement, html i css — nie ma tagu `svg`. Bez niego zagnieżdżone szablony
+ * wewnątrz <svg> trafiłyby do przestrzeni nazw HTML i nie narysowałyby się,
+ * więc SVG budujemy jako tekst i wstawiamy do kontenera w updated().
  */
 
-import { LitElement, html, svg, css } from "./vendor/lit/lit-element.js";
+import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 
 const PADDING = { top: 8, right: 8, bottom: 20, left: 40 };
+const WIDTH = 600;
+
+/* Do SVG trafiają tylko liczby i sformatowane etykiety, ale escapujemy
+   wszystko, co idzie do tekstu — taniej niż zakładać, że tak zostanie. */
+function esc(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 class MeshLineChart extends LitElement {
   static get properties() {
@@ -27,6 +43,7 @@ class MeshLineChart extends LitElement {
          wykres byłby nudną prostą do góry. */
       derivative: { type: Boolean },
       language: { type: String },
+      emptyLabel: { type: String },
     };
   }
 
@@ -38,6 +55,7 @@ class MeshLineChart extends LitElement {
     this.height = 160;
     this.derivative = false;
     this.language = "pl";
+    this.emptyLabel = "";
   }
 
   _prepared() {
@@ -68,14 +86,13 @@ class MeshLineChart extends LitElement {
     return out;
   }
 
-  render() {
+  _buildSvg() {
     const points = this._prepared();
     if (points.length < 2) {
-      return html`<div class="chart-empty"><slot name="empty"></slot></div>`;
+      return "";
     }
 
-    const width = 600;
-    const innerW = width - PADDING.left - PADDING.right;
+    const innerW = WIDTH - PADDING.left - PADDING.right;
     const innerH = this.height - PADDING.top - PADDING.bottom;
 
     const tsMin = points[0].ts;
@@ -96,42 +113,65 @@ class MeshLineChart extends LitElement {
     const x = (ts) => PADDING.left + ((ts - tsMin) / tsSpan) * innerW;
     const y = (v) => PADDING.top + innerH - (v / vMax) * innerH;
 
-    const gridValues = [0, vMax / 2, vMax];
     const formatValue = (v) => (vMax >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
     const formatTime = (ts) =>
       new Date(ts).toLocaleTimeString(this.language, { hour: "2-digit", minute: "2-digit" });
 
+    const parts = [];
+    parts.push(
+      `<svg viewBox="0 0 ${WIDTH} ${this.height}" preserveAspectRatio="none" role="img">`
+    );
+
+    for (const v of [0, vMax / 2, vMax]) {
+      const gy = y(v).toFixed(1);
+      parts.push(
+        `<line class="grid" x1="${PADDING.left}" x2="${WIDTH - PADDING.right}" y1="${gy}" y2="${gy}"/>`,
+        `<text class="axis" x="${PADDING.left - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">` +
+          `${esc(formatValue(v))}${esc(this.unit)}</text>`
+      );
+    }
+
+    parts.push(
+      `<text class="axis" x="${PADDING.left}" y="${this.height - 6}" text-anchor="start">` +
+        `${esc(formatTime(tsMin))}</text>`,
+      `<text class="axis" x="${WIDTH - PADDING.right}" y="${this.height - 6}" text-anchor="end">` +
+        `${esc(formatTime(tsMax))}</text>`
+    );
+
+    for (const s of this.series) {
+      const d = points
+        .filter((p) => typeof p[s.key] === "number")
+        .map((p, i) => `${i === 0 ? "M" : "L"}${x(p.ts).toFixed(1)},${y(p[s.key]).toFixed(1)}`)
+        .join(" ");
+      if (d) {
+        parts.push(`<path class="line" d="${d}" stroke="${esc(s.color)}"/>`);
+      }
+    }
+
+    parts.push("</svg>");
+    return parts.join("");
+  }
+
+  updated() {
+    const canvas = this.renderRoot && this.renderRoot.querySelector(".canvas");
+    if (canvas) {
+      canvas.innerHTML = this._buildSvg();
+    }
+  }
+
+  render() {
+    const hasData = this._prepared().length >= 2;
     return html`
-      <div class="legend">
-        ${this.series.map(
-          (s) => html`<span class="legend-item">
-            <span class="swatch" style="background:${s.color}"></span>${s.label}
-          </span>`
-        )}
-      </div>
-      <svg viewBox="0 0 ${width} ${this.height}" preserveAspectRatio="none" role="img">
-        ${gridValues.map(
-          (v) => svg`
-            <line class="grid" x1=${PADDING.left} x2=${width - PADDING.right} y1=${y(v)} y2=${y(v)} />
-            <text class="axis" x=${PADDING.left - 6} y=${y(v) + 4} text-anchor="end">
-              ${formatValue(v)}${this.unit}
-            </text>
-          `
-        )}
-        <text class="axis" x=${PADDING.left} y=${this.height - 6} text-anchor="start">
-          ${formatTime(tsMin)}
-        </text>
-        <text class="axis" x=${width - PADDING.right} y=${this.height - 6} text-anchor="end">
-          ${formatTime(tsMax)}
-        </text>
-        ${this.series.map((s) => {
-          const path = points
-            .filter((p) => typeof p[s.key] === "number")
-            .map((p, i) => `${i === 0 ? "M" : "L"}${x(p.ts).toFixed(1)},${y(p[s.key]).toFixed(1)}`)
-            .join(" ");
-          return path ? svg`<path class="line" d=${path} stroke=${s.color} />` : svg``;
-        })}
-      </svg>
+      ${hasData
+        ? html`<div class="legend">
+            ${this.series.map(
+              (s) => html`<span class="legend-item">
+                <span class="swatch" style="background:${s.color}"></span>${s.label}
+              </span>`
+            )}
+          </div>`
+        : html`<div class="chart-empty">${this.emptyLabel}</div>`}
+      <div class="canvas"></div>
     `;
   }
 
@@ -141,13 +181,13 @@ class MeshLineChart extends LitElement {
         display: block;
       }
 
-      svg {
+      .canvas svg {
         width: 100%;
         height: auto;
         overflow: visible;
       }
 
-      .line {
+      .canvas .line {
         fill: none;
         stroke-width: 2;
         stroke-linejoin: round;
@@ -155,13 +195,13 @@ class MeshLineChart extends LitElement {
         vector-effect: non-scaling-stroke;
       }
 
-      .grid {
+      .canvas .grid {
         stroke: var(--divider-color);
         stroke-width: 1;
         vector-effect: non-scaling-stroke;
       }
 
-      .axis {
+      .canvas .axis {
         fill: var(--secondary-text-color);
         font-size: 10px;
         font-family: inherit;
