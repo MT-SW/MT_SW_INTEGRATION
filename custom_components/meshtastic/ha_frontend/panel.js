@@ -12,10 +12,11 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
 
 import "./views.js";
+import "./messages.js";
 import "./neighbors.js";
 
 const POLL_MS = 10000;
-const TABS = ["radio", "neighbors"];
+const TABS = ["radio", "messages", "neighbors"];
 
 function tabFromPath() {
   const parts = location.pathname.replace(/\/+$/, "").split("/");
@@ -34,6 +35,9 @@ class MeshtasticPanel extends LitElement {
       _gateways: { type: Array },
       _channels: { type: Object },
       _channelsError: { type: Object },
+      _nodes: { type: Array },
+      _messages: { type: Array },
+      _timeseries: { type: Array },
     };
   }
 
@@ -43,7 +47,12 @@ class MeshtasticPanel extends LitElement {
     this._gateways = [];
     this._channels = {};
     this._channelsError = {};
+    this._nodes = [];
+    this._messages = [];
+    this._timeseries = [];
     this._pollTimer = null;
+    this._unsubscribe = null;
+    this._subscribedEntryId = null;
     this._onLocationChanged = () => {
       this._activeTab = tabFromPath();
     };
@@ -59,6 +68,7 @@ class MeshtasticPanel extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener("location-changed", this._onLocationChanged);
     this._stopPolling();
+    this._unsubscribeMessages();
   }
 
   updated(changed) {
@@ -67,6 +77,12 @@ class MeshtasticPanel extends LitElement {
     if (changed.has("hass") && !changed.get("hass") && this.hass) {
       this._refresh();
     }
+  }
+
+  /* Wpis, którego dotyczą wiadomości i wykresy.
+     Przy kilku bramkach bierzemy pierwszą — wybór bramki dojdzie później. */
+  get _primaryEntryId() {
+    return this._gateways.length ? this._gateways[0].entry_id : null;
   }
 
   _startPolling() {
@@ -78,6 +94,18 @@ class MeshtasticPanel extends LitElement {
     if (this._pollTimer !== null) {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
+    }
+  }
+
+  _unsubscribeMessages() {
+    if (this._unsubscribe) {
+      try {
+        this._unsubscribe();
+      } catch (err) {
+        console.debug("MT_SW: odsubskrybowanie nie powiodło się", err);
+      }
+      this._unsubscribe = null;
+      this._subscribedEntryId = null;
     }
   }
 
@@ -93,7 +121,18 @@ class MeshtasticPanel extends LitElement {
       this._gateways = [];
       return;
     }
+
     await Promise.all(this._gateways.map((gateway) => this._refreshChannels(gateway.entry_id)));
+
+    const entryId = this._primaryEntryId;
+    if (!entryId) {
+      return;
+    }
+    await Promise.all([
+      this._refreshNodes(entryId),
+      this._refreshTimeseries(entryId),
+      this._ensureSubscription(entryId),
+    ]);
   }
 
   async _refreshChannels(entryId) {
@@ -108,6 +147,76 @@ class MeshtasticPanel extends LitElement {
     }
   }
 
+  async _refreshNodes(entryId) {
+    try {
+      const result = await this.hass.callWS({ type: "meshtastic/nodes", entry_id: entryId });
+      this._nodes = result.nodes || [];
+    } catch (err) {
+      console.warn("MT_SW: nie udało się pobrać węzłów", err);
+    }
+  }
+
+  async _refreshTimeseries(entryId) {
+    try {
+      const result = await this.hass.callWS({ type: "meshtastic/timeseries", entry_id: entryId });
+      this._timeseries = result.points || [];
+    } catch (err) {
+      console.warn("MT_SW: nie udało się pobrać szeregu czasowego", err);
+    }
+  }
+
+  /* Historię pobieramy raz, potem utrzymuje ją subskrypcja — odpytywanie
+     co 10 s przewijałoby czat pod palcami przy każdym odświeżeniu. */
+  async _ensureSubscription(entryId) {
+    if (this._subscribedEntryId === entryId && this._unsubscribe) {
+      return;
+    }
+    this._unsubscribeMessages();
+
+    try {
+      const result = await this.hass.callWS({
+        type: "meshtastic/messages",
+        entry_id: entryId,
+      });
+      this._messages = result.messages || [];
+    } catch (err) {
+      console.warn("MT_SW: nie udało się pobrać historii wiadomości", err);
+      this._messages = [];
+      return;
+    }
+
+    try {
+      this._unsubscribe = await this.hass.connection.subscribeMessage(
+        (event) => this._onStoreEvent(event),
+        { type: "meshtastic/subscribe_messages", entry_id: entryId }
+      );
+      this._subscribedEntryId = entryId;
+    } catch (err) {
+      console.warn("MT_SW: subskrypcja wiadomości nie powiodła się", err);
+    }
+  }
+
+  _onStoreEvent(event) {
+    if (!event) {
+      return;
+    }
+    if (event.kind === "cleared") {
+      this._messages = [];
+      return;
+    }
+    const incoming = event.message;
+    if (!incoming) {
+      return;
+    }
+    if (event.kind === "ack") {
+      this._messages = this._messages.map((m) =>
+        m.id === incoming.id && m.direction === "out" ? { ...m, ...incoming } : m
+      );
+      return;
+    }
+    this._messages = [...this._messages, incoming];
+  }
+
   _selectTab(tab) {
     if (tab === this._activeTab) {
       return;
@@ -119,7 +228,16 @@ class MeshtasticPanel extends LitElement {
   }
 
   _renderTab() {
+    const entryId = this._primaryEntryId;
     switch (this._activeTab) {
+      case "messages":
+        return html`<mesh-messages-tab
+          .hass=${this.hass}
+          .entryId=${entryId}
+          .messages=${this._messages}
+          .nodes=${this._nodes}
+          .channels=${entryId ? this._channels[entryId] || [] : []}
+        ></mesh-messages-tab>`;
       case "neighbors":
         return html`<mesh-neighbors-tab .hass=${this.hass}></mesh-neighbors-tab>`;
       case "radio":
@@ -129,6 +247,7 @@ class MeshtasticPanel extends LitElement {
           .gateways=${this._gateways}
           .channels=${this._channels}
           .channelsError=${this._channelsError}
+          .timeseries=${this._timeseries}
         ></mesh-radio-tab>`;
     }
   }

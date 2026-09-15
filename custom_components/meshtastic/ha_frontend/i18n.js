@@ -20,6 +20,7 @@ const STRINGS = {
     "panel.title": "MT_SW_INTEGRATION",
 
     "tab.radio": "Radio",
+    "tab.messages": "Wiadomości",
     "tab.neighbors": "Sąsiedzi",
 
     "common.unknown": "—",
@@ -76,6 +77,27 @@ const STRINGS = {
     "radio.channels.precision": "Precyzja pozycji",
     "radio.channels.unnamed": "(bez nazwy)",
 
+    "messages.channel": "Kanał",
+    "messages.empty": "Brak wiadomości i kanałów do wyświetlenia.",
+    "messages.no_messages": "Ta rozmowa jest jeszcze pusta.",
+    "messages.placeholder": "Napisz wiadomość… (Enter wysyła, Shift+Enter nowa linia)",
+    "messages.send": "Wyślij",
+    "messages.sending": "Wysyłanie…",
+    "messages.send_failed": "Nie udało się wysłać wiadomości.",
+    "messages.hops": "{n} przeskoków",
+    "messages.ack.pending": "Oczekuje na potwierdzenie",
+    "messages.ack.ok": "Potwierdzona",
+    "messages.ack.failed": "Brak potwierdzenia",
+
+    "radio.chart.airtime": "Obciążenie eteru",
+    "radio.chart.packets": "Ruch pakietów (na próbkę)",
+    "radio.chart.empty": "Zbieranie danych — wykres pojawi się po kilku minutach.",
+    "radio.chart.chutil": "Wykorzystanie kanału",
+    "radio.chart.airutil": "Czas nadawania",
+    "radio.chart.tx": "Wysłane",
+    "radio.chart.rx": "Odebrane",
+    "radio.chart.rx_bad": "Błędne",
+
     "neighbors.empty": "Żaden śledzony węzeł nie zgłosił jeszcze sąsiadów.",
     "neighbors.none_in_frame": "Brak sąsiadów w ostatniej ramce.",
     "neighbors.col.neighbor": "Sąsiad",
@@ -94,6 +116,7 @@ const STRINGS = {
     "panel.title": "MT_SW_INTEGRATION",
 
     "tab.radio": "Radio",
+    "tab.messages": "Messages",
     "tab.neighbors": "Neighbors",
 
     "common.unknown": "—",
@@ -149,6 +172,27 @@ const STRINGS = {
     "radio.channels.downlink": "Downlink",
     "radio.channels.precision": "Position precision",
     "radio.channels.unnamed": "(unnamed)",
+
+    "messages.channel": "Channel",
+    "messages.empty": "No messages or channels to show.",
+    "messages.no_messages": "This conversation is still empty.",
+    "messages.placeholder": "Write a message… (Enter sends, Shift+Enter for a new line)",
+    "messages.send": "Send",
+    "messages.sending": "Sending…",
+    "messages.send_failed": "Could not send the message.",
+    "messages.hops": "{n} hops",
+    "messages.ack.pending": "Awaiting acknowledgement",
+    "messages.ack.ok": "Acknowledged",
+    "messages.ack.failed": "Not acknowledged",
+
+    "radio.chart.airtime": "Airtime load",
+    "radio.chart.packets": "Packet traffic (per sample)",
+    "radio.chart.empty": "Collecting data — the chart appears after a few minutes.",
+    "radio.chart.chutil": "Channel utilization",
+    "radio.chart.airutil": "Air util TX",
+    "radio.chart.tx": "Sent",
+    "radio.chart.rx": "Received",
+    "radio.chart.rx_bad": "Bad",
 
     "neighbors.empty": "No tracked node has reported neighbors yet.",
     "neighbors.none_in_frame": "No neighbors in the last frame.",

@@ -9,6 +9,7 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles, badgeStyles, channelStyles } from "./styles.js";
 import { t, formatUptime } from "./i18n.js";
+import "./chart.js";
 
 class MeshRadioTab extends LitElement {
   static get properties() {
@@ -17,6 +18,7 @@ class MeshRadioTab extends LitElement {
       gateways: { type: Array },
       channels: { type: Object },
       channelsError: { type: Object },
+      timeseries: { type: Array },
     };
   }
 
@@ -25,6 +27,7 @@ class MeshRadioTab extends LitElement {
     this.gateways = [];
     this.channels = {};
     this.channelsError = {};
+    this.timeseries = [];
   }
 
   _value(raw, suffix) {
@@ -147,6 +150,44 @@ class MeshRadioTab extends LitElement {
     `;
   }
 
+  _renderCharts() {
+    const points = this.timeseries || [];
+    const empty = html`<span slot="empty">${t(this.hass, "radio.chart.empty")}</span>`;
+
+    return html`
+      <div class="section-title">${t(this.hass, "radio.chart.airtime")}</div>
+      <div class="chart-wrap">
+        <mesh-line-chart
+          .points=${points}
+          .language=${this.hass.language}
+          unit=" %"
+          .series=${[
+            { key: "channel_utilization", label: t(this.hass, "radio.chart.chutil"), color: "#F5C839" },
+            { key: "air_util_tx", label: t(this.hass, "radio.chart.airutil"), color: "#4FC3F7" },
+          ]}
+        >
+          ${empty}
+        </mesh-line-chart>
+      </div>
+
+      <div class="section-title">${t(this.hass, "radio.chart.packets")}</div>
+      <div class="chart-wrap">
+        <mesh-line-chart
+          derivative
+          .points=${points}
+          .language=${this.hass.language}
+          .series=${[
+            { key: "packets_tx", label: t(this.hass, "radio.chart.tx"), color: "#81C784" },
+            { key: "packets_rx", label: t(this.hass, "radio.chart.rx"), color: "#9575CD" },
+            { key: "packets_rx_bad", label: t(this.hass, "radio.chart.rx_bad"), color: "#E57373" },
+          ]}
+        >
+          ${empty}
+        </mesh-line-chart>
+      </div>
+    `;
+  }
+
   _renderGateway(gateway) {
     const title = gateway.long_name || gateway.title || gateway.node_hex || "";
     return html`
@@ -199,6 +240,8 @@ class MeshRadioTab extends LitElement {
           ${this._renderStat("radio.nodes_total", gateway.nodes_total)}
           ${this._renderStat("radio.tracked_nodes", gateway.tracked_nodes)}
         </div>
+
+        ${this._renderCharts()}
 
         <div class="section-title">${t(this.hass, "radio.section.channels")}</div>
         ${this._renderChannels(gateway)}
@@ -325,6 +368,10 @@ class MeshRadioTab extends LitElement {
         .web-client-name {
           flex: 1;
           font-size: 14px;
+        }
+
+        .chart-wrap {
+          padding: 8px 16px 16px;
         }
 
         a {

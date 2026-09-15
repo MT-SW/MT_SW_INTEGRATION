@@ -19,6 +19,7 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
 
 from .const import DOMAIN
+from .store import get_store
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 WS_PREFIX = DOMAIN
+
+DEFAULT_MESSAGE_LIMIT = 500
 
 
 def _loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
@@ -170,7 +173,182 @@ async def ws_channels(
     connection.send_result(msg["id"], {"channels": channels})
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/nodes",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_nodes(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Lekka lista węzłów — tyle, ile trzeba do rozwiązania nazw w czacie."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+
+    nodes = []
+    for node_id, node in (entry.runtime_data.coordinator.data or {}).items():
+        user = node.get("user", {}) or {}
+        nodes.append(
+            {
+                "node_id": node_id,
+                "node_hex": f"!{node_id:08x}" if isinstance(node_id, int) else None,
+                "long_name": user.get("longName"),
+                "short_name": user.get("shortName"),
+                "last_heard": node.get("lastHeard"),
+            }
+        )
+    nodes.sort(key=lambda n: (n["long_name"] or n["node_hex"] or "").lower())
+    connection.send_result(msg["id"], {"nodes": nodes})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/messages",
+        vol.Required("entry_id"): str,
+        vol.Optional("limit", default=DEFAULT_MESSAGE_LIMIT): vol.All(int, vol.Range(min=1, max=2000)),
+    }
+)
+@websocket_api.async_response
+async def ws_messages(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Historia wiadomości z trwałego magazynu."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], {"messages": store.messages(msg["limit"])})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/timeseries",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_timeseries(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Szereg czasowy telemetrii bramki do wykresów."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], {"points": store.timeseries()})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/send_message",
+        vol.Required("entry_id"): str,
+        vol.Required("text"): vol.All(str, vol.Length(min=1, max=228)),
+        vol.Optional("channel_index"): vol.All(int, vol.Range(min=0, max=7)),
+        vol.Optional("node_id"): int,
+    }
+)
+@websocket_api.async_response
+async def ws_send_message(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Wyślij wiadomość tekstową na kanał albo bezpośrednio do węzła."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+
+    node_id = msg.get("node_id")
+    channel_index = msg.get("channel_index")
+    if node_id is None and channel_index is None:
+        connection.send_error(msg["id"], "invalid_target", "Podaj node_id albo channel_index")
+        return
+
+    client = entry.runtime_data.client
+    try:
+        if node_id is not None:
+            sent = await client.send_text(msg["text"], destination_id=node_id, want_ack=True)
+        else:
+            sent = await client.send_text(msg["text"], channel_index=channel_index, want_ack=True)
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Nie udało się wysłać wiadomości: %s", err)
+        connection.send_error(msg["id"], "send_failed", str(err))
+        return
+
+    connection.send_result(msg["id"], {"sent": bool(sent)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/clear_messages",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_clear_messages(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Wyczyść historię wiadomości."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    store.clear_messages()
+    connection.send_result(msg["id"], {})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/subscribe_messages",
+        vol.Required("entry_id"): str,
+    }
+)
+def ws_subscribe_messages(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Strumień nowych wiadomości i potwierdzeń.
+
+    Panel dostaje je natychmiast, zamiast czekać na kolejne odpytanie —
+    to jest różnica między czatem a tabelą odświeżaną co 10 sekund.
+    """
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+
+    def _forward(kind: str, payload: dict[str, Any]) -> None:
+        connection.send_message(websocket_api.event_message(msg["id"], {"kind": kind, "message": payload}))
+
+    connection.subscriptions[msg["id"]] = store.add_listener(_forward)
+    connection.send_result(msg["id"], {})
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
-    websocket_api.async_register_command(hass, ws_gateways)
-    websocket_api.async_register_command(hass, ws_channels)
+    for handler in (
+        ws_gateways,
+        ws_channels,
+        ws_nodes,
+        ws_messages,
+        ws_timeseries,
+        ws_send_message,
+        ws_clear_messages,
+        ws_subscribe_messages,
+    ):
+        websocket_api.async_register_command(hass, handler)

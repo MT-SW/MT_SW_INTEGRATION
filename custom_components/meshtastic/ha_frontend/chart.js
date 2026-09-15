@@ -1,0 +1,202 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Mały wykres liniowy w czystym SVG.
+ *
+ * Świadomie bez D3 — rysowanie kilku linii na siatce nie jest warte 276 KB
+ * zależności. Komponent przyjmuje surowe punkty z magazynu i sam liczy skalę.
+ */
+
+import { LitElement, html, svg, css } from "./vendor/lit/lit-element.js";
+
+const PADDING = { top: 8, right: 8, bottom: 20, left: 40 };
+
+class MeshLineChart extends LitElement {
+  static get properties() {
+    return {
+      /* [{ ts: number, <key>: number }] */
+      points: { type: Array },
+      /* [{ key: string, label: string, color: string }] */
+      series: { type: Array },
+      unit: { type: String },
+      height: { type: Number },
+      /* Jeśli true, rysujemy przyrosty między próbkami zamiast wartości
+         bezwzględnych — liczniki pakietów rosną monotonicznie i bez tego
+         wykres byłby nudną prostą do góry. */
+      derivative: { type: Boolean },
+      language: { type: String },
+    };
+  }
+
+  constructor() {
+    super();
+    this.points = [];
+    this.series = [];
+    this.unit = "";
+    this.height = 160;
+    this.derivative = false;
+    this.language = "pl";
+  }
+
+  _prepared() {
+    const raw = (this.points || []).filter((p) => p && typeof p.ts === "number");
+    if (raw.length < 2) {
+      return [];
+    }
+    if (!this.derivative) {
+      return raw;
+    }
+    const out = [];
+    for (let i = 1; i < raw.length; i += 1) {
+      const point = { ts: raw[i].ts };
+      let any = false;
+      for (const s of this.series) {
+        const prev = raw[i - 1][s.key];
+        const cur = raw[i][s.key];
+        if (typeof prev === "number" && typeof cur === "number") {
+          // reset licznika po restarcie radia -> pomijamy ujemny skok
+          point[s.key] = cur >= prev ? cur - prev : 0;
+          any = true;
+        }
+      }
+      if (any) {
+        out.push(point);
+      }
+    }
+    return out;
+  }
+
+  render() {
+    const points = this._prepared();
+    if (points.length < 2) {
+      return html`<div class="chart-empty"><slot name="empty"></slot></div>`;
+    }
+
+    const width = 600;
+    const innerW = width - PADDING.left - PADDING.right;
+    const innerH = this.height - PADDING.top - PADDING.bottom;
+
+    const tsMin = points[0].ts;
+    const tsMax = points[points.length - 1].ts;
+    const tsSpan = Math.max(1, tsMax - tsMin);
+
+    let vMax = 0;
+    for (const p of points) {
+      for (const s of this.series) {
+        if (typeof p[s.key] === "number" && p[s.key] > vMax) {
+          vMax = p[s.key];
+        }
+      }
+    }
+    // Zawsze zostaw trochę powietrza nad najwyższą wartością.
+    vMax = vMax > 0 ? vMax * 1.15 : 1;
+
+    const x = (ts) => PADDING.left + ((ts - tsMin) / tsSpan) * innerW;
+    const y = (v) => PADDING.top + innerH - (v / vMax) * innerH;
+
+    const gridValues = [0, vMax / 2, vMax];
+    const formatValue = (v) => (vMax >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
+    const formatTime = (ts) =>
+      new Date(ts).toLocaleTimeString(this.language, { hour: "2-digit", minute: "2-digit" });
+
+    return html`
+      <div class="legend">
+        ${this.series.map(
+          (s) => html`<span class="legend-item">
+            <span class="swatch" style="background:${s.color}"></span>${s.label}
+          </span>`
+        )}
+      </div>
+      <svg viewBox="0 0 ${width} ${this.height}" preserveAspectRatio="none" role="img">
+        ${gridValues.map(
+          (v) => svg`
+            <line class="grid" x1=${PADDING.left} x2=${width - PADDING.right} y1=${y(v)} y2=${y(v)} />
+            <text class="axis" x=${PADDING.left - 6} y=${y(v) + 4} text-anchor="end">
+              ${formatValue(v)}${this.unit}
+            </text>
+          `
+        )}
+        <text class="axis" x=${PADDING.left} y=${this.height - 6} text-anchor="start">
+          ${formatTime(tsMin)}
+        </text>
+        <text class="axis" x=${width - PADDING.right} y=${this.height - 6} text-anchor="end">
+          ${formatTime(tsMax)}
+        </text>
+        ${this.series.map((s) => {
+          const path = points
+            .filter((p) => typeof p[s.key] === "number")
+            .map((p, i) => `${i === 0 ? "M" : "L"}${x(p.ts).toFixed(1)},${y(p[s.key]).toFixed(1)}`)
+            .join(" ");
+          return path ? svg`<path class="line" d=${path} stroke=${s.color} />` : svg``;
+        })}
+      </svg>
+    `;
+  }
+
+  static get styles() {
+    return css`
+      :host {
+        display: block;
+      }
+
+      svg {
+        width: 100%;
+        height: auto;
+        overflow: visible;
+      }
+
+      .line {
+        fill: none;
+        stroke-width: 2;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .grid {
+        stroke: var(--divider-color);
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .axis {
+        fill: var(--secondary-text-color);
+        font-size: 10px;
+        font-family: inherit;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: var(--secondary-text-color);
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+      }
+
+      .chart-empty {
+        color: var(--secondary-text-color);
+        font-size: 13px;
+        padding: 12px 0;
+      }
+    `;
+  }
+}
+
+if (!customElements.get("mesh-line-chart")) {
+  customElements.define("mesh-line-chart", MeshLineChart);
+}

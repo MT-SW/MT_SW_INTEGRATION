@@ -74,6 +74,7 @@ from .entity import (
 from .helpers import async_prune_stale_node_entities, fetch_meshtastic_hardware_names, node_identity_key
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
+from .store import async_setup_store, async_unload_store
 from .websocket_api import async_register_websocket_api
 
 if TYPE_CHECKING:
@@ -266,6 +267,8 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
+    await async_setup_store(hass, entry)
 
     await _setup_meshtastic_devices(hass, entry, client)
     await _setup_meshtastic_entities(hass, entry, client)
@@ -653,6 +656,7 @@ async def async_unload_entry(
         ]:
             await hass.data[DATA_COMPONENT].async_remove_entity(entity.entity_id)
 
+        await async_unload_store(entry.entry_id)
         await services.async_unregister_gateway(hass, entry)
 
         for remove_listener in _remove_listeners.pop(entry.entry_id, []):
