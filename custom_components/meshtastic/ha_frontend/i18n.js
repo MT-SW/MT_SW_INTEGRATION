@@ -59,6 +59,8 @@ const STRINGS = {
     "radio.packets_rx_bad": "Błędne",
     "radio.packets_tx_relay": "Przekazane",
     "radio.packets_tx_dropped": "Odrzucone",
+    "radio.packets_rx_dupe": "Duplikaty",
+    "radio.packets_tx_relay_canceled": "Przekazanie anulowane",
 
     "radio.section.mesh": "Sieć",
     "radio.nodes_online": "Węzły online",
@@ -176,6 +178,8 @@ const STRINGS = {
     "radio.packets_rx_bad": "Bad",
     "radio.packets_tx_relay": "Relayed",
     "radio.packets_tx_dropped": "Dropped",
+    "radio.packets_rx_dupe": "Duplicates",
+    "radio.packets_tx_relay_canceled": "Relay cancelled",
 
     "radio.section.mesh": "Mesh",
     "radio.nodes_online": "Nodes online",

@@ -229,7 +229,7 @@ class PanelStore:
 
         node_data = data.coordinator.data.get(node_id) or {}
         device_metrics = node_data.get("deviceMetrics") or {}
-        local_stats = node_data.get("localStats") or {}
+        local_stats = node_data.get("localStatsExtended") or node_data.get("localStats") or {}
 
         point: dict[str, Any] = {"ts": _now_ms()}
         for key, source, field in (

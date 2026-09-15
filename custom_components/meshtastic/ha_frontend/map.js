@@ -14,8 +14,12 @@
 import { LitElement, html } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
 
-const DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const DEFAULT_ATTRIBUTION = "&copy; OpenStreetMap";
+/* OpenStreetMap blokuje ruch aplikacji nietrzymających się ich polityki kafli
+   (HTTP 403). Używamy CARTO — tego samego dostawcy, co wbudowana karta mapy
+   Home Assistanta — w wariancie dopasowanym do motywu. */
+const TILE_URL_LIGHT = "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
+const TILE_URL_DARK = "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png";
+const DEFAULT_ATTRIBUTION = "&copy; OpenStreetMap &copy; CARTO";
 
 let leafletPromise = null;
 
@@ -78,7 +82,9 @@ class MeshMapTab extends LitElement {
   constructor() {
     super();
     this.nodes = [];
-    this.tileUrl = DEFAULT_TILE_URL;
+    this.tileUrl = null;
+    this._tileLayer = null;
+    this._darkMode = null;
     this.showLinks = true;
     this._map = null;
     this._markerLayer = null;
@@ -129,13 +135,31 @@ class MeshMapTab extends LitElement {
     }
 
     this._map = L.map(container, { preferCanvas: true }).setView([51.0, 20.9], 9);
-    L.tileLayer(this.tileUrl || DEFAULT_TILE_URL, {
-      maxZoom: 19,
-      attribution: DEFAULT_ATTRIBUTION,
-    }).addTo(this._map);
+    this._applyTileLayer(L);
 
     this._markerLayer = L.layerGroup().addTo(this._map);
     this._linkLayer = L.layerGroup().addTo(this._map);
+  }
+
+  _isDark() {
+    return Boolean(this.hass && this.hass.themes && this.hass.themes.darkMode);
+  }
+
+  /* Warstwę kafli przestawiamy tylko przy faktycznej zmianie motywu —
+     odtwarzanie jej przy każdym odświeżeniu migałoby na ekranie. */
+  _applyTileLayer(L) {
+    const dark = this._isDark();
+    if (this._tileLayer && this._darkMode === dark) {
+      return;
+    }
+    if (this._tileLayer) {
+      this._map.removeLayer(this._tileLayer);
+    }
+    this._tileLayer = L.tileLayer(this.tileUrl || (dark ? TILE_URL_DARK : TILE_URL_LIGHT), {
+      maxZoom: 19,
+      attribution: DEFAULT_ATTRIBUTION,
+    }).addTo(this._map);
+    this._darkMode = dark;
   }
 
   _redraw() {
@@ -215,6 +239,9 @@ class MeshMapTab extends LitElement {
     if (this._map) {
       // Kontener dostaje wymiary dopiero po wstawieniu do drzewa.
       this._map.invalidateSize();
+      if (window.L) {
+        this._applyTileLayer(window.L);
+      }
       this._redraw();
     }
   }

@@ -232,6 +232,8 @@ class MeshRadioTab extends LitElement {
           ${this._renderStat("radio.packets_rx_bad", gateway.packets_rx_bad)}
           ${this._renderStat("radio.packets_tx_relay", gateway.packets_tx_relay)}
           ${this._renderStat("radio.packets_tx_dropped", gateway.packets_tx_dropped)}
+          ${this._renderStat("radio.packets_rx_dupe", gateway.packets_rx_dupe)}
+          ${this._renderStat("radio.packets_tx_relay_canceled", gateway.packets_tx_relay_canceled)}
         </div>
 
         <div class="section-title">${t(this.hass, "radio.section.mesh")}</div>

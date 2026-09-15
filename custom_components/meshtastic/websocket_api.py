@@ -79,7 +79,9 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
 
     user = gateway_node.get("user", {}) or {}
     device_metrics = node_data.get("deviceMetrics", {}) or {}
-    local_stats = node_data.get("localStats", {}) or {}
+    # Firmware MT_SW wysyła LocalStatsExtended; standardowe LocalStats jest
+    # fallbackiem dla bramek na firmware waniliowym.
+    local_stats = node_data.get("localStatsExtended") or node_data.get("localStats") or {}
 
     try:
         metadata = client.metadata or {}
@@ -111,6 +113,8 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         "packets_rx_bad": _as_int(local_stats.get("numPacketsRxBad")),
         "packets_tx_relay": _as_int(local_stats.get("numTxRelay")),
         "packets_tx_dropped": _as_int(local_stats.get("numTxDropped")),
+        "packets_rx_dupe": _as_int(local_stats.get("numRxDupe")),
+        "packets_tx_relay_canceled": _as_int(local_stats.get("numTxRelayCanceled")),
         "nodes_online": _as_int(local_stats.get("numOnlineNodes")),
         "nodes_total": _as_int(local_stats.get("numTotalNodes")),
         "noise_floor": _as_float(local_stats.get("noiseFloor")),

@@ -32,7 +32,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     # Add to sidepanel if needed
     if DOMAIN not in hass.data.get("frontend_panels", {}):
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(f"{URL_BASE}/frontend", locate_dir(), cache_headers=not _DEBUG)]
+            [StaticPathConfig(f"{URL_BASE}/frontend", locate_dir(), cache_headers=False)]
         )
 
         async_register_built_in_panel(
