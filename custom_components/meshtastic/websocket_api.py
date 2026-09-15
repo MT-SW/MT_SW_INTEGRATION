@@ -379,6 +379,45 @@ def ws_subscribe_messages(
     connection.send_result(msg["id"], {})
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/config",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_config(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Pełna konfiguracja bramki — sekcje localConfig i moduleConfig.
+
+    Tylko odczyt. Zapis wymaga wiadomości administracyjnych i trafi tu
+    w osobnym wydaniu, bo nieudany zapis konfiguracji LoRa wyrzuca węzeł
+    z sieci bez drogi powrotnej.
+    """
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+
+    client = entry.runtime_data.client
+    try:
+        local_config = await client.async_get_node_local_config()
+        module_config = await client.async_get_node_module_config()
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Nie udało się pobrać konfiguracji: %s", err)
+        connection.send_error(msg["id"], "config_failed", str(err))
+        return
+
+    connection.send_result(
+        msg["id"],
+        {"local_config": local_config or {}, "module_config": module_config or {}},
+    )
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -390,5 +429,6 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_send_message,
         ws_clear_messages,
         ws_subscribe_messages,
+        ws_config,
     ):
         websocket_api.async_register_command(hass, handler)

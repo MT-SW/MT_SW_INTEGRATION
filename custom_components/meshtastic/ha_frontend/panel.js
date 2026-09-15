@@ -15,10 +15,11 @@ import "./views.js";
 import "./messages.js";
 import "./nodes.js";
 import "./map.js";
+import "./settings.js";
 import "./neighbors.js";
 
 const POLL_MS = 10000;
-const TABS = ["radio", "messages", "nodes", "map", "neighbors"];
+const TABS = ["radio", "messages", "nodes", "map", "neighbors", "settings"];
 
 function tabFromPath() {
   const parts = location.pathname.replace(/\/+$/, "").split("/");
@@ -41,6 +42,9 @@ class MeshtasticPanel extends LitElement {
       _messages: { type: Array },
       _timeseries: { type: Array },
       _selectedEntryId: { type: String },
+      _localConfig: { type: Object },
+      _moduleConfig: { type: Object },
+      _configError: { type: Boolean },
     };
   }
 
@@ -54,6 +58,9 @@ class MeshtasticPanel extends LitElement {
     this._messages = [];
     this._timeseries = [];
     this._selectedEntryId = null;
+    this._localConfig = null;
+    this._moduleConfig = null;
+    this._configError = false;
     this._pollTimer = null;
     this._unsubscribe = null;
     this._subscribedEntryId = null;
@@ -140,6 +147,7 @@ class MeshtasticPanel extends LitElement {
       this._refreshNodes(entryId),
       this._refreshTimeseries(entryId),
       this._ensureSubscription(entryId),
+      this._refreshConfig(entryId),
     ]);
   }
 
@@ -170,6 +178,24 @@ class MeshtasticPanel extends LitElement {
       this._timeseries = result.points || [];
     } catch (err) {
       console.warn("MT_SW: nie udało się pobrać szeregu czasowego", err);
+    }
+  }
+
+  /* Konfiguracja zmienia się rzadko i każdy odczyt to round trip do radia,
+     więc pobieramy ją raz na wpis, a nie w cyklu odpytywania. */
+  async _refreshConfig(entryId) {
+    if (this._configEntryId === entryId) {
+      return;
+    }
+    try {
+      const result = await this.hass.callWS({ type: "meshtastic/config", entry_id: entryId });
+      this._localConfig = result.local_config || {};
+      this._moduleConfig = result.module_config || {};
+      this._configError = false;
+      this._configEntryId = entryId;
+    } catch (err) {
+      console.warn("MT_SW: nie udało się pobrać konfiguracji", err);
+      this._configError = true;
     }
   }
 
@@ -252,6 +278,13 @@ class MeshtasticPanel extends LitElement {
         return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
       case "neighbors":
         return html`<mesh-neighbors-tab .hass=${this.hass}></mesh-neighbors-tab>`;
+      case "settings":
+        return html`<mesh-settings-tab
+          .hass=${this.hass}
+          .localConfig=${this._localConfig}
+          .moduleConfig=${this._moduleConfig}
+          .configError=${this._configError}
+        ></mesh-settings-tab>`;
       case "radio":
       default:
         return html`<mesh-radio-tab

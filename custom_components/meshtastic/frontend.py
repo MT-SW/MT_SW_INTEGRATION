@@ -32,7 +32,11 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     # Add to sidepanel if needed
     if DOMAIN not in hass.data.get("frontend_panels", {}):
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(f"{URL_BASE}/frontend", locate_dir(), cache_headers=False)]
+            [
+                StaticPathConfig(
+                    f"{URL_BASE}/frontend/{_INTEGRATION_VERSION}", locate_dir(), cache_headers=True
+                )
+            ]
         )
 
         async_register_built_in_panel(
@@ -46,7 +50,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
                     "name": "meshtastic-frontend",
                     "embed_iframe": False,
                     "trust_external": False,
-                    "module_url": f"{URL_BASE}/frontend/panel.js?v={_INTEGRATION_VERSION}"
+                    "module_url": f"{URL_BASE}/frontend/{_INTEGRATION_VERSION}/panel.js"
                     + (f"&t={time.time()}" if _DEBUG else ""),
                 }
             },
