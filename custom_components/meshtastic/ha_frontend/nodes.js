@@ -320,33 +320,47 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
-  /* RouteDiscovery niesie trasę tam i z powrotem oraz SNR każdego przeskoku.
-     Wartości SNR są w czwartych częściach decybela — stąd dzielenie przez 4. */
-  _closeDetail() {
-    this._detail = null;
-    this._traceroute = null;
-    this._notice = null;
-    this._error = null;
+  /* RouteDiscovery niesie same przeskoki pośrednie — bez nadawcy i celu.
+     Żeby trasa dała się przeczytać, doklejamy oba końce i budujemy łańcuch:
+     bramka -> przeskok -> ... -> cel. SNR dotyczy odcinków, więc jest ich
+     o jeden mniej niż węzłów; wartości są w czwartych częściach decybela. */
+  _gatewayId() {
+    const gateway = (this.nodes || []).find((n) => n.is_gateway);
+    return gateway ? gateway.node_id : null;
   }
 
-  _renderHopList(labelKey, route, snrs) {
-    if (!route || !route.length) {
+  _snrClass(db) {
+    if (db === null) return "";
+    if (db >= 0) return "good";
+    if (db >= -8) return "fair";
+    return "poor";
+  }
+
+  _renderChain(labelKey, chain, snrs) {
+    if (!chain || chain.length < 2) {
       return html``;
     }
     return html`
       <div class="detail-section">${t(this.hass, labelKey)}</div>
-      ${route.map(
-        (hop, index) => html`
-          <div class="detail-row">
-            <span class="detail-label">${index + 1}. ${this._nameOf(hop)}</span>
-            <span class="detail-value">
-              ${snrs && snrs[index] !== undefined
-                ? `${(snrs[index] / 4).toFixed(2)} dB`
-                : t(this.hass, "common.unknown")}
-            </span>
-          </div>
-        `
-      )}
+      <div class="route">
+        ${chain.map((hop, index) => {
+          const raw = snrs && snrs[index] !== undefined ? snrs[index] / 4 : null;
+          return html`
+            <div class="route-node">
+              <span class="route-dot ${index === 0 ? "start" : ""}${index === chain.length - 1 ? "end" : ""}"></span>
+              <span class="route-name">${this._nameOf(hop)}</span>
+            </div>
+            ${index < chain.length - 1
+              ? html`<div class="route-link">
+                  <span class="route-line"></span>
+                  <span class="route-snr ${this._snrClass(raw)}">
+                    ${raw === null ? t(this.hass, "common.unknown") : `${raw.toFixed(2)} dB`}
+                  </span>
+                </div>`
+              : ""}
+          `;
+        })}
+      </div>
     `;
   }
 
@@ -355,20 +369,22 @@ class MeshNodesTab extends LitElement {
     if (!route) {
       return html``;
     }
-    const towards = route.route || [];
-    const back = route.routeBack || [];
-    if (!towards.length && !back.length) {
-      return html`
-        <div class="detail-section">${t(this.hass, "nodes.traceroute.title")}</div>
-        <div class="detail-row">
-          <span class="detail-label">${t(this.hass, "nodes.traceroute.direct")}</span>
-          <span class="detail-value"></span>
-        </div>
-      `;
-    }
+    const gateway = this._gatewayId();
+    const towards = [gateway, ...(route.route || []), node.node_id].filter(
+      (id) => id !== null && id !== undefined
+    );
+    const back = [node.node_id, ...(route.routeBack || []), gateway].filter(
+      (id) => id !== null && id !== undefined
+    );
+
+    const direct = (route.route || []).length === 0;
+
     return html`
-      ${this._renderHopList("nodes.traceroute.towards", towards, route.snrTowards)}
-      ${this._renderHopList("nodes.traceroute.back", back, route.snrBack)}
+      ${this._renderChain("nodes.traceroute.towards", towards, route.snrTowards)}
+      ${route.routeBack ? this._renderChain("nodes.traceroute.back", back, route.snrBack) : ""}
+      ${direct
+        ? html`<div class="route-note">${t(this.hass, "nodes.traceroute.direct")}</div>`
+        : ""}
     `;
   }
 
@@ -777,6 +793,70 @@ class MeshNodesTab extends LitElement {
           font-size: 14px;
           font-variant-numeric: tabular-nums;
           text-align: end;
+        }
+
+        .route {
+          padding: 4px 16px 8px;
+        }
+
+        .route-node {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+        }
+
+        .route-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          background: var(--secondary-text-color);
+          flex: none;
+        }
+
+        .route-dot.start,
+        .route-dot.end {
+          background: var(--primary-color);
+        }
+
+        .route-link {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-inline-start: 4px;
+          min-height: 22px;
+        }
+
+        .route-line {
+          width: 1px;
+          align-self: stretch;
+          background: var(--divider-color);
+          margin-inline-start: 4px;
+        }
+
+        .route-snr {
+          font-size: 12px;
+          font-variant-numeric: tabular-nums;
+          color: var(--secondary-text-color);
+          padding-inline-start: 8px;
+        }
+
+        .route-snr.good {
+          color: #4caf50;
+        }
+
+        .route-snr.fair {
+          color: #f5c839;
+        }
+
+        .route-snr.poor {
+          color: #e57373;
+        }
+
+        .route-note {
+          padding: 0 16px 8px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
         }
 
         .detail-section {

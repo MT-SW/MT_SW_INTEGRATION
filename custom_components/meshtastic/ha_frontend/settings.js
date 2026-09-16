@@ -15,6 +15,8 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t } from "./i18n.js";
 import { fieldLabel } from "./field-labels.js";
+import { enumOptions } from "./enum-labels.js";
+import "./components.js";
 
 /* Sekcje, które chcemy pokazać najwyżej — reszta leci alfabetycznie pod nimi. */
 const PRIORITY_SECTIONS = ["lora", "device", "position", "power", "network", "bluetooth", "display"];
@@ -151,54 +153,51 @@ class MeshSettingsTab extends LitElement {
   _renderControl(groupId, section, key, current) {
     const meta = this._meta(groupId, section, key);
     const value = this._draftValue(groupId, section, key, current);
+    const label = fieldLabel(section, key) || this._humanize(key);
 
     if (!meta || !meta.editable) {
-      return html`<span class="field-value readonly">${this._formatValue(current)}</span>`;
+      return html`
+        <mesh-form-field .label=${label}>
+          <div class="readonly">${this._formatValue(current)}</div>
+        </mesh-form-field>
+      `;
     }
 
     if (meta.type === "bool") {
-      return html`<input
-        type="checkbox"
+      return html`<mesh-toggle
+        .label=${label}
         .checked=${Boolean(value)}
-        @change=${(e) => this._setDraft(groupId, section, key, e.target.checked)}
-      />`;
+        @change=${(e) => this._setDraft(groupId, section, key, e.detail.checked)}
+      ></mesh-toggle>`;
     }
 
     if (meta.type === "enum") {
-      return html`<select @change=${(e) => this._setDraft(groupId, section, key, e.target.value)}>
-        ${(meta.options || []).map(
-          (option) => html`<option value=${option} ?selected=${option === value}>${option}</option>`
-        )}
-      </select>`;
+      return html`<mesh-select
+        .label=${label}
+        .value=${value === null || value === undefined ? "" : String(value)}
+        .options=${enumOptions(meta.enum, meta.options)}
+        @change=${(e) => this._setDraft(groupId, section, key, e.detail.value)}
+      ></mesh-select>`;
     }
 
     if (meta.type === "int" || meta.type === "float") {
-      return html`<input
-        type="number"
-        step=${meta.type === "float" ? "any" : "1"}
-        .value=${value === null || value === undefined ? "" : String(value)}
-        @change=${(e) => {
-          const raw = e.target.value;
-          const parsed = raw === "" ? 0 : Number(raw);
-          this._setDraft(groupId, section, key, Number.isNaN(parsed) ? 0 : parsed);
-        }}
-      />`;
+      return html`<mesh-number-input
+        .label=${label}
+        .value=${typeof value === "number" ? value : 0}
+        .step=${meta.type === "float" ? 0.01 : 1}
+        @change=${(e) => this._setDraft(groupId, section, key, Number(e.detail.value))}
+      ></mesh-number-input>`;
     }
 
-    return html`<input
-      type="text"
+    return html`<mesh-text-input
+      .label=${label}
       .value=${value === null || value === undefined ? "" : String(value)}
-      @change=${(e) => this._setDraft(groupId, section, key, e.target.value)}
-    />`;
+      @change=${(e) => this._setDraft(groupId, section, key, e.detail.value)}
+    ></mesh-text-input>`;
   }
 
   _renderField(groupId, section, key, value) {
-    return html`
-      <div class="field">
-        <span class="field-label">${fieldLabel(section, key) || this._humanize(key)}</span>
-        <span class="field-control">${this._renderControl(groupId, section, key, value)}</span>
-      </div>
-    `;
+    return html`<div class="field">${this._renderControl(groupId, section, key, value)}</div>`;
   }
 
   _renderSection(groupId, name, section) {
@@ -224,7 +223,9 @@ class MeshSettingsTab extends LitElement {
           ? html`<div class="section-body">
               ${this._renderSaveBar(groupId, name)}
               ${fields.length
-                ? fields.map(([key, value]) => this._renderField(groupId, name, key, value))
+                ? html`<div class="section-body-grid">
+                    ${fields.map(([key, value]) => this._renderField(groupId, name, key, value))}
+                  </div>`
                 : html`<div class="empty-state">${t(this.hass, "settings.section_empty")}</div>`}
             </div>`
           : ""}
@@ -420,11 +421,25 @@ class MeshSettingsTab extends LitElement {
           padding: 4px 0 8px;
         }
 
+        /* Etykieta stoi teraz nad kontrolką, więc pola układamy w siatkę —
+           wcześniej etykieta była przy lewej, a kontrolka przy prawej krawędzi
+           karty i przy szerokim oknie nie było wiadomo, co z czym się łączy. */
+        .section-body-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+          gap: 14px 20px;
+          padding: 14px 16px;
+        }
+
         .field {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          padding: 6px 16px;
+          min-width: 0;
+        }
+
+        .readonly {
+          padding: 7px 0;
+          font-size: 13px;
+          color: var(--secondary-text-color);
+          overflow-wrap: anywhere;
         }
 
         .field-label {

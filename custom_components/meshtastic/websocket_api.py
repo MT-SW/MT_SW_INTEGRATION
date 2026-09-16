@@ -420,10 +420,13 @@ def _field_meta(descriptor: Any) -> dict[str, Any]:
     kind = "string"
     options = None
 
+    enum_name = None
+
     if descriptor.type == descriptor.TYPE_BOOL:
         kind = "bool"
     elif descriptor.type == descriptor.TYPE_ENUM:
         kind = "enum"
+        enum_name = descriptor.enum_type.name
         options = [value.name for value in descriptor.enum_type.values]
     elif descriptor.type in (descriptor.TYPE_FLOAT, descriptor.TYPE_DOUBLE):
         kind = "float"
@@ -446,6 +449,7 @@ def _field_meta(descriptor: Any) -> dict[str, Any]:
     repeated = descriptor.label == descriptor.LABEL_REPEATED
     return {
         "type": kind,
+        "enum": enum_name,
         "options": options,
         # Pola binarne, zagnieżdżone i powtarzalne pokazujemy, ale nie pozwalamy
         # ich edytować — formularz nie ma dla nich sensownej kontrolki.
