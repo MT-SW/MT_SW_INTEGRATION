@@ -3,7 +3,13 @@
  *
  * SPDX-License-Identifier: MIT
  *
- * Zakładka Węzły — sortowalna tabela z filtrem i dialogiem szczegółów.
+ * Zakładka Węzły — pełna lista z bazy urządzenia, filtry i akcje.
+ *
+ * Źródłem jest baza węzłów radia, a nie coordinator.data. Opcja "nodes"
+ * wpisu konfiguracyjnego decyduje wyłącznie o tym, dla których węzłów
+ * powstają encje Home Assistanta — panel pokazuje wszystko, co widzi radio,
+ * tak jak klient WWW. Węzły z encjami są oznaczone, żeby nadal było wiadomo,
+ * które trafiają do automatyzacji.
  */
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
@@ -18,15 +24,29 @@ const COLUMNS = [
   { key: "last_heard", labelKey: "nodes.col.last_heard", numeric: true },
 ];
 
+const FILTERS = [
+  { key: "favorites", labelKey: "nodes.filter.favorites" },
+  { key: "direct", labelKey: "nodes.filter.direct" },
+  { key: "positioned", labelKey: "nodes.filter.positioned" },
+  { key: "tracked", labelKey: "nodes.filter.tracked" },
+  { key: "hideMqtt", labelKey: "nodes.filter.hide_mqtt" },
+  { key: "showIgnored", labelKey: "nodes.filter.show_ignored" },
+];
+
 class MeshNodesTab extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
+      entryId: { type: String },
       nodes: { type: Array },
       _filter: { type: String },
+      _toggles: { type: Object },
       _sortKey: { type: String },
       _sortAsc: { type: Boolean },
       _detail: { type: Object },
+      _busy: { type: String },
+      _error: { type: String },
+      _notice: { type: String },
     };
   }
 
@@ -34,13 +54,25 @@ class MeshNodesTab extends LitElement {
     super();
     this.nodes = [];
     this._filter = "";
+    this._toggles = {};
     this._sortKey = "last_heard";
     this._sortAsc = false;
     this._detail = null;
+    this._busy = null;
+    this._error = null;
+    this._notice = null;
   }
 
   _displayName(node) {
     return node.long_name || node.short_name || node.node_hex || String(node.node_id);
+  }
+
+  _current() {
+    // Dialog trzyma kopię sprzed odświeżenia, więc szukamy aktualnej wersji.
+    if (!this._detail) {
+      return null;
+    }
+    return (this.nodes || []).find((n) => n.node_id === this._detail.node_id) || this._detail;
   }
 
   _sortValue(node, key) {
@@ -53,20 +85,32 @@ class MeshNodesTab extends LitElement {
 
   _visibleNodes() {
     const needle = (this._filter || "").trim().toLowerCase();
+    const on = this._toggles;
     let list = this.nodes || [];
 
-    if (needle) {
-      list = list.filter((node) => {
+    list = list.filter((node) => {
+      if (node.is_ignored && !on.showIgnored) return false;
+      if (on.favorites && !node.is_favorite) return false;
+      if (on.direct && node.hops_away !== 0) return false;
+      if (on.positioned && typeof node.latitude !== "number") return false;
+      if (on.tracked && !node.is_tracked) return false;
+      if (on.hideMqtt && node.via_mqtt) return false;
+      if (needle) {
         const haystack = [node.long_name, node.short_name, node.node_hex, node.role]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return haystack.includes(needle);
-      });
-    }
+        if (!haystack.includes(needle)) return false;
+      }
+      return true;
+    });
 
     const direction = this._sortAsc ? 1 : -1;
     return [...list].sort((a, b) => {
+      // Ulubione zawsze na górze, niezależnie od wybranego sortowania.
+      if (a.is_favorite !== b.is_favorite) {
+        return a.is_favorite ? -1 : 1;
+      }
       const va = this._sortValue(a, this._sortKey);
       const vb = this._sortValue(b, this._sortKey);
       if (va < vb) return -1 * direction;
@@ -82,6 +126,10 @@ class MeshNodesTab extends LitElement {
       this._sortKey = key;
       this._sortAsc = key === "name";
     }
+  }
+
+  _toggleFilter(key) {
+    this._toggles = { ...this._toggles, [key]: !this._toggles[key] };
   }
 
   _formatValue(value, suffix, digits) {
@@ -100,13 +148,70 @@ class MeshNodesTab extends LitElement {
     return new Date(seconds * 1000).toLocaleString(this.hass.language);
   }
 
+  async _call(kind, payload) {
+    if (!this.entryId || this._busy) {
+      return;
+    }
+    this._busy = kind;
+    this._error = null;
+    this._notice = null;
+    try {
+      await this.hass.callWS({ type: `meshtastic/${kind}`, entry_id: this.entryId, ...payload });
+      this._notice = t(this.hass, "nodes.action.sent");
+      this.dispatchEvent(new CustomEvent("mtsw-refresh", { bubbles: true, composed: true }));
+    } catch (err) {
+      console.error("MT_SW: akcja nie powiodła się", kind, err);
+      this._error = (err && err.message) || t(this.hass, "nodes.action.failed");
+    } finally {
+      this._busy = null;
+    }
+  }
+
+  _openDm(node) {
+    this.dispatchEvent(
+      new CustomEvent("mtsw-open-dm", {
+        detail: { nodeId: node.node_id },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  async _confirmRemove(node) {
+    const message = t(this.hass, "nodes.action.remove_confirm", { name: this._displayName(node) });
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(message)) {
+      return;
+    }
+    await this._call("remove_node", { node_id: node.node_id });
+    this._detail = null;
+  }
+
+  _renderStar(node) {
+    return html`
+      <button
+        class="star ${node.is_favorite ? "on" : ""}"
+        title=${t(this.hass, node.is_favorite ? "nodes.action.unfavorite" : "nodes.action.favorite")}
+        @click=${(e) => {
+          e.stopPropagation();
+          this._call("set_favorite", { node_id: node.node_id, favorite: !node.is_favorite });
+        }}
+      >
+        ${node.is_favorite ? "★" : "☆"}
+      </button>
+    `;
+  }
+
   _renderRow(node) {
     return html`
-      <tr @click=${() => (this._detail = node)}>
+      <tr class=${node.is_ignored ? "ignored" : ""} @click=${() => (this._detail = node)}>
+        <td class="star-cell">${this._renderStar(node)}</td>
         <td>
           <span class="name">${this._displayName(node)}</span>
           ${node.is_gateway ? html`<span class="tag">${t(this.hass, "nodes.gateway")}</span>` : ""}
           ${node.via_mqtt ? html`<span class="tag mqtt">MQTT</span>` : ""}
+          ${node.is_ignored ? html`<span class="tag muted">${t(this.hass, "nodes.ignored")}</span>` : ""}
+          ${node.is_tracked ? html`<span class="dot" title=${t(this.hass, "nodes.tracked_hint")}></span>` : ""}
           <span class="hex">${node.node_hex}</span>
         </td>
         <td class="num">${this._formatValue(node.snr, " dB", 1)}</td>
@@ -129,8 +234,60 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
+  _nameOf(nodeId) {
+    const node = (this.nodes || []).find((n) => n.node_id === nodeId);
+    if (node) {
+      return this._displayName(node);
+    }
+    return `!${(nodeId >>> 0).toString(16).padStart(8, "0")}`;
+  }
+
+  _renderActions(node) {
+    const busy = Boolean(this._busy);
+    const action = (kind, labelKey, payload, danger) => html`
+      <button
+        class="action ${danger ? "danger" : ""}"
+        ?disabled=${busy}
+        @click=${() => this._call(kind, payload)}
+      >
+        ${t(this.hass, labelKey)}
+      </button>
+    `;
+
+    return html`
+      <div class="actions">
+        <button class="action primary" ?disabled=${busy} @click=${() => this._openDm(node)}>
+          ${t(this.hass, "nodes.action.message")}
+        </button>
+        <button
+          class="action"
+          ?disabled=${busy}
+          @click=${() => this._call("set_favorite", { node_id: node.node_id, favorite: !node.is_favorite })}
+        >
+          ${t(this.hass, node.is_favorite ? "nodes.action.unfavorite" : "nodes.action.favorite")}
+        </button>
+        <button
+          class="action"
+          ?disabled=${busy}
+          @click=${() => this._call("set_ignored", { node_id: node.node_id, ignored: !node.is_ignored })}
+        >
+          ${t(this.hass, node.is_ignored ? "nodes.action.unignore" : "nodes.action.ignore")}
+        </button>
+        ${action("request_position", "nodes.action.position", { node_id: node.node_id })}
+        ${action("request_neighbors", "nodes.action.neighbors", { node_id: node.node_id })}
+        ${action("traceroute", "nodes.action.traceroute", { node_id: node.node_id })}
+        <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
+          ${t(this.hass, "nodes.action.remove")}
+        </button>
+      </div>
+      ${this._busy ? html`<div class="status">${t(this.hass, "nodes.action.working")}</div>` : ""}
+      ${this._notice ? html`<div class="status ok">${this._notice}</div>` : ""}
+      ${this._error ? html`<div class="status error">${this._error}</div>` : ""}
+    `;
+  }
+
   _renderDetail() {
-    const node = this._detail;
+    const node = this._current();
     if (!node) {
       return html``;
     }
@@ -139,10 +296,12 @@ class MeshNodesTab extends LitElement {
       <div class="scrim" @click=${() => (this._detail = null)}>
         <div class="dialog" @click=${(e) => e.stopPropagation()}>
           <div class="dialog-header">
-            <span>${this._displayName(node)}</span>
+            <span>${this._renderStar(node)} ${this._displayName(node)}</span>
             <button class="close" @click=${() => (this._detail = null)}>✕</button>
           </div>
           <div class="dialog-body">
+            ${this._renderActions(node)}
+
             ${this._detailRow("nodes.col.id", node.node_hex)}
             ${this._detailRow("radio.hw_model", node.hw_model)}
             ${this._detailRow("radio.role", node.role)}
@@ -162,13 +321,14 @@ class MeshNodesTab extends LitElement {
             ${this._detailRow("nodes.temperature", this._formatValue(node.temperature, " °C", 1))}
             ${this._detailRow("nodes.humidity", this._formatValue(node.humidity, " %", 0))}
             ${this._detailRow("nodes.pressure", this._formatValue(node.pressure, " hPa", 0))}
-            ${node.latitude !== null && node.latitude !== undefined
+            ${typeof node.latitude === "number"
               ? this._detailRow(
                   "nodes.position",
                   `${node.latitude.toFixed(5)}, ${node.longitude.toFixed(5)}` +
                     (node.altitude !== null && node.altitude !== undefined ? ` (${node.altitude} m)` : "")
                 )
               : ""}
+            ${this._detailRow("nodes.tracked", node.is_tracked ? t(this.hass, "common.yes") : t(this.hass, "common.no"))}
 
             ${node.neighbors && node.neighbors.length
               ? html`
@@ -187,14 +347,6 @@ class MeshNodesTab extends LitElement {
         </div>
       </div>
     `;
-  }
-
-  _nameOf(nodeId) {
-    const node = (this.nodes || []).find((n) => n.node_id === nodeId);
-    if (node) {
-      return this._displayName(node);
-    }
-    return `!${(nodeId >>> 0).toString(16).padStart(8, "0")}`;
   }
 
   render() {
@@ -217,6 +369,19 @@ class MeshNodesTab extends LitElement {
           <span class="count">${t(this.hass, "nodes.count", { n: nodes.length })}</span>
         </div>
 
+        <div class="chips">
+          ${FILTERS.map(
+            (filter) => html`
+              <button
+                class="chip ${this._toggles[filter.key] ? "on" : ""}"
+                @click=${() => this._toggleFilter(filter.key)}
+              >
+                ${t(this.hass, filter.labelKey)}
+              </button>
+            `
+          )}
+        </div>
+
         ${nodes.length === 0
           ? html`<div class="empty-state">${t(this.hass, "nodes.empty")}</div>`
           : html`
@@ -224,6 +389,7 @@ class MeshNodesTab extends LitElement {
                 <table>
                   <thead>
                     <tr>
+                      <th class="star-cell"></th>
                       ${COLUMNS.map(
                         (column) => html`
                           <th
@@ -261,7 +427,7 @@ class MeshNodesTab extends LitElement {
           display: flex;
           align-items: center;
           gap: 12px;
-          margin-bottom: 12px;
+          margin-bottom: 8px;
         }
 
         input[type="search"] {
@@ -279,6 +445,34 @@ class MeshNodesTab extends LitElement {
         .count {
           font-size: 13px;
           color: var(--secondary-text-color);
+        }
+
+        .chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 12px;
+        }
+
+        .chip {
+          border: 1px solid var(--divider-color);
+          border-radius: 999px;
+          background: var(--card-background-color);
+          color: var(--secondary-text-color);
+          font-family: inherit;
+          font-size: 12px;
+          padding: 5px 12px;
+          cursor: pointer;
+        }
+
+        .chip:hover {
+          color: var(--primary-text-color);
+        }
+
+        .chip.on {
+          background: var(--primary-color);
+          border-color: var(--primary-color);
+          color: var(--text-primary-color, #fff);
         }
 
         table {
@@ -315,12 +509,35 @@ class MeshNodesTab extends LitElement {
           white-space: nowrap;
         }
 
+        .star-cell {
+          width: 32px;
+          padding-inline-end: 0;
+        }
+
+        .star {
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 16px;
+          line-height: 1;
+          padding: 0;
+          color: var(--secondary-text-color);
+        }
+
+        .star.on {
+          color: #f5c839;
+        }
+
         tbody tr {
           cursor: pointer;
         }
 
         tbody tr:hover {
           background: var(--secondary-background-color);
+        }
+
+        tbody tr.ignored {
+          opacity: 0.45;
         }
 
         .name {
@@ -343,8 +560,19 @@ class MeshNodesTab extends LitElement {
           color: var(--text-primary-color, #fff);
         }
 
-        .tag.mqtt {
+        .tag.mqtt,
+        .tag.muted {
           background: var(--secondary-text-color);
+        }
+
+        .dot {
+          display: inline-block;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          margin-inline-start: 6px;
+          background: var(--primary-color);
+          vertical-align: middle;
         }
 
         .scrim {
@@ -359,8 +587,8 @@ class MeshNodesTab extends LitElement {
         }
 
         .dialog {
-          width: min(520px, 100%);
-          max-height: 80vh;
+          width: min(560px, 100%);
+          max-height: 85vh;
           display: flex;
           flex-direction: column;
           background: var(--card-background-color);
@@ -373,6 +601,7 @@ class MeshNodesTab extends LitElement {
           display: flex;
           align-items: center;
           justify-content: space-between;
+          gap: 8px;
           padding: 14px 16px;
           font-size: 16px;
           font-weight: 500;
@@ -390,6 +619,58 @@ class MeshNodesTab extends LitElement {
         .dialog-body {
           overflow-y: auto;
           padding: 8px 0;
+        }
+
+        .actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding: 8px 16px 12px;
+          border-bottom: 1px solid var(--divider-color);
+        }
+
+        .action {
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          font-family: inherit;
+          font-size: 12px;
+          padding: 6px 10px;
+          cursor: pointer;
+        }
+
+        .action:hover:not([disabled]) {
+          background: var(--secondary-background-color);
+        }
+
+        .action[disabled] {
+          opacity: 0.5;
+          cursor: default;
+        }
+
+        .action.primary {
+          background: var(--primary-color);
+          border-color: var(--primary-color);
+          color: var(--text-primary-color, #fff);
+        }
+
+        .action.danger {
+          color: var(--error-color, #db4437);
+        }
+
+        .status {
+          padding: 6px 16px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
+        }
+
+        .status.ok {
+          color: var(--success-color, #4caf50);
+        }
+
+        .status.error {
+          color: var(--error-color, #db4437);
         }
 
         .detail-row {

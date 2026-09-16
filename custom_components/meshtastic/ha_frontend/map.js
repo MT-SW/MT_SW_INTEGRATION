@@ -151,6 +151,66 @@ function saveTileSettings(settings) {
   }
 }
 
+/* Meshtastic obcina współrzędne do `precisionBits`, więc pozycja jest
+   w istocie kwadratem, nie punktem. Promień koła niepewności maleje
+   dwukrotnie z każdym bitem — 10 bitów to ~23 km, 19 bitów ~45 m. */
+const PRECISION_BASE_METERS = 23905787;
+const MIN_PRECISION_BITS = 1;
+const MAX_PRECISION_BITS = 31;
+
+function precisionRadius(bits) {
+  if (typeof bits !== "number" || bits < MIN_PRECISION_BITS || bits > MAX_PRECISION_BITS) {
+    return null;
+  }
+  return PRECISION_BASE_METERS / Math.pow(2, bits);
+}
+
+/* Rozsuwanie nakładających się węzłów.
+   Grupujemy po odległości w pikselach przy bieżącym powiększeniu, więc ta sama
+   grupa rozjeżdża się płynnie w miarę przybliżania — dokładnie jak w aplikacji.
+   Offset liczony jest w przestrzeni ekranu, żeby odstęp był stały wizualnie. */
+const CLUSTER_PX = 18;
+const SPREAD_PX = 16;
+
+function spreadOverlapping(map, nodes) {
+  const placed = [];
+  const groups = [];
+
+  for (const node of nodes) {
+    const point = map.latLngToLayerPoint([node.latitude, node.longitude]);
+    let group = groups.find((g) => {
+      const dx = g.point.x - point.x;
+      const dy = g.point.y - point.y;
+      return Math.sqrt(dx * dx + dy * dy) <= CLUSTER_PX;
+    });
+    if (!group) {
+      group = { point, members: [] };
+      groups.push(group);
+    }
+    group.members.push({ node, point });
+  }
+
+  for (const group of groups) {
+    if (group.members.length === 1) {
+      const only = group.members[0];
+      placed.push({ node: only.node, latlng: [only.node.latitude, only.node.longitude], offset: false });
+      continue;
+    }
+    // Promień rośnie z liczbą węzłów, żeby przy kilkunastu nadal dało się je rozróżnić.
+    const radius = SPREAD_PX + group.members.length * 1.5;
+    group.members.forEach((member, index) => {
+      const angle = (2 * Math.PI * index) / group.members.length;
+      const shifted = map.layerPointToLatLng([
+        group.point.x + radius * Math.cos(angle),
+        group.point.y + radius * Math.sin(angle),
+      ]);
+      placed.push({ node: member.node, latlng: [shifted.lat, shifted.lng], offset: true });
+    });
+  }
+
+  return placed;
+}
+
 function snrColor(snr) {
   if (snr === null || snr === undefined) {
     return "#9E9E9E";
@@ -170,6 +230,8 @@ class MeshMapTab extends LitElement {
       hass: { type: Object },
       nodes: { type: Array },
       showLinks: { type: Boolean },
+      showLabels: { type: Boolean },
+      showPrecision: { type: Boolean },
       _tiles: { type: Object },
       _showTileSettings: { type: Boolean },
     };
@@ -179,6 +241,8 @@ class MeshMapTab extends LitElement {
     super();
     this.nodes = [];
     this.showLinks = true;
+    this.showLabels = true;
+    this.showPrecision = true;
     this._tiles = loadTileSettings();
     this._showTileSettings = false;
     this._map = null;
@@ -264,6 +328,10 @@ class MeshMapTab extends LitElement {
     this._applyTileLayer(L);
     this._markerLayer = L.layerGroup().addTo(this._map);
     this._linkLayer = L.layerGroup().addTo(this._map);
+    this._precisionLayer = L.layerGroup().addTo(this._map);
+    // Rozsunięcie liczone jest w pikselach, więc po każdej zmianie
+    // powiększenia trzeba je przeliczyć od nowa.
+    this._map.on("zoomend", () => this._redraw());
   }
 
   /* Warstwę kafli przestawiamy tylko przy faktycznej zmianie adresu —
@@ -300,6 +368,7 @@ class MeshMapTab extends LitElement {
 
     this._markerLayer.clearLayers();
     this._linkLayer.clearLayers();
+    this._precisionLayer.clearLayers();
 
     const byId = new Map(nodes.map((node) => [node.node_id, node]));
 
@@ -335,22 +404,49 @@ class MeshMapTab extends LitElement {
       }
     }
 
-    for (const node of nodes) {
+    if (this.showPrecision) {
+      for (const node of nodes) {
+        const radius = precisionRadius(node.precision_bits);
+        if (radius) {
+          L.circle([node.latitude, node.longitude], {
+            radius,
+            color: "#4FC3F7",
+            weight: 1,
+            opacity: 0.5,
+            fillColor: "#4FC3F7",
+            fillOpacity: 0.08,
+            interactive: false,
+          }).addTo(this._precisionLayer);
+        }
+      }
+    }
+
+    // Linie topologii łączą prawdziwe pozycje; rozsuwamy tylko markery,
+    // żeby obraz zasięgu pozostał zgodny z rzeczywistością.
+    for (const placement of spreadOverlapping(this._map, nodes)) {
+      const node = placement.node;
       const name = node.long_name || node.short_name || node.node_hex;
-      L.circleMarker([node.latitude, node.longitude], {
+      const marker = L.circleMarker(placement.latlng, {
         radius: node.is_gateway ? 9 : 6,
         color: node.is_gateway ? "#F5C839" : "#2C2D3C",
         weight: 2,
         fillColor: node.is_gateway ? "#F5C839" : "#4FC3F7",
         fillOpacity: 0.9,
       })
-        .bindTooltip(name, { direction: "top" })
         .bindPopup(
           `<strong>${name}</strong><br>${node.node_hex}` +
             (node.altitude !== null && node.altitude !== undefined ? `<br>${node.altitude} m` : "") +
-            (node.snr !== null && node.snr !== undefined ? `<br>SNR ${node.snr} dB` : "")
+            (node.snr !== null && node.snr !== undefined ? `<br>SNR ${node.snr} dB` : "") +
+            (placement.offset ? `<br><em>${t(this.hass, "map.offset_note")}</em>` : "")
         )
         .addTo(this._markerLayer);
+
+      marker.bindTooltip(this.showLabels ? node.short_name || name : name, {
+        direction: "top",
+        permanent: Boolean(this.showLabels),
+        className: "mtsw-node-label",
+        offset: [0, -4],
+      });
     }
 
     // Kadrujemy tylko raz — inaczej mapa skakałaby przy każdym odświeżeniu.
@@ -451,6 +547,29 @@ class MeshMapTab extends LitElement {
             />
             ${t(this.hass, "map.show_links")}
           </label>
+          <label>
+            <input
+              type="checkbox"
+              .checked=${this.showLabels}
+              @change=${(e) => {
+                this.showLabels = e.target.checked;
+                this._fitted = true;
+                this._redraw();
+              }}
+            />
+            ${t(this.hass, "map.show_labels")}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              .checked=${this.showPrecision}
+              @change=${(e) => {
+                this.showPrecision = e.target.checked;
+                this._redraw();
+              }}
+            />
+            ${t(this.hass, "map.show_precision")}
+          </label>
           <span class="map-toolbar-right">
             <span class="map-count">${t(this.hass, "map.count", { n: positioned, total })}</span>
             <button
@@ -477,7 +596,8 @@ class MeshMapTab extends LitElement {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 16px;
+          flex-wrap: wrap;
+          gap: 8px 16px;
           padding: 10px 16px;
           border-bottom: 1px solid var(--divider-color);
           background: var(--card-background-color);
@@ -555,6 +675,20 @@ class MeshMapTab extends LitElement {
           flex: 1;
           min-height: 320px;
           background: var(--secondary-background-color);
+        }
+        .mtsw-map .mtsw-node-label {
+          background: rgba(44, 45, 60, 0.85);
+          border: none;
+          border-radius: 4px;
+          box-shadow: none;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 500;
+          padding: 1px 5px;
+          white-space: nowrap;
+        }
+        .mtsw-map .mtsw-node-label::before {
+          display: none;
         }
         .mtsw-map .leaflet-container {
           font-family: inherit;

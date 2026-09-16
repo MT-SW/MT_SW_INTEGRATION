@@ -17,6 +17,7 @@ class MeshMessagesTab extends LitElement {
     return {
       hass: { type: Object },
       entryId: { type: String },
+      selectKey: { type: String },
       messages: { type: Array },
       nodes: { type: Array },
       channels: { type: Array },
@@ -92,6 +93,18 @@ class MeshMessagesTab extends LitElement {
         });
       }
       map.get(key).messages.push(message);
+    }
+
+    if (this._selected && this._selected.startsWith("dm:") && !map.has(this._selected)) {
+      const peer = Number(this._selected.slice(3));
+      map.set(this._selected, {
+        key: this._selected,
+        kind: "dm",
+        channelIndex: null,
+        nodeId: peer,
+        name: this._nodeName(peer),
+        messages: [],
+      });
     }
 
     const list = [...map.values()];
@@ -184,7 +197,12 @@ class MeshMessagesTab extends LitElement {
   }
 
   updated(changed) {
-    if (changed.has("messages") || changed.has("_selected")) {
+    // Przejście z listy węzłów: rozmowa może jeszcze nie istnieć w historii,
+    // więc tworzymy ją pusto przy pierwszym wyborze.
+    if (changed.has("selectKey") && this.selectKey) {
+      this._selected = this.selectKey;
+    }
+    if (changed.has("messages") || changed.has("_selected") || changed.has("selectKey")) {
       const thread = this.renderRoot && this.renderRoot.querySelector(".thread");
       if (thread) {
         thread.scrollTop = thread.scrollHeight;

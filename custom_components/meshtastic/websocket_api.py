@@ -209,8 +209,21 @@ async def ws_nodes(
     gateway_node = entry.runtime_data.gateway_node or {}
     gateway_id = gateway_node.get("num")
 
+    # Panel celowo czyta pełną bazę węzłów z urządzenia, a nie coordinator.data.
+    # Koordynator jest przefiltrowany opcją "nodes" wpisu konfiguracyjnego,
+    # która decyduje wyłącznie o tym, dla których węzłów powstają encje HA.
+    # Panel ma pokazywać to samo, co widzi radio — jak klient WWW.
+    try:
+        all_nodes = await entry.runtime_data.client.async_get_all_nodes()
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Nie udało się pobrać bazy węzłów: %s", err)
+        connection.send_error(msg["id"], "nodes_failed", str(err))
+        return
+
+    tracked = set(entry.runtime_data.coordinator.data or {})
+
     nodes = []
-    for node_id, node in (entry.runtime_data.coordinator.data or {}).items():
+    for node_id, node in all_nodes.items():
         user = node.get("user", {}) or {}
         position = node.get("position", {}) or {}
         device_metrics = node.get("deviceMetrics", {}) or {}
@@ -235,6 +248,12 @@ async def ws_nodes(
                 "hw_model": user.get("hwModel"),
                 "role": user.get("role"),
                 "is_gateway": node_id == gateway_id,
+                "is_tracked": node_id in tracked,
+                "is_favorite": bool(node.get("isFavorite")),
+                "is_ignored": bool(node.get("isIgnored")),
+                "is_muted": bool(node.get("isMuted")),
+                "heard_on_current_lora": node.get("heardOnCurrentLora"),
+                "channel": _as_int(node.get("channel")),
                 "last_heard": node.get("lastHeard"),
                 "snr": _as_float(node.get("snr")),
                 "hops_away": _as_int(node.get("hopsAway")),
@@ -243,6 +262,7 @@ async def ws_nodes(
                 "longitude": position.get("longitude"),
                 "altitude": _as_int(position.get("altitude")),
                 "position_time": position.get("time"),
+                "precision_bits": _as_int(position.get("precisionBits")),
                 "battery_level": _as_int(device_metrics.get("batteryLevel")),
                 "voltage": _as_float(device_metrics.get("voltage")),
                 "channel_utilization": _as_float(device_metrics.get("channelUtilization")),
@@ -429,6 +449,95 @@ async def ws_config(
     )
 
 
+def _node_action_schema(name: str) -> dict:
+    return {
+        vol.Required("type"): f"{WS_PREFIX}/{name}",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+    }
+
+
+async def _run_node_action(hass, connection, msg, action):
+    """Wspólna obsługa akcji na węźle — jeden kształt błędu dla wszystkich."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    try:
+        result = await action(entry.runtime_data.client, msg)
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Akcja %s nie powiodła się: %s", msg["type"], err)
+        connection.send_error(msg["id"], "action_failed", str(err))
+        return
+    connection.send_result(msg["id"], {"result": result if isinstance(result, dict) else True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/set_favorite",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Required("favorite"): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_favorite(hass, connection, msg) -> None:
+    """Oznacz węzeł jako ulubiony na urządzeniu (albo zdejmij oznaczenie)."""
+    await _run_node_action(
+        hass, connection, msg, lambda c, m: c.set_node_favorite(m["node_id"], m["favorite"])
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/set_ignored",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Required("ignored"): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_ignored(hass, connection, msg) -> None:
+    """Dodaj węzeł do ignorowanych na urządzeniu (albo usuń z listy)."""
+    await _run_node_action(
+        hass, connection, msg, lambda c, m: c.set_node_ignored(m["node_id"], m["ignored"])
+    )
+
+
+@websocket_api.websocket_command(_node_action_schema("remove_node"))
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_remove_node(hass, connection, msg) -> None:
+    """Usuń węzeł z bazy urządzenia."""
+    await _run_node_action(hass, connection, msg, lambda c, m: c.async_remove_node(m["node_id"]))
+
+
+@websocket_api.websocket_command(_node_action_schema("request_position"))
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_request_position(hass, connection, msg) -> None:
+    """Poproś węzeł o aktualną pozycję."""
+    await _run_node_action(hass, connection, msg, lambda c, m: c.request_position(m["node_id"]))
+
+
+@websocket_api.websocket_command(_node_action_schema("request_neighbors"))
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_request_neighbors(hass, connection, msg) -> None:
+    """Poproś węzeł o listę sąsiadów."""
+    await _run_node_action(hass, connection, msg, lambda c, m: c.request_neighbor_info(m["node_id"]))
+
+
+@websocket_api.websocket_command(_node_action_schema("traceroute"))
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_traceroute(hass, connection, msg) -> None:
+    """Prześledź trasę do węzła."""
+    await _run_node_action(hass, connection, msg, lambda c, m: c.request_traceroute(m["node_id"]))
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -441,5 +550,11 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_clear_messages,
         ws_subscribe_messages,
         ws_config,
+        ws_set_favorite,
+        ws_set_ignored,
+        ws_remove_node,
+        ws_request_position,
+        ws_request_neighbors,
+        ws_traceroute,
     ):
         websocket_api.async_register_command(hass, handler)

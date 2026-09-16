@@ -504,6 +504,18 @@ class MeshtasticApiClient:
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 
+    async def set_node_favorite(self, node_num: int, favorite: bool) -> None:
+        try:
+            await self._interface.set_node_favorite(node_num, favorite)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def set_node_ignored(self, node_num: int, ignored: bool) -> None:
+        try:
+            await self._interface.set_node_ignored(node_num, ignored)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
     async def request_neighbor_info(self, node: int) -> Mapping[str, Any]:
         try:
             response = await self._interface.request_neighbor_info(node)

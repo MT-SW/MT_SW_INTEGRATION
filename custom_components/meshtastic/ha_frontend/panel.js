@@ -67,17 +67,29 @@ class MeshtasticPanel extends LitElement {
     this._onLocationChanged = () => {
       this._activeTab = tabFromPath();
     };
+    // Akcja na węźle zmienia stan po stronie radia, więc po niej dociągamy
+    // świeże dane zamiast czekać na kolejny cykl odpytywania.
+    this._onRefreshRequest = () => this._refresh();
+    this._onOpenDm = (event) => {
+      this._dmKey = `dm:${event.detail.nodeId}`;
+      this._selectTab("messages");
+      this.requestUpdate();
+    };
   }
 
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener("location-changed", this._onLocationChanged);
+    this.addEventListener("mtsw-refresh", this._onRefreshRequest);
+    this.addEventListener("mtsw-open-dm", this._onOpenDm);
     this._startPolling();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("location-changed", this._onLocationChanged);
+    this.removeEventListener("mtsw-refresh", this._onRefreshRequest);
+    this.removeEventListener("mtsw-open-dm", this._onOpenDm);
     this._stopPolling();
     this._unsubscribeMessages();
   }
@@ -271,9 +283,14 @@ class MeshtasticPanel extends LitElement {
           .messages=${this._messages}
           .nodes=${this._nodes}
           .channels=${entryId ? this._channels[entryId] || [] : []}
+          .selectKey=${this._dmKey || null}
         ></mesh-messages-tab>`;
       case "nodes":
-        return html`<mesh-nodes-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-nodes-tab>`;
+        return html`<mesh-nodes-tab
+          .hass=${this.hass}
+          .entryId=${entryId}
+          .nodes=${this._nodes}
+        ></mesh-nodes-tab>`;
       case "map":
         return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
       case "neighbors":

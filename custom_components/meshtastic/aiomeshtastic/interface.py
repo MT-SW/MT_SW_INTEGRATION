@@ -923,6 +923,22 @@ class MeshInterface:
         admin_message.reboot_seconds = seconds
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
+    async def set_node_favorite(self, node_num: int, favorite: bool, node: int | None = None) -> None:
+        admin_message = admin_pb2.AdminMessage()
+        if favorite:
+            admin_message.set_favorite_node = node_num
+        else:
+            admin_message.remove_favorite_node = node_num
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
+    async def set_node_ignored(self, node_num: int, ignored: bool, node: int | None = None) -> None:
+        admin_message = admin_pb2.AdminMessage()
+        if ignored:
+            admin_message.set_ignored_node = node_num
+        else:
+            admin_message.remove_ignored_node = node_num
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
     async def remove_node_from_database(self, node_num_to_remove: int, node: int | None = None) -> bool:
         """Ask the connected node to drop a stale entry from its own on-device node database.
 
