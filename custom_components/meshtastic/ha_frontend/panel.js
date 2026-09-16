@@ -16,10 +16,9 @@ import "./messages.js";
 import "./nodes.js";
 import "./map.js";
 import "./settings.js";
-import "./neighbors.js";
 
 const POLL_MS = 10000;
-const TABS = ["radio", "messages", "nodes", "map", "neighbors", "settings"];
+const TABS = ["radio", "messages", "nodes", "map", "settings"];
 
 function tabFromPath() {
   const parts = location.pathname.replace(/\/+$/, "").split("/");
@@ -214,7 +213,6 @@ class MeshtasticPanel extends LitElement {
       this._moduleConfig = result.module_config || {};
       this._configSchema = result.schema || null;
       this._configError = false;
-    this._configSchema = null;
       this._configEntryId = entryId;
     } catch (err) {
       console.warn("MT_SW: nie udało się pobrać konfiguracji", err);
@@ -304,8 +302,6 @@ class MeshtasticPanel extends LitElement {
         ></mesh-nodes-tab>`;
       case "map":
         return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
-      case "neighbors":
-        return html`<mesh-neighbors-tab .hass=${this.hass}></mesh-neighbors-tab>`;
       case "settings":
         return html`<mesh-settings-tab
           .hass=${this.hass}

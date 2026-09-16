@@ -47,6 +47,7 @@ class MeshNodesTab extends LitElement {
       _busy: { type: String },
       _error: { type: String },
       _notice: { type: String },
+      _traceroute: { type: Object },
     };
   }
 
@@ -61,6 +62,7 @@ class MeshNodesTab extends LitElement {
     this._busy = null;
     this._error = null;
     this._notice = null;
+    this._traceroute = null;
   }
 
   _displayName(node) {
@@ -172,7 +174,7 @@ class MeshNodesTab extends LitElement {
         kind === "remove_node" ? "nodes.action.removed" : "nodes.action.sent"
       );
       this.dispatchEvent(new CustomEvent("mtsw-refresh", { bubbles: true, composed: true }));
-      return true;
+      return result && result.result !== undefined ? result.result || true : true;
     } catch (err) {
       console.error("MT_SW: akcja nie powiodła się", kind, err);
       this._error = (err && err.message) || t(this.hass, "nodes.action.failed");
@@ -295,7 +297,19 @@ class MeshNodesTab extends LitElement {
         </button>
         ${action("request_position", "nodes.action.position", { node_id: node.node_id })}
         ${action("request_neighbors", "nodes.action.neighbors", { node_id: node.node_id })}
-        ${action("traceroute", "nodes.action.traceroute", { node_id: node.node_id })}
+        <button
+          class="action"
+          ?disabled=${busy}
+          @click=${async () => {
+            this._traceroute = null;
+            const route = await this._call("traceroute", { node_id: node.node_id });
+            if (route && typeof route === "object") {
+              this._traceroute = route;
+            }
+          }}
+        >
+          ${t(this.hass, "nodes.action.traceroute")}
+        </button>
         <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
           ${t(this.hass, "nodes.action.remove")}
         </button>
@@ -306,6 +320,58 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
+  /* RouteDiscovery niesie trasę tam i z powrotem oraz SNR każdego przeskoku.
+     Wartości SNR są w czwartych częściach decybela — stąd dzielenie przez 4. */
+  _closeDetail() {
+    this._detail = null;
+    this._traceroute = null;
+    this._notice = null;
+    this._error = null;
+  }
+
+  _renderHopList(labelKey, route, snrs) {
+    if (!route || !route.length) {
+      return html``;
+    }
+    return html`
+      <div class="detail-section">${t(this.hass, labelKey)}</div>
+      ${route.map(
+        (hop, index) => html`
+          <div class="detail-row">
+            <span class="detail-label">${index + 1}. ${this._nameOf(hop)}</span>
+            <span class="detail-value">
+              ${snrs && snrs[index] !== undefined
+                ? `${(snrs[index] / 4).toFixed(2)} dB`
+                : t(this.hass, "common.unknown")}
+            </span>
+          </div>
+        `
+      )}
+    `;
+  }
+
+  _renderTraceroute(node) {
+    const route = this._traceroute;
+    if (!route) {
+      return html``;
+    }
+    const towards = route.route || [];
+    const back = route.routeBack || [];
+    if (!towards.length && !back.length) {
+      return html`
+        <div class="detail-section">${t(this.hass, "nodes.traceroute.title")}</div>
+        <div class="detail-row">
+          <span class="detail-label">${t(this.hass, "nodes.traceroute.direct")}</span>
+          <span class="detail-value"></span>
+        </div>
+      `;
+    }
+    return html`
+      ${this._renderHopList("nodes.traceroute.towards", towards, route.snrTowards)}
+      ${this._renderHopList("nodes.traceroute.back", back, route.snrBack)}
+    `;
+  }
+
   _renderDetail() {
     const node = this._current();
     if (!node) {
@@ -313,11 +379,11 @@ class MeshNodesTab extends LitElement {
     }
 
     return html`
-      <div class="scrim" @click=${() => (this._detail = null)}>
+      <div class="scrim" @click=${() => this._closeDetail()}>
         <div class="dialog" @click=${(e) => e.stopPropagation()}>
           <div class="dialog-header">
             <span>${this._renderStar(node)} ${this._displayName(node)}</span>
-            <button class="close" @click=${() => (this._detail = null)}>✕</button>
+            <button class="close" @click=${() => this._closeDetail()}>✕</button>
           </div>
           <div class="dialog-body">
             ${this._renderActions(node)}
@@ -349,6 +415,8 @@ class MeshNodesTab extends LitElement {
                 )
               : ""}
             ${this._detailRow("nodes.tracked", node.is_tracked ? t(this.hass, "common.yes") : t(this.hass, "common.no"))}
+
+            ${this._renderTraceroute(node)}
 
             ${node.neighbors && node.neighbors.length
               ? html`

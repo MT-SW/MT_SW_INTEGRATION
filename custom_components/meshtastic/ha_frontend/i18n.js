@@ -149,6 +149,10 @@ const STRINGS = {
     "nodes.action.sent": "Polecenie wysłane.",
     "nodes.action.unconfirmed": "Radio nie potwierdziło polecenia — spróbuj ponownie.",
     "nodes.action.removed": "Węzeł usunięty z bazy urządzenia.",
+    "nodes.traceroute.title": "Trasa",
+    "nodes.traceroute.towards": "Trasa do węzła",
+    "nodes.traceroute.back": "Trasa powrotna",
+    "nodes.traceroute.direct": "Połączenie bezpośrednie, bez przeskoków",
     "nodes.action.failed": "Nie udało się wykonać polecenia.",
 
     "map.show_links": "Pokaż połączenia",
@@ -354,6 +358,10 @@ const STRINGS = {
     "nodes.action.sent": "Command sent.",
     "nodes.action.unconfirmed": "The radio did not confirm the command — try again.",
     "nodes.action.removed": "Node removed from the device database.",
+    "nodes.traceroute.title": "Route",
+    "nodes.traceroute.towards": "Route to the node",
+    "nodes.traceroute.back": "Return route",
+    "nodes.traceroute.direct": "Direct link, no hops",
     "nodes.action.failed": "The command failed.",
 
     "map.show_links": "Show links",
