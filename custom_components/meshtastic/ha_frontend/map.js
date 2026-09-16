@@ -9,17 +9,70 @@
  * komponent świadomie rezygnuje z shadow DOM (createRenderRoot zwraca
  * sam element). Inaczej trzeba by wstrzykiwać arkusz Leafleta do każdego
  * cienia z osobna i walczyć z pozycjonowaniem kontrolek.
+ *
+ * Źródło kafli jest wybierane przez użytkownika i zapamiętywane w
+ * localStorage. Dostawcy zmieniają zasady w trakcie życia integracji
+ * (CARTO zaczęło wymagać klucza w sierpniu 2026, OpenStreetMap blokuje
+ * klientów spoza swojej polityki), więc zaszycie jednego na stałe oznacza
+ * zepsutą mapę przy każdej takiej zmianie.
  */
 
 import { LitElement, html } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
 
-/* OpenStreetMap blokuje ruch aplikacji nietrzymających się ich polityki kafli
-   (HTTP 403). Używamy CARTO — tego samego dostawcy, co wbudowana karta mapy
-   Home Assistanta — w wariancie dopasowanym do motywu. */
-const TILE_URL_LIGHT = "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
-const TILE_URL_DARK = "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png";
-const DEFAULT_ATTRIBUTION = "&copy; OpenStreetMap &copy; CARTO";
+const STORAGE_KEY = "mtsw.map.tiles";
+
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const ESRI_ATTR = "Kafle &copy; Esri";
+
+/* Domyślny jest Esri: nie wymaga rejestracji ani klucza, ma dobre pokrycie
+   Polski i od lat jest jednym z dostawców wymienianych jako darmowe
+   w leaflet-providers. */
+const TILE_PRESETS = {
+  esri_street: {
+    labelKey: "map.tiles.esri_street",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution: ESRI_ATTR,
+    maxZoom: 19,
+  },
+  esri_topo: {
+    labelKey: "map.tiles.esri_topo",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution: ESRI_ATTR,
+    maxZoom: 19,
+  },
+  esri_imagery: {
+    labelKey: "map.tiles.esri_imagery",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: ESRI_ATTR,
+    maxZoom: 19,
+  },
+  opentopo: {
+    labelKey: "map.tiles.opentopo",
+    url: "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: `${OSM_ATTR}, SRTM | &copy; OpenTopoMap (CC-BY-SA)`,
+    maxZoom: 17,
+  },
+  /* CARTO wygląda najlepiej i ma wariant ciemny, ale od sierpnia 2026
+     wymaga darmowego klucza — bez niego kafle wracają ze znakiem wodnym. */
+  carto: {
+    labelKey: "map.tiles.carto",
+    url: "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+    darkUrl: "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
+    attribution: `${OSM_ATTR} &copy; CARTO`,
+    maxZoom: 20,
+    needsKey: true,
+  },
+  custom: {
+    labelKey: "map.tiles.custom",
+    url: "",
+    attribution: "",
+    maxZoom: 19,
+    isCustom: true,
+  },
+};
+
+const DEFAULT_PRESET = "esri_street";
 
 let leafletPromise = null;
 
@@ -56,6 +109,29 @@ function loadLeaflet() {
   return leafletPromise;
 }
 
+function loadTileSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && TILE_PRESETS[parsed.preset]) {
+        return { preset: parsed.preset, customUrl: parsed.customUrl || "", key: parsed.key || "" };
+      }
+    }
+  } catch (err) {
+    console.debug("MT_SW: nie udało się odczytać ustawień kafli", err);
+  }
+  return { preset: DEFAULT_PRESET, customUrl: "", key: "" };
+}
+
+function saveTileSettings(settings) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch (err) {
+    console.debug("MT_SW: nie udało się zapisać ustawień kafli", err);
+  }
+}
+
 function snrColor(snr) {
   if (snr === null || snr === undefined) {
     return "#9E9E9E";
@@ -74,21 +150,23 @@ class MeshMapTab extends LitElement {
     return {
       hass: { type: Object },
       nodes: { type: Array },
-      tileUrl: { type: String },
       showLinks: { type: Boolean },
+      _tiles: { type: Object },
+      _showTileSettings: { type: Boolean },
     };
   }
 
   constructor() {
     super();
     this.nodes = [];
-    this.tileUrl = null;
-    this._tileLayer = null;
-    this._darkMode = null;
     this.showLinks = true;
+    this._tiles = loadTileSettings();
+    this._showTileSettings = false;
     this._map = null;
     this._markerLayer = null;
     this._linkLayer = null;
+    this._tileLayer = null;
+    this._tileSignature = null;
     this._fitted = false;
     this._error = null;
   }
@@ -102,8 +180,34 @@ class MeshMapTab extends LitElement {
     if (this._map) {
       this._map.remove();
       this._map = null;
+      this._tileLayer = null;
+      this._tileSignature = null;
       this._fitted = false;
     }
+  }
+
+  _isDark() {
+    return Boolean(this.hass && this.hass.themes && this.hass.themes.darkMode);
+  }
+
+  /* Adres kafli wraz z kluczem, jeśli dostawca go wymaga. */
+  _tileSpec() {
+    const preset = TILE_PRESETS[this._tiles.preset] || TILE_PRESETS[DEFAULT_PRESET];
+    let url = preset.isCustom ? (this._tiles.customUrl || "").trim() : preset.url;
+
+    if (preset.darkUrl && this._isDark()) {
+      url = preset.darkUrl;
+    }
+    if (preset.needsKey && this._tiles.key && url) {
+      url += `${url.includes("?") ? "&" : "?"}key=${encodeURIComponent(this._tiles.key)}`;
+    }
+
+    return {
+      url,
+      attribution: preset.isCustom ? OSM_ATTR : preset.attribution,
+      maxZoom: preset.maxZoom || 19,
+      preset,
+    };
   }
 
   _positioned() {
@@ -134,32 +238,35 @@ class MeshMapTab extends LitElement {
       return;
     }
 
-    this._map = L.map(container, { preferCanvas: true }).setView([51.0, 20.9], 9);
+    this._map = L.map(container, { preferCanvas: true }).setView([50.87, 20.63], 9);
     this._applyTileLayer(L);
-
     this._markerLayer = L.layerGroup().addTo(this._map);
     this._linkLayer = L.layerGroup().addTo(this._map);
   }
 
-  _isDark() {
-    return Boolean(this.hass && this.hass.themes && this.hass.themes.darkMode);
-  }
-
-  /* Warstwę kafli przestawiamy tylko przy faktycznej zmianie motywu —
+  /* Warstwę kafli przestawiamy tylko przy faktycznej zmianie adresu —
      odtwarzanie jej przy każdym odświeżeniu migałoby na ekranie. */
   _applyTileLayer(L) {
-    const dark = this._isDark();
-    if (this._tileLayer && this._darkMode === dark) {
+    const spec = this._tileSpec();
+    if (!spec.url) {
+      if (this._tileLayer) {
+        this._map.removeLayer(this._tileLayer);
+        this._tileLayer = null;
+        this._tileSignature = null;
+      }
+      return;
+    }
+    if (this._tileLayer && this._tileSignature === spec.url) {
       return;
     }
     if (this._tileLayer) {
       this._map.removeLayer(this._tileLayer);
     }
-    this._tileLayer = L.tileLayer(this.tileUrl || (dark ? TILE_URL_DARK : TILE_URL_LIGHT), {
-      maxZoom: 19,
-      attribution: DEFAULT_ATTRIBUTION,
+    this._tileLayer = L.tileLayer(spec.url, {
+      maxZoom: spec.maxZoom,
+      attribution: spec.attribution,
     }).addTo(this._map);
-    this._darkMode = dark;
+    this._tileSignature = spec.url;
   }
 
   _redraw() {
@@ -234,6 +341,15 @@ class MeshMapTab extends LitElement {
     }
   }
 
+  _updateTiles(patch) {
+    this._tiles = { ...this._tiles, ...patch };
+    saveTileSettings(this._tiles);
+    if (this._map && window.L) {
+      this._applyTileLayer(window.L);
+    }
+    this.requestUpdate();
+  }
+
   async updated() {
     await this._ensureMap();
     if (this._map) {
@@ -244,6 +360,53 @@ class MeshMapTab extends LitElement {
       }
       this._redraw();
     }
+  }
+
+  _renderTileSettings() {
+    const preset = TILE_PRESETS[this._tiles.preset] || TILE_PRESETS[DEFAULT_PRESET];
+    return html`
+      <div class="map-tilebar">
+        <label class="map-field">
+          <span>${t(this.hass, "map.tiles.source")}</span>
+          <select
+            @change=${(e) => this._updateTiles({ preset: e.target.value })}
+          >
+            ${Object.entries(TILE_PRESETS).map(
+              ([id, cfg]) => html`<option value=${id} ?selected=${id === this._tiles.preset}>
+                ${t(this.hass, cfg.labelKey)}
+              </option>`
+            )}
+          </select>
+        </label>
+
+        ${preset.isCustom
+          ? html`<label class="map-field grow">
+              <span>${t(this.hass, "map.tiles.url")}</span>
+              <input
+                type="text"
+                .value=${this._tiles.customUrl}
+                placeholder="https://…/{z}/{x}/{y}.png"
+                @change=${(e) => this._updateTiles({ customUrl: e.target.value })}
+              />
+            </label>`
+          : ""}
+
+        ${preset.needsKey
+          ? html`<label class="map-field grow">
+              <span>${t(this.hass, "map.tiles.key")}</span>
+              <input
+                type="text"
+                .value=${this._tiles.key}
+                placeholder=${t(this.hass, "map.tiles.key_hint")}
+                @change=${(e) => this._updateTiles({ key: e.target.value })}
+              />
+            </label>`
+          : ""}
+      </div>
+      ${preset.needsKey && !this._tiles.key
+        ? html`<div class="map-hint">${t(this.hass, "map.tiles.key_missing")}</div>`
+        : ""}
+    `;
   }
 
   render() {
@@ -266,8 +429,19 @@ class MeshMapTab extends LitElement {
             />
             ${t(this.hass, "map.show_links")}
           </label>
-          <span class="map-count">${t(this.hass, "map.count", { n: positioned, total })}</span>
+          <span class="map-toolbar-right">
+            <span class="map-count">${t(this.hass, "map.count", { n: positioned, total })}</span>
+            <button
+              class="map-settings-toggle"
+              @click=${() => {
+                this._showTileSettings = !this._showTileSettings;
+              }}
+            >
+              ${t(this.hass, "map.tiles.toggle")}
+            </button>
+          </span>
         </div>
+        ${this._showTileSettings ? this._renderTileSettings() : ""}
         ${this._error ? html`<div class="map-error">${this._error}</div>` : ""}
         <div class="map-canvas"></div>
       </div>
@@ -293,8 +467,62 @@ class MeshMapTab extends LitElement {
           gap: 6px;
           cursor: pointer;
         }
+        .mtsw-map .map-toolbar-right {
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+        }
         .mtsw-map .map-count {
           color: var(--secondary-text-color);
+        }
+        .mtsw-map .map-settings-toggle {
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: none;
+          color: var(--primary-text-color);
+          font-family: inherit;
+          font-size: 12px;
+          padding: 5px 10px;
+          cursor: pointer;
+        }
+        .mtsw-map .map-settings-toggle:hover {
+          background: var(--secondary-background-color);
+        }
+        .mtsw-map .map-tilebar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          padding: 10px 16px;
+          border-bottom: 1px solid var(--divider-color);
+          background: var(--secondary-background-color);
+        }
+        .mtsw-map .map-field {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
+        }
+        .mtsw-map .map-field.grow {
+          flex: 1;
+          min-width: 240px;
+        }
+        .mtsw-map .map-field select,
+        .mtsw-map .map-field input {
+          padding: 6px 8px;
+          border-radius: 8px;
+          border: 1px solid var(--divider-color);
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          font-family: inherit;
+          font-size: 13px;
+        }
+        .mtsw-map .map-hint {
+          padding: 8px 16px;
+          font-size: 12px;
+          color: var(--warning-color, #ffa600);
+          border-bottom: 1px solid var(--divider-color);
+          background: var(--secondary-background-color);
         }
         .mtsw-map .map-error {
           padding: 8px 16px;
