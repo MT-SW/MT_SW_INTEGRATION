@@ -74,39 +74,58 @@ const TILE_PRESETS = {
 
 const DEFAULT_PRESET = "esri_street";
 
-let leafletPromise = null;
+const BASE_URL = import.meta.url.replace(/\/[^/]+$/, "");
 
-/* Leaflet ładujemy raz na dokument i dopiero przy pierwszym wejściu na
-   zakładkę — nie ma powodu ciągnąć 148 KB, jeśli ktoś ogląda tylko Radio. */
-function loadLeaflet() {
+let leafletPromise = null;
+let leafletCssText = null;
+
+/* Skrypt Leafleta jest globalny, więc ładujemy go raz na dokument i dopiero
+   przy pierwszym wejściu na zakładkę — nie ma powodu ciągnąć 148 KB, jeśli
+   ktoś ogląda tylko Radio. */
+function loadLeafletScript() {
   if (leafletPromise) {
     return leafletPromise;
   }
-
-  const base = import.meta.url.replace(/\/[^/]+$/, "");
 
   leafletPromise = new Promise((resolve, reject) => {
     if (window.L) {
       resolve(window.L);
       return;
     }
-
-    if (!document.querySelector("link[data-mtsw-leaflet]")) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = `${base}/vendor/leaflet/leaflet.css`;
-      link.setAttribute("data-mtsw-leaflet", "");
-      document.head.appendChild(link);
-    }
-
     const script = document.createElement("script");
-    script.src = `${base}/vendor/leaflet/leaflet.js`;
+    script.src = `${BASE_URL}/vendor/leaflet/leaflet.js`;
     script.onload = () => resolve(window.L);
     script.onerror = () => reject(new Error("Nie udało się wczytać Leafleta"));
     document.head.appendChild(script);
   });
 
   return leafletPromise;
+}
+
+/* Arkusz Leafleta musi trafić do tego samego drzewa, w którym stoi mapa.
+   Ten komponent renderuje do light DOM, ale sam siedzi w shadow roocie
+   panelu — a style z document.head nie przenikają przez granicę cienia.
+   Bez nich kafle są zwykłymi obrazkami bez pozycjonowania i rozjeżdżają się
+   po stronie. Pobieramy arkusz raz jako tekst i wstawiamy go jako <style>
+   do właściwego korzenia. */
+async function ensureLeafletCss(root) {
+  if (!root || root.querySelector("style[data-mtsw-leaflet]")) {
+    return;
+  }
+  if (leafletCssText === null) {
+    const response = await fetch(`${BASE_URL}/vendor/leaflet/leaflet.css`);
+    if (!response.ok) {
+      throw new Error(`Arkusz Leafleta: HTTP ${response.status}`);
+    }
+    leafletCssText = await response.text();
+  }
+  if (root.querySelector("style[data-mtsw-leaflet]")) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.setAttribute("data-mtsw-leaflet", "");
+  style.textContent = leafletCssText;
+  root.appendChild(style);
 }
 
 function loadTileSettings() {
@@ -230,7 +249,10 @@ class MeshMapTab extends LitElement {
 
     let L;
     try {
-      L = await loadLeaflet();
+      // Arkusz musi być na miejscu przed inicjalizacją — Leaflet odczytuje
+      // rozmiar kontenera, a bez stylów ten rozmiar jest bez sensu.
+      await ensureLeafletCss(this.getRootNode());
+      L = await loadLeafletScript();
     } catch (err) {
       console.error("MT_SW: Leaflet nie wstał", err);
       this._error = t(this.hass, "map.load_failed");

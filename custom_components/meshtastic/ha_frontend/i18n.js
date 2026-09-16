@@ -63,6 +63,11 @@ const STRINGS = {
     "radio.packets_rx_dupe": "Duplikaty",
     "radio.packets_tx_relay_canceled": "Przekazanie anulowane",
 
+    "radio.section.resources": "Pamięć i procesor",
+    "radio.cpu_usage": "Użycie CPU",
+    "radio.heap": "Wolny heap",
+    "radio.flash": "Flash",
+    "radio.psram": "PSRAM",
     "radio.section.mesh": "Sieć",
     "radio.nodes_online": "Węzły online",
     "radio.nodes_total": "Węzły łącznie",
@@ -222,6 +227,11 @@ const STRINGS = {
     "radio.packets_rx_dupe": "Duplicates",
     "radio.packets_tx_relay_canceled": "Relay cancelled",
 
+    "radio.section.resources": "Memory & CPU",
+    "radio.cpu_usage": "CPU usage",
+    "radio.heap": "Free heap",
+    "radio.flash": "Flash",
+    "radio.psram": "PSRAM",
     "radio.section.mesh": "Mesh",
     "radio.nodes_online": "Nodes online",
     "radio.nodes_total": "Nodes total",

@@ -79,9 +79,13 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
 
     user = gateway_node.get("user", {}) or {}
     device_metrics = node_data.get("deviceMetrics", {}) or {}
-    # Firmware MT_SW wysyła LocalStatsExtended; standardowe LocalStats jest
-    # fallbackiem dla bramek na firmware waniliowym.
-    local_stats = node_data.get("localStatsExtended") or node_data.get("localStats") or {}
+    # LocalStats niesie liczniki pakietów i węzłów, LocalStatsExtended (firmware
+    # MT_SW) wyłącznie pamięć i CPU — to rozłączne zbiory pól, więc scalamy je,
+    # zamiast wybierać jeden. Na firmware waniliowym drugi człon jest pusty.
+    local_stats = {
+        **(node_data.get("localStats") or {}),
+        **(node_data.get("localStatsExtended") or {}),
+    }
 
     try:
         metadata = client.metadata or {}
@@ -118,6 +122,13 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         "nodes_online": _as_int(local_stats.get("numOnlineNodes")),
         "nodes_total": _as_int(local_stats.get("numTotalNodes")),
         "noise_floor": _as_float(local_stats.get("noiseFloor")),
+        "heap_free": _as_int(local_stats.get("heapFreeBytes") or local_stats.get("memoryFreeCheap")),
+        "heap_total": _as_int(local_stats.get("heapTotalBytes") or local_stats.get("memoryTotal")),
+        "cpu_usage": _as_float(local_stats.get("cpuUsagePercent")),
+        "flash_used": _as_int(local_stats.get("flashUsedBytes")),
+        "flash_total": _as_int(local_stats.get("flashTotalBytes")),
+        "psram_free": _as_int(local_stats.get("memoryPsramFree")),
+        "psram_total": _as_int(local_stats.get("memoryPsramTotal")),
         "tracked_nodes": len(coordinator.data or {}),
     }
 

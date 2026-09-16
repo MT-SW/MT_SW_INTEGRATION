@@ -37,6 +37,15 @@ class MeshRadioTab extends LitElement {
     return suffix ? `${raw}${suffix}` : String(raw);
   }
 
+  /* "412 / 1024 kB" albo null, gdy bramka nie zgłasza tych liczb. */
+  _formatBytes(value, total) {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    const kb = (n) => Math.round(n / 1024);
+    return total ? `${kb(value)} / ${kb(total)} kB` : `${kb(value)} kB`;
+  }
+
   _renderStat(labelKey, raw, suffix) {
     return html`
       <div class="stat">
@@ -232,6 +241,14 @@ class MeshRadioTab extends LitElement {
           ${this._renderStat("radio.packets_tx_dropped", gateway.packets_tx_dropped)}
           ${this._renderStat("radio.packets_rx_dupe", gateway.packets_rx_dupe)}
           ${this._renderStat("radio.packets_tx_relay_canceled", gateway.packets_tx_relay_canceled)}
+        </div>
+
+        <div class="section-title">${t(this.hass, "radio.section.resources")}</div>
+        <div class="stat-grid">
+          ${this._renderStat("radio.cpu_usage", gateway.cpu_usage, " %")}
+          ${this._renderStat("radio.heap", this._formatBytes(gateway.heap_free, gateway.heap_total))}
+          ${this._renderStat("radio.flash", this._formatBytes(gateway.flash_used, gateway.flash_total))}
+          ${this._renderStat("radio.psram", this._formatBytes(gateway.psram_free, gateway.psram_total))}
         </div>
 
         <div class="section-title">${t(this.hass, "radio.section.mesh")}</div>
