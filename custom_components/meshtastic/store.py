@@ -136,6 +136,40 @@ class PanelStore:
     def timeseries(self) -> list[dict[str, Any]]:
         return list(self._timeseries)
 
+    def _conversation_of(self, message: dict[str, Any]) -> str | None:
+        """Klucz rozmowy w tej samej postaci, której używa panel."""
+        channel = message.get("to_channel")
+        if channel is not None:
+            return f"ch:{channel}"
+        peer = message.get("to_node") if message.get("direction") == "out" else message.get("from")
+        return None if peer is None else f"dm:{peer}"
+
+    def delete_message(self, message_id: Any, ts: Any) -> bool:
+        """Usuń pojedynczą wiadomość.
+
+        Dopasowujemy po parze (id, ts), bo samo id bywa puste dla wiadomości
+        przychodzących, a znacznik czasu jest nadawany lokalnie przy zapisie.
+        """
+        before = len(self._messages)
+        self._messages = [
+            m for m in self._messages if not (m.get("id") == message_id and m.get("ts") == ts)
+        ]
+        if len(self._messages) == before:
+            return False
+        self._schedule_save()
+        self._notify("deleted", {"id": message_id, "ts": ts})
+        return True
+
+    def delete_conversation(self, key: str) -> int:
+        """Usuń całą rozmowę — kanał albo wymianę prywatną z jednym węzłem."""
+        before = len(self._messages)
+        self._messages = [m for m in self._messages if self._conversation_of(m) != key]
+        removed = before - len(self._messages)
+        if removed:
+            self._schedule_save()
+            self._notify("conversation_deleted", {"key": key})
+        return removed
+
     def clear_messages(self) -> None:
         self._messages = []
         self._schedule_save()

@@ -504,7 +504,13 @@ class MeshtasticApiClient:
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 
-    async def set_node_favorite(self, node_num: int, favorite: bool) -> None:
+    async def async_set_config(
+        self, section: str, values: Mapping[str, Any], *, is_module: bool = False
+    ) -> None:
+        try:
+            await self._interface.write_config_section(section, values, is_module=is_module)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
         try:
             await self._interface.set_node_favorite(node_num, favorite)
         except MeshtasticError as e:

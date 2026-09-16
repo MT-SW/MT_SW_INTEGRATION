@@ -931,7 +931,42 @@ class MeshInterface:
             admin_message.remove_favorite_node = node_num
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
-    async def set_node_ignored(self, node_num: int, ignored: bool, node: int | None = None) -> None:
+    async def write_config_section(
+        self,
+        section: str,
+        values: Mapping[str, Any],
+        *,
+        is_module: bool = False,
+        node: int | None = None,
+    ) -> None:
+        """Zapisz jedną sekcję konfiguracji urządzenia.
+
+        Nazwa sekcji przychodzi z panelu w postaci camelCase (tak zwraca ją
+        radio), więc rozwiązujemy ją przez deskryptor zamiast zgadywać
+        odpowiednik w snake_case.
+        """
+        from google.protobuf.json_format import ParseDict  # noqa: PLC0415
+
+        container = module_config_pb2.ModuleConfig() if is_module else config_pb2.Config()
+        descriptor = container.DESCRIPTOR
+        field = descriptor.fields_by_camelcase_name.get(section) or descriptor.fields_by_name.get(section)
+        if field is None:
+            msg = f"Unknown config section: {section}"
+            raise ValueError(msg)
+
+        target = getattr(container, field.name)
+        ParseDict(dict(values), target, ignore_unknown_fields=True)
+        # Sekcje siedzą w oneof — bez tego zapis samych wartości domyślnych
+        # (np. wyłączenie przełącznika) nie oznaczyłby wariantu jako obecnego.
+        target.SetInParent()
+
+        admin_message = admin_pb2.AdminMessage()
+        if is_module:
+            admin_message.set_module_config.CopyFrom(container)
+        else:
+            admin_message.set_config.CopyFrom(container)
+
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
         admin_message = admin_pb2.AdminMessage()
         if ignored:
             admin_message.set_ignored_node = node_num

@@ -25,6 +25,7 @@ class MeshMessagesTab extends LitElement {
       _draft: { type: String },
       _sending: { type: Boolean },
       _error: { type: String },
+      _deleting: { type: Boolean },
     };
   }
 
@@ -37,6 +38,7 @@ class MeshMessagesTab extends LitElement {
     this._draft = "";
     this._sending = false;
     this._error = null;
+    this._deleting = false;
   }
 
   _nodeName(nodeId) {
@@ -150,6 +152,50 @@ class MeshMessagesTab extends LitElement {
     }
   }
 
+  async _deleteMessage(message) {
+    if (this._deleting) {
+      return;
+    }
+    this._deleting = true;
+    try {
+      await this.hass.callWS({
+        type: "meshtastic/delete_message",
+        entry_id: this.entryId,
+        ts: message.ts,
+        message_id: message.id ?? null,
+      });
+    } catch (err) {
+      console.error("MT_SW: nie udało się usunąć wiadomości", err);
+      this._error = (err && err.message) || t(this.hass, "messages.delete_failed");
+    } finally {
+      this._deleting = false;
+    }
+  }
+
+  async _deleteConversation(conversation) {
+    const question = t(this.hass, "messages.delete_conversation_confirm", { name: conversation.name });
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(question) || this._deleting) {
+      return;
+    }
+    this._deleting = true;
+    try {
+      await this.hass.callWS({
+        type: "meshtastic/delete_conversation",
+        entry_id: this.entryId,
+        key: conversation.key,
+      });
+      if (this._selected === conversation.key) {
+        this._selected = null;
+      }
+    } catch (err) {
+      console.error("MT_SW: nie udało się usunąć rozmowy", err);
+      this._error = (err && err.message) || t(this.hass, "messages.delete_failed");
+    } finally {
+      this._deleting = false;
+    }
+  }
+
   _onKeyDown(event, conversation) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -185,6 +231,14 @@ class MeshMessagesTab extends LitElement {
           ${message.direction === "in"
             ? html`<div class="sender">${message.from_name || this._nodeName(message.from)}</div>`
             : ""}
+          <button
+            class="bubble-delete"
+            title=${t(this.hass, "messages.delete")}
+            ?disabled=${this._deleting}
+            @click=${() => this._deleteMessage(message)}
+          >
+            ✕
+          </button>
           <div class="text">${message.text}</div>
           <div class="meta">
             <span>${new Date(message.ts).toLocaleString(this.hass.language)}</span>
@@ -242,6 +296,15 @@ class MeshMessagesTab extends LitElement {
                   ${conversation.kind === "channel" ? "#" : ""}${conversation.name}
                 </span>
                 <span class="conversation-preview">${conversation.preview}</span>
+                <span
+                  class="conversation-delete"
+                  title=${t(this.hass, "messages.delete_conversation")}
+                  @click=${(e) => {
+                    e.stopPropagation();
+                    this._deleteConversation(conversation);
+                  }}
+                  >✕</span
+                >
               </button>
             `
           )}
@@ -378,6 +441,7 @@ class MeshMessagesTab extends LitElement {
         }
 
         .bubble {
+          position: relative;
           max-width: min(560px, 80%);
           padding: 8px 12px;
           border-radius: 12px;
@@ -389,6 +453,51 @@ class MeshMessagesTab extends LitElement {
           background: var(--primary-color);
           color: var(--text-primary-color, #fff);
           border-color: transparent;
+        }
+
+        .bubble-delete {
+          position: absolute;
+          top: 2px;
+          inset-inline-end: 4px;
+          border: none;
+          background: none;
+          color: inherit;
+          cursor: pointer;
+          font-size: 11px;
+          line-height: 1;
+          opacity: 0;
+          padding: 2px;
+        }
+
+        .bubble:hover .bubble-delete {
+          opacity: 0.6;
+        }
+
+        .bubble-delete:hover {
+          opacity: 1;
+        }
+
+        .conversation {
+          position: relative;
+        }
+
+        .conversation-delete {
+          position: absolute;
+          top: 10px;
+          inset-inline-end: 10px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
+          opacity: 0;
+          cursor: pointer;
+        }
+
+        .conversation:hover .conversation-delete {
+          opacity: 0.7;
+        }
+
+        .conversation-delete:hover {
+          opacity: 1;
+          color: var(--error-color, #db4437);
         }
 
         .sender {

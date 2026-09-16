@@ -45,6 +45,7 @@ class MeshtasticPanel extends LitElement {
       _localConfig: { type: Object },
       _moduleConfig: { type: Object },
       _configError: { type: Boolean },
+      _configSchema: { type: Object },
     };
   }
 
@@ -61,6 +62,7 @@ class MeshtasticPanel extends LitElement {
     this._localConfig = null;
     this._moduleConfig = null;
     this._configError = false;
+    this._configSchema = null;
     this._pollTimer = null;
     this._unsubscribe = null;
     this._subscribedEntryId = null;
@@ -70,6 +72,11 @@ class MeshtasticPanel extends LitElement {
     // Akcja na węźle zmienia stan po stronie radia, więc po niej dociągamy
     // świeże dane zamiast czekać na kolejny cykl odpytywania.
     this._onRefreshRequest = () => this._refresh();
+    this._onConfigSaved = () => {
+      // Radio mogło znormalizować zapisane wartości, więc czytamy je od nowa.
+      this._configEntryId = null;
+      this._refresh();
+    };
     this._onOpenDm = (event) => {
       this._dmKey = `dm:${event.detail.nodeId}`;
       this._selectTab("messages");
@@ -81,6 +88,7 @@ class MeshtasticPanel extends LitElement {
     super.connectedCallback();
     window.addEventListener("location-changed", this._onLocationChanged);
     this.addEventListener("mtsw-refresh", this._onRefreshRequest);
+    this.addEventListener("mtsw-config-saved", this._onConfigSaved);
     this.addEventListener("mtsw-open-dm", this._onOpenDm);
     this._startPolling();
   }
@@ -89,6 +97,7 @@ class MeshtasticPanel extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener("location-changed", this._onLocationChanged);
     this.removeEventListener("mtsw-refresh", this._onRefreshRequest);
+    this.removeEventListener("mtsw-config-saved", this._onConfigSaved);
     this.removeEventListener("mtsw-open-dm", this._onOpenDm);
     this._stopPolling();
     this._unsubscribeMessages();
@@ -203,7 +212,9 @@ class MeshtasticPanel extends LitElement {
       const result = await this.hass.callWS({ type: "meshtastic/config", entry_id: entryId });
       this._localConfig = result.local_config || {};
       this._moduleConfig = result.module_config || {};
+      this._configSchema = result.schema || null;
       this._configError = false;
+    this._configSchema = null;
       this._configEntryId = entryId;
     } catch (err) {
       console.warn("MT_SW: nie udało się pobrać konfiguracji", err);
@@ -298,6 +309,8 @@ class MeshtasticPanel extends LitElement {
       case "settings":
         return html`<mesh-settings-tab
           .hass=${this.hass}
+          .entryId=${entryId}
+          .schema=${this._configSchema}
           .localConfig=${this._localConfig}
           .moduleConfig=${this._moduleConfig}
           .configError=${this._configError}

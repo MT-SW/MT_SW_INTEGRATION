@@ -410,6 +410,64 @@ def ws_subscribe_messages(
     connection.send_result(msg["id"], {})
 
 
+def _field_meta(descriptor: Any) -> dict[str, Any]:
+    """Opis pola dla formularza: typ i dozwolone wartości.
+
+    Frontend nie zna protobufów, więc to backend mówi mu, czy dane pole
+    jest przełącznikiem, liczbą, tekstem czy listą wyboru. Dzięki temu
+    formularz obsługuje też pola, które firmware doda w przyszłości.
+    """
+    kind = "string"
+    options = None
+
+    if descriptor.type == descriptor.TYPE_BOOL:
+        kind = "bool"
+    elif descriptor.type == descriptor.TYPE_ENUM:
+        kind = "enum"
+        options = [value.name for value in descriptor.enum_type.values]
+    elif descriptor.type in (descriptor.TYPE_FLOAT, descriptor.TYPE_DOUBLE):
+        kind = "float"
+    elif descriptor.type in (
+        descriptor.TYPE_INT32,
+        descriptor.TYPE_INT64,
+        descriptor.TYPE_UINT32,
+        descriptor.TYPE_UINT64,
+        descriptor.TYPE_SINT32,
+        descriptor.TYPE_SINT64,
+        descriptor.TYPE_FIXED32,
+        descriptor.TYPE_FIXED64,
+    ):
+        kind = "int"
+    elif descriptor.type == descriptor.TYPE_BYTES:
+        kind = "bytes"
+    elif descriptor.type == descriptor.TYPE_MESSAGE:
+        kind = "message"
+
+    repeated = descriptor.label == descriptor.LABEL_REPEATED
+    return {
+        "type": kind,
+        "options": options,
+        # Pola binarne, zagnieżdżone i powtarzalne pokazujemy, ale nie pozwalamy
+        # ich edytować — formularz nie ma dla nich sensownej kontrolki.
+        "editable": kind not in ("bytes", "message") and not repeated,
+        "repeated": repeated,
+    }
+
+
+def _config_schema() -> dict[str, Any]:
+    from .aiomeshtastic.protobuf import config_pb2, module_config_pb2  # noqa: PLC0415
+
+    schema: dict[str, Any] = {"local": {}, "module": {}}
+    for group, message in (("local", config_pb2.Config), ("module", module_config_pb2.ModuleConfig)):
+        for section in message.DESCRIPTOR.fields:
+            if section.message_type is None:
+                continue
+            schema[group][section.json_name] = {
+                field.json_name: _field_meta(field) for field in section.message_type.fields
+            }
+    return schema
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{WS_PREFIX}/config",
@@ -445,7 +503,11 @@ async def ws_config(
 
     connection.send_result(
         msg["id"],
-        {"local_config": local_config or {}, "module_config": module_config or {}},
+        {
+            "local_config": local_config or {},
+            "module_config": module_config or {},
+            "schema": _config_schema(),
+        },
     )
 
 
@@ -469,7 +531,18 @@ async def _run_node_action(hass, connection, msg, action):
         _LOGGER.warning("Akcja %s nie powiodła się: %s", msg["type"], err)
         connection.send_error(msg["id"], "action_failed", str(err))
         return
-    connection.send_result(msg["id"], {"result": result if isinstance(result, dict) else True})
+
+    # Część akcji zwraca bool — brak potwierdzenia z radia to niepowodzenie,
+    # a nie sukces. Wcześniej każdy wynik nie-słownikowy był raportowany jako
+    # udany, przez co nieudane usunięcie węzła wyglądało na wykonane.
+    if result is False:
+        connection.send_result(msg["id"], {"confirmed": False})
+        return
+
+    connection.send_result(
+        msg["id"],
+        {"confirmed": True, "result": result if isinstance(result, dict) else None},
+    )
 
 
 @websocket_api.websocket_command(
@@ -538,6 +611,89 @@ async def ws_traceroute(hass, connection, msg) -> None:
     await _run_node_action(hass, connection, msg, lambda c, m: c.request_traceroute(m["node_id"]))
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/set_config",
+        vol.Required("entry_id"): str,
+        vol.Required("group"): vol.In(["local", "module"]),
+        vol.Required("section"): str,
+        vol.Required("values"): dict,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_config(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Zapisz jedną sekcję konfiguracji do bramki.
+
+    Zapis obejmuje wyłącznie wskazaną sekcję — radio scala ją z resztą
+    własnej konfiguracji, więc pola pominięte w żądaniu zostają nietknięte.
+    """
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+
+    try:
+        await entry.runtime_data.client.async_set_config(
+            msg["section"], msg["values"], is_module=msg["group"] == "module"
+        )
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Zapis sekcji %s nie powiódł się: %s", msg["section"], err)
+        connection.send_error(msg["id"], "set_config_failed", str(err))
+        return
+
+    connection.send_result(msg["id"], {"saved": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/delete_message",
+        vol.Required("entry_id"): str,
+        vol.Required("ts"): int,
+        vol.Optional("message_id"): vol.Any(int, None),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_delete_message(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Usuń jedną wiadomość z historii panelu."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], {"deleted": store.delete_message(msg.get("message_id"), msg["ts"])})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/delete_conversation",
+        vol.Required("entry_id"): str,
+        vol.Required("key"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_delete_conversation(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Usuń całą rozmowę z historii panelu."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], {"deleted": store.delete_conversation(msg["key"])})
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -556,5 +712,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_request_position,
         ws_request_neighbors,
         ws_traceroute,
+        ws_set_config,
+        ws_delete_message,
+        ws_delete_conversation,
     ):
         websocket_api.async_register_command(hass, handler)

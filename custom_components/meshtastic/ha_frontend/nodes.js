@@ -156,12 +156,27 @@ class MeshNodesTab extends LitElement {
     this._error = null;
     this._notice = null;
     try {
-      await this.hass.callWS({ type: `meshtastic/${kind}`, entry_id: this.entryId, ...payload });
-      this._notice = t(this.hass, "nodes.action.sent");
+      const result = await this.hass.callWS({
+        type: `meshtastic/${kind}`,
+        entry_id: this.entryId,
+        ...payload,
+      });
+      // Radio potrafi przyjąć polecenie bez potwierdzenia — wtedy nic się nie
+      // stało i nie wolno tego meldować jako sukcesu.
+      if (result && result.confirmed === false) {
+        this._error = t(this.hass, "nodes.action.unconfirmed");
+        return false;
+      }
+      this._notice = t(
+        this.hass,
+        kind === "remove_node" ? "nodes.action.removed" : "nodes.action.sent"
+      );
       this.dispatchEvent(new CustomEvent("mtsw-refresh", { bubbles: true, composed: true }));
+      return true;
     } catch (err) {
       console.error("MT_SW: akcja nie powiodła się", kind, err);
       this._error = (err && err.message) || t(this.hass, "nodes.action.failed");
+      return false;
     } finally {
       this._busy = null;
     }
@@ -183,8 +198,13 @@ class MeshNodesTab extends LitElement {
     if (!window.confirm(message)) {
       return;
     }
-    await this._call("remove_node", { node_id: node.node_id });
-    this._detail = null;
+    const removed = await this._call("remove_node", { node_id: node.node_id });
+    if (removed) {
+      // Usuwamy też z lokalnej listy, żeby wiersz zniknął natychmiast,
+      // nie dopiero po następnym odpytaniu.
+      this.nodes = (this.nodes || []).filter((n) => n.node_id !== node.node_id);
+      this._detail = null;
+    }
   }
 
   _renderStar(node) {

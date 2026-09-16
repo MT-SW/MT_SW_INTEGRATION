@@ -26,7 +26,13 @@ class MeshSettingsTab extends LitElement {
       localConfig: { type: Object },
       moduleConfig: { type: Object },
       configError: { type: Boolean },
+      schema: { type: Object },
+      entryId: { type: String },
       _open: { type: Object },
+      _drafts: { type: Object },
+      _saving: { type: String },
+      _status: { type: Object },
+      _confirmSection: { type: Object },
     };
   }
 
@@ -35,7 +41,12 @@ class MeshSettingsTab extends LitElement {
     this.localConfig = null;
     this.moduleConfig = null;
     this.configError = false;
+    this.schema = null;
     this._open = {};
+    this._drafts = {};
+    this._saving = null;
+    this._status = {};
+    this._confirmSection = null;
   }
 
   /* camelCase -> "Camel case"; etykiety pól zostają w formie technicznej,
@@ -71,11 +82,121 @@ class MeshSettingsTab extends LitElement {
     return String(value);
   }
 
-  _renderField(section, key, value) {
+  _meta(groupId, section, key) {
+    const group = groupId === "module" ? "module" : "local";
+    return (this.schema && this.schema[group] && this.schema[group][section] && this.schema[group][section][key]) || null;
+  }
+
+  _draftKey(groupId, section) {
+    return `${groupId}.${section}`;
+  }
+
+  _draftValue(groupId, section, key, current) {
+    const draft = this._drafts[this._draftKey(groupId, section)];
+    if (draft && Object.prototype.hasOwnProperty.call(draft, key)) {
+      return draft[key];
+    }
+    return current;
+  }
+
+  _setDraft(groupId, section, key, value) {
+    const id = this._draftKey(groupId, section);
+    this._drafts = { ...this._drafts, [id]: { ...(this._drafts[id] || {}), [key]: value } };
+  }
+
+  _discard(groupId, section) {
+    const id = this._draftKey(groupId, section);
+    const { [id]: _dropped, ...rest } = this._drafts;
+    this._drafts = rest;
+    this._status = { ...this._status, [id]: null };
+  }
+
+  async _save(groupId, section) {
+    const id = this._draftKey(groupId, section);
+    const values = this._drafts[id];
+    if (!values || !this.entryId || this._saving) {
+      return;
+    }
+    this._saving = id;
+    this._status = { ...this._status, [id]: null };
+    try {
+      await this.hass.callWS({
+        type: "meshtastic/set_config",
+        entry_id: this.entryId,
+        group: groupId,
+        section,
+        values,
+      });
+      this._discard(groupId, section);
+      this._status = { ...this._status, [id]: { ok: true } };
+      this.dispatchEvent(new CustomEvent("mtsw-config-saved", { bubbles: true, composed: true }));
+    } catch (err) {
+      console.error("MT_SW: zapis konfiguracji nie powiódł się", err);
+      this._status = { ...this._status, [id]: { ok: false, message: (err && err.message) || "" } };
+    } finally {
+      this._saving = null;
+    }
+  }
+
+  /* LoRa dostaje osobne potwierdzenie: zmiana regionu, presetu czy
+     częstotliwości na węźle zdalnym wyrzuca go z sieci bez drogi powrotnej. */
+  _requestSave(groupId, section) {
+    if (section === "lora") {
+      this._confirmSection = { groupId, section };
+      return;
+    }
+    this._save(groupId, section);
+  }
+
+  _renderControl(groupId, section, key, current) {
+    const meta = this._meta(groupId, section, key);
+    const value = this._draftValue(groupId, section, key, current);
+
+    if (!meta || !meta.editable) {
+      return html`<span class="field-value readonly">${this._formatValue(current)}</span>`;
+    }
+
+    if (meta.type === "bool") {
+      return html`<input
+        type="checkbox"
+        .checked=${Boolean(value)}
+        @change=${(e) => this._setDraft(groupId, section, key, e.target.checked)}
+      />`;
+    }
+
+    if (meta.type === "enum") {
+      return html`<select @change=${(e) => this._setDraft(groupId, section, key, e.target.value)}>
+        ${(meta.options || []).map(
+          (option) => html`<option value=${option} ?selected=${option === value}>${option}</option>`
+        )}
+      </select>`;
+    }
+
+    if (meta.type === "int" || meta.type === "float") {
+      return html`<input
+        type="number"
+        step=${meta.type === "float" ? "any" : "1"}
+        .value=${value === null || value === undefined ? "" : String(value)}
+        @change=${(e) => {
+          const raw = e.target.value;
+          const parsed = raw === "" ? 0 : Number(raw);
+          this._setDraft(groupId, section, key, Number.isNaN(parsed) ? 0 : parsed);
+        }}
+      />`;
+    }
+
+    return html`<input
+      type="text"
+      .value=${value === null || value === undefined ? "" : String(value)}
+      @change=${(e) => this._setDraft(groupId, section, key, e.target.value)}
+    />`;
+  }
+
+  _renderField(groupId, section, key, value) {
     return html`
       <div class="field">
         <span class="field-label">${fieldLabel(section, key) || this._humanize(key)}</span>
-        <span class="field-value">${this._formatValue(value)}</span>
+        <span class="field-control">${this._renderControl(groupId, section, key, value)}</span>
       </div>
     `;
   }
@@ -101,11 +222,75 @@ class MeshSettingsTab extends LitElement {
         </button>
         ${expanded
           ? html`<div class="section-body">
+              ${this._renderSaveBar(groupId, name)}
               ${fields.length
-                ? fields.map(([key, value]) => this._renderField(name, key, value))
+                ? fields.map(([key, value]) => this._renderField(groupId, name, key, value))
                 : html`<div class="empty-state">${t(this.hass, "settings.section_empty")}</div>`}
             </div>`
           : ""}
+      </div>
+    `;
+  }
+
+  _renderSaveBar(groupId, name) {
+    const id = this._draftKey(groupId, name);
+    const dirty = Boolean(this._drafts[id] && Object.keys(this._drafts[id]).length);
+    const status = this._status[id];
+
+    if (!dirty && !status) {
+      return html``;
+    }
+    return html`
+      <div class="save-bar">
+        ${dirty
+          ? html`
+              <span class="save-hint">${t(this.hass, "settings.unsaved")}</span>
+              <button class="btn" ?disabled=${Boolean(this._saving)} @click=${() => this._discard(groupId, name)}>
+                ${t(this.hass, "settings.discard")}
+              </button>
+              <button
+                class="btn primary"
+                ?disabled=${Boolean(this._saving)}
+                @click=${() => this._requestSave(groupId, name)}
+              >
+                ${this._saving === id ? t(this.hass, "settings.saving") : t(this.hass, "settings.save")}
+              </button>
+            `
+          : ""}
+        ${status
+          ? html`<span class="save-status ${status.ok ? "ok" : "error"}">
+              ${status.ok ? t(this.hass, "settings.saved") : `${t(this.hass, "settings.save_failed")} ${status.message}`}
+            </span>`
+          : ""}
+      </div>
+    `;
+  }
+
+  _renderConfirm() {
+    if (!this._confirmSection) {
+      return html``;
+    }
+    const { groupId, section } = this._confirmSection;
+    return html`
+      <div class="scrim" @click=${() => (this._confirmSection = null)}>
+        <div class="confirm" @click=${(e) => e.stopPropagation()}>
+          <div class="confirm-title">${t(this.hass, "settings.lora_confirm_title")}</div>
+          <div class="confirm-body">${t(this.hass, "settings.lora_confirm_body")}</div>
+          <div class="confirm-actions">
+            <button class="btn" @click=${() => (this._confirmSection = null)}>
+              ${t(this.hass, "settings.discard_change")}
+            </button>
+            <button
+              class="btn danger"
+              @click=${() => {
+                this._confirmSection = null;
+                this._save(groupId, section);
+              }}
+            >
+              ${t(this.hass, "settings.lora_confirm_ok")}
+            </button>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -148,10 +333,11 @@ class MeshSettingsTab extends LitElement {
 
     return html`
       <div class="tab-content">
-        <div class="notice">${t(this.hass, "settings.read_only")}</div>
+        <div class="notice">${t(this.hass, "settings.editable_notice")}</div>
         ${this._renderGroup("local", "settings.group.device", this.localConfig)}
         ${this._renderGroup("module", "settings.group.modules", this.moduleConfig)}
       </div>
+      ${this._renderConfirm()}
     `;
   }
 
@@ -244,6 +430,125 @@ class MeshSettingsTab extends LitElement {
         .field-label {
           font-size: 13px;
           color: var(--secondary-text-color);
+        }
+
+        .field-control {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          min-width: 180px;
+        }
+
+        .field-control input[type="text"],
+        .field-control input[type="number"],
+        .field-control select {
+          width: 100%;
+          max-width: 260px;
+          padding: 5px 8px;
+          border-radius: 6px;
+          border: 1px solid var(--divider-color);
+          background: var(--primary-background-color);
+          color: var(--primary-text-color);
+          font-family: inherit;
+          font-size: 13px;
+          text-align: end;
+        }
+
+        .field-control .readonly {
+          color: var(--secondary-text-color);
+        }
+
+        .save-bar {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding: 8px 16px;
+          border-bottom: 1px solid var(--divider-color);
+        }
+
+        .save-hint {
+          flex: 1;
+          font-size: 12px;
+          color: var(--warning-color, #ffa600);
+        }
+
+        .btn {
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          font-family: inherit;
+          font-size: 12px;
+          padding: 6px 12px;
+          cursor: pointer;
+        }
+
+        .btn[disabled] {
+          opacity: 0.5;
+          cursor: default;
+        }
+
+        .btn.primary {
+          background: var(--primary-color);
+          border-color: var(--primary-color);
+          color: var(--text-primary-color, #fff);
+        }
+
+        .btn.danger {
+          background: var(--error-color, #db4437);
+          border-color: var(--error-color, #db4437);
+          color: #fff;
+        }
+
+        .save-status {
+          font-size: 12px;
+        }
+
+        .save-status.ok {
+          color: var(--success-color, #4caf50);
+        }
+
+        .save-status.error {
+          color: var(--error-color, #db4437);
+        }
+
+        .scrim {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+          padding: 16px;
+        }
+
+        .confirm {
+          width: min(480px, 100%);
+          background: var(--card-background-color);
+          border: 1px solid var(--divider-color);
+          border-radius: 12px;
+          padding: 16px;
+        }
+
+        .confirm-title {
+          font-size: 16px;
+          font-weight: 500;
+          margin-bottom: 8px;
+        }
+
+        .confirm-body {
+          font-size: 13px;
+          color: var(--secondary-text-color);
+          margin-bottom: 16px;
+        }
+
+        .confirm-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
         }
 
         .field-value {
