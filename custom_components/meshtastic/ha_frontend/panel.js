@@ -276,6 +276,77 @@ class MeshtasticPanel extends LitElement {
     this._messages = [...this._messages, incoming];
   }
 
+  /* Mostek do przeniesionej zakładki ustawień.
+     Jej komponenty wołają polecenia pod nazwami z projektu źródłowego
+     (meshtastic_ui/...). Tłumaczymy nazwy i kształt odpowiedzi tutaj, żeby
+     settings.js i modules.js zostały nietknięte poza przepuszczeniem napisów
+     przez PL() — i dały się podmieniać na nowsze ich wydania. */
+  async _settingsWs(type, data = {}) {
+    const entryId = this._primaryEntryId;
+    if (!entryId || !this.hass) {
+      return null;
+    }
+    const name = String(type).replace(/^meshtastic_ui\//, "");
+
+    try {
+      switch (name) {
+        case "get_config": {
+          const result = await this.hass.callWS({ type: "meshtastic/config", entry_id: entryId });
+          this._localConfig = result.local_config || {};
+          this._moduleConfig = result.module_config || {};
+          return result;
+        }
+        case "set_config": {
+          // Ich komponenty podają samą nazwę sekcji, więc grupę rozpoznajemy
+          // po tym, w której części konfiguracji ta sekcja występuje.
+          const group = Object.prototype.hasOwnProperty.call(this._localConfig || {}, data.section)
+            ? "local"
+            : "module";
+          await this.hass.callWS({
+            type: "meshtastic/set_config",
+            entry_id: entryId,
+            group,
+            section: data.section,
+            values: data.values || {},
+          });
+          this._configEntryId = null;
+          return { success: true };
+        }
+        case "set_owner":
+          await this.hass.callWS({
+            type: "meshtastic/set_owner",
+            entry_id: entryId,
+            long_name: data.long_name ?? data.longName ?? "",
+            short_name: data.short_name ?? data.shortName ?? "",
+            is_licensed: Boolean(data.is_licensed ?? data.isLicensed),
+          });
+          return { success: true };
+        case "set_channel":
+          await this.hass.callWS({
+            type: "meshtastic/set_channel",
+            entry_id: entryId,
+            channel: data.channel || data,
+          });
+          return { success: true };
+        case "device_action":
+          await this.hass.callWS({
+            type: "meshtastic/device_action",
+            entry_id: entryId,
+            action: data.action,
+          });
+          return { success: true };
+        case "storage_stats":
+          return { success: true, nodes: (this._nodes || []).length };
+        default:
+          console.warn("MT_SW: nieobsługiwane polecenie ustawień", name);
+          return null;
+      }
+    } catch (err) {
+      console.error("MT_SW: polecenie ustawień nie powiodło się", name, err);
+      return null;
+    }
+  }
+
   _selectTab(tab) {
     if (tab === this._activeTab) {
       return;
@@ -308,14 +379,12 @@ class MeshtasticPanel extends LitElement {
       case "map":
         return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
       case "settings":
-        return html`<mesh-settings-tab
-          .hass=${this.hass}
-          .entryId=${entryId}
-          .schema=${this._configSchema}
-          .localConfig=${this._localConfig}
-          .moduleConfig=${this._moduleConfig}
-          .configError=${this._configError}
-        ></mesh-settings-tab>`;
+        return entryId
+          ? html`<mesh-settings-tab
+              .hass=${this.hass}
+              .wsCommand=${(type, data) => this._settingsWs(type, data)}
+            ></mesh-settings-tab>`
+          : html`<div class="tab-placeholder">${t(this.hass, "common.loading")}</div>`;
       case "radio":
       default:
         return html`<mtsw-radio-tab
@@ -421,6 +490,12 @@ class MeshtasticPanel extends LitElement {
 
       .tab:hover {
         color: var(--primary-text-color);
+      }
+
+      .tab-placeholder {
+        padding: 24px 16px;
+        color: var(--secondary-text-color);
+        font-size: 14px;
       }
 
       .tab.active {
