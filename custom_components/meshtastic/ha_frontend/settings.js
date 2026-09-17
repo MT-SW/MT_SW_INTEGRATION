@@ -19,17 +19,27 @@ import {
 
 /* ── LoRa modem presets & region enum maps ── */
 const MODEM_PRESETS = [
-  { value: "LONG_FAST", label: "Long Range / Fast" },
-  { value: "LONG_SLOW", label: "Long Range / Slow" },
-  { value: "LONG_MODERATE", label: "Long Range / Moderate" },
-  { value: "SHORT_FAST", label: "Short Range / Fast" },
-  { value: "SHORT_SLOW", label: "Short Range / Slow" },
-  { value: "MEDIUM_FAST", label: "Medium Range / Fast" },
-  { value: "MEDIUM_SLOW", label: "Medium Range / Slow" },
+  { value: "LONG_FAST", label: "LONG FAST" },
+  { value: "LONG_SLOW", label: "LONG SLOW" },
+  { value: "VERY_LONG_SLOW", label: "VERY LONG SLOW" },
+  { value: "MEDIUM_SLOW", label: "MEDIUM SLOW" },
+  { value: "MEDIUM_FAST", label: "MEDIUM FAST" },
+  { value: "SHORT_SLOW", label: "SHORT SLOW" },
+  { value: "SHORT_FAST", label: "SHORT FAST" },
+  { value: "LONG_MODERATE", label: "LONG MODERATE" },
+  { value: "SHORT_TURBO", label: "SHORT TURBO" },
+  { value: "LONG_TURBO", label: "LONG TURBO" },
+  { value: "LITE_FAST", label: "LITE FAST" },
+  { value: "LITE_SLOW", label: "LITE SLOW" },
+  { value: "NARROW_FAST", label: "NARROW FAST" },
+  { value: "NARROW_SLOW", label: "NARROW SLOW" },
+  { value: "TINY_FAST", label: "TINY FAST" },
+  { value: "TINY_SLOW", label: "TINY SLOW" },
+  { value: "MEDIUM_TURBO", label: "MEDIUM TURBO" },
 ];
 
 const REGIONS = [
-  { value: "UNSET", label: "Unset" },
+  { value: "UNSET", label: "UNSET" },
   { value: "US", label: "US" },
   { value: "EU_433", label: "EU 433" },
   { value: "EU_868", label: "EU 868" },
@@ -42,77 +52,96 @@ const REGIONS = [
   { value: "IN", label: "IN" },
   { value: "NZ_865", label: "NZ 865" },
   { value: "TH", label: "TH" },
+  { value: "LORA_24", label: "LORA 24" },
   { value: "UA_433", label: "UA 433" },
   { value: "UA_868", label: "UA 868" },
   { value: "MY_433", label: "MY 433" },
   { value: "MY_919", label: "MY 919" },
   { value: "SG_923", label: "SG 923" },
-  { value: "LORA_24", label: "2.4 GHz" },
+  { value: "PH_433", label: "PH 433" },
+  { value: "PH_868", label: "PH 868" },
+  { value: "PH_915", label: "PH 915" },
+  { value: "ANZ_433", label: "ANZ 433" },
+  { value: "KZ_433", label: "KZ 433" },
+  { value: "KZ_863", label: "KZ 863" },
+  { value: "NP_865", label: "NP 865" },
+  { value: "BR_902", label: "BR 902" },
+  { value: "ITU1_2M", label: "ITU1 2M" },
+  { value: "ITU2_2M", label: "ITU2 2M" },
+  { value: "EU_866", label: "EU 866" },
+  { value: "EU_874", label: "EU 874" },
+  { value: "EU_917", label: "EU 917" },
+  { value: "EU_N_868", label: "EU N 868" },
+  { value: "ITU3_2M", label: "ITU3 2M" },
+  { value: "ITU1_70CM", label: "ITU1 70CM" },
+  { value: "ITU2_70CM", label: "ITU2 70CM" },
+  { value: "ITU3_70CM", label: "ITU3 70CM" },
+  { value: "ITU2_125CM", label: "ITU2 125CM" },
 ];
 
 const CHANNEL_ROLES = [
-  { value: "DISABLED", label: "Disabled" },
-  { value: "PRIMARY", label: "Primary" },
-  { value: "SECONDARY", label: "Secondary" },
+  { value: "DISABLED", label: PL("Disabled") },
+  { value: "PRIMARY", label: PL("Primary") },
+  { value: "SECONDARY", label: PL("Secondary") },
 ];
 
 /* ── Device role enum ── */
 const DEVICE_ROLES = [
-  { value: "CLIENT", label: "Client" },
-  { value: "CLIENT_MUTE", label: "Client Mute" },
-  { value: "CLIENT_HIDDEN", label: "Client Hidden" },
-  { value: "CLIENT_BASE", label: "Client Base" },
-  { value: "ROUTER", label: "Router" },
-  { value: "ROUTER_LATE", label: "Router Late" },
-  { value: "ROUTER_CLIENT", label: "Router Client" },
-  { value: "REPEATER", label: "Repeater" },
-  { value: "TRACKER", label: "Tracker" },
-  { value: "SENSOR", label: "Sensor" },
-  { value: "TAK", label: "TAK" },
-  { value: "TAK_TRACKER", label: "TAK Tracker" },
-  { value: "LOST_AND_FOUND", label: "Lost and Found" },
+  { value: "CLIENT", label: PL("Client") },
+  { value: "CLIENT_MUTE", label: PL("Client Mute") },
+  { value: "CLIENT_HIDDEN", label: PL("Client Hidden") },
+  { value: "CLIENT_BASE", label: PL("Client Base") },
+  { value: "ROUTER", label: PL("Router") },
+  { value: "ROUTER_LATE", label: PL("Router Late") },
+  { value: "ROUTER_CLIENT", label: PL("Router Client") },
+  { value: "REPEATER", label: PL("Repeater") },
+  { value: "TRACKER", label: PL("Tracker") },
+  { value: "SENSOR", label: PL("Sensor") },
+  { value: "TAK", label: PL("TAK") },
+  { value: "TAK_TRACKER", label: PL("TAK Tracker") },
+  { value: "LOST_AND_FOUND", label: PL("Lost and Found") },
 ];
 
 const REBROADCAST_MODES = [
-  { value: "ALL", label: "All" },
-  { value: "ALL_SKIP_DECODING", label: "All (Skip Decoding)" },
-  { value: "LOCAL_ONLY", label: "Local Only" },
-  { value: "KNOWN_ONLY", label: "Known Only" },
-  { value: "NONE", label: "None" },
+  { value: "ALL", label: PL("All") },
+  { value: "ALL_SKIP_DECODING", label: PL("All (Skip Decoding)") },
+  { value: "LOCAL_ONLY", label: PL("Local Only") },
+  { value: "KNOWN_ONLY", label: PL("Known Only") },
+  { value: "NONE", label: PL("None") },
 ];
 
 /* ── Position / GPS enums ── */
 const GPS_MODES = [
-  { value: "DISABLED", label: "Disabled" },
-  { value: "ENABLED", label: "Enabled" },
-  { value: "NOT_PRESENT", label: "Not Present" },
+  { value: "DISABLED", label: PL("Disabled") },
+  { value: "ENABLED", label: PL("Enabled") },
+  { value: "NOT_PRESENT", label: PL("Not Present") },
 ];
 
 /* ── Display enums ── */
 const DISPLAY_MODES = [
-  { value: "DEFAULT", label: "Default" },
-  { value: "TWOCOLOR", label: "Two Color" },
-  { value: "INVERTED", label: "Inverted" },
-  { value: "COLOR", label: "Color" },
+  { value: "DEFAULT", label: PL("Default") },
+  { value: "TWOCOLOR", label: PL("Two Color") },
+  { value: "INVERTED", label: PL("Inverted") },
+  { value: "COLOR", label: PL("Color") },
 ];
 
 const DISPLAY_UNITS = [
-  { value: "METRIC", label: "Metric" },
-  { value: "IMPERIAL", label: "Imperial" },
+  { value: "METRIC", label: PL("Metric") },
+  { value: "IMPERIAL", label: PL("Imperial") },
 ];
 
 const OLED_TYPES = [
-  { value: "OLED_AUTO", label: "Auto Detect" },
-  { value: "OLED_SSD1306", label: "SSD1306" },
-  { value: "OLED_SH1106", label: "SH1106" },
-  { value: "OLED_SH1107", label: "SH1107" },
+  { value: "OLED_AUTO", label: PL("Auto Detect") },
+  { value: "OLED_SSD1306", label: PL("SSD1306") },
+  { value: "OLED_SH1106", label: PL("SH1106") },
+  { value: "OLED_SH1107", label: PL("SH1107") },
 ];
 
 /* ── Bluetooth enums ── */
 const BT_PAIRING_MODES = [
-  { value: "RANDOM_PIN", label: "Random PIN" },
-  { value: "FIXED_PIN", label: "Fixed PIN" },
-  { value: "NO_PIN", label: "No PIN" },
+  { value: "RANDOM_PIN", label: PL("Random PIN") },
+  { value: "FIXED_PIN", label: PL("Fixed PIN") },
+  { value: "NO_PIN", label: PL("No PIN") },
 ];
 
 /* ── Navigation items ── */
@@ -120,50 +149,50 @@ const NAV_ITEMS = [
   {
     group: "Radio Config",
     items: [
-      { id: "lora", label: "LoRa", icon: "mdi:antenna" },
-      { id: "channels", label: "Channels", icon: "mdi:forum" },
-      { id: "user", label: "User", icon: "mdi:account" },
+      { id: "lora", label: PL("LoRa"), icon: "mdi:antenna" },
+      { id: "channels", label: PL("Channels"), icon: "mdi:forum" },
+      { id: "user", label: PL("User"), icon: "mdi:account" },
     ],
   },
   {
     group: "Device Config",
     items: [
-      { id: "device", label: "Device", icon: "mdi:cellphone-cog" },
-      { id: "position", label: "Position", icon: "mdi:crosshairs-gps" },
-      { id: "power", label: "Power", icon: "mdi:battery-charging" },
-      { id: "network", label: "Network", icon: "mdi:wifi" },
-      { id: "display", label: "Display", icon: "mdi:monitor" },
-      { id: "bluetooth", label: "Bluetooth", icon: "mdi:bluetooth" },
-      { id: "security", label: "Security", icon: "mdi:shield-lock" },
+      { id: "device", label: PL("Device"), icon: "mdi:cellphone-cog" },
+      { id: "position", label: PL("Position"), icon: "mdi:crosshairs-gps" },
+      { id: "power", label: PL("Power"), icon: "mdi:battery-charging" },
+      { id: "network", label: PL("Network"), icon: "mdi:wifi" },
+      { id: "display", label: PL("Display"), icon: "mdi:monitor" },
+      { id: "bluetooth", label: PL("Bluetooth"), icon: "mdi:bluetooth" },
+      { id: "security", label: PL("Security"), icon: "mdi:shield-lock" },
     ],
   },
   {
     group: "Module Config",
     items: [
-      { id: "mqtt", label: "MQTT", icon: "mdi:transit-connection-variant" },
-      { id: "serial", label: "Serial", icon: "mdi:serial-port" },
-      { id: "ext_notification", label: "Ext. Notification", icon: "mdi:bell-ring" },
-      { id: "store_forward", label: "Store & Forward", icon: "mdi:database-arrow-right" },
-      { id: "range_test", label: "Range Test", icon: "mdi:signal-distance-variant" },
-      { id: "telemetry", label: "Telemetry", icon: "mdi:chart-line" },
-      { id: "canned_message", label: "Canned Messages", icon: "mdi:message-reply-text" },
-      { id: "audio", label: "Audio", icon: "mdi:microphone" },
-      { id: "neighbor_info", label: "Neighbor Info", icon: "mdi:account-group" },
-      { id: "ambient_lighting", label: "Ambient Lighting", icon: "mdi:led-on" },
-      { id: "detection_sensor", label: "Detection Sensor", icon: "mdi:motion-sensor" },
-      { id: "paxcounter", label: "Paxcounter", icon: "mdi:counter" },
+      { id: "mqtt", label: PL("MQTT"), icon: "mdi:transit-connection-variant" },
+      { id: "serial", label: PL("Serial"), icon: "mdi:serial-port" },
+      { id: "ext_notification", label: PL("Ext. Notification"), icon: "mdi:bell-ring" },
+      { id: "store_forward", label: PL("Store & Forward"), icon: "mdi:database-arrow-right" },
+      { id: "range_test", label: PL("Range Test"), icon: "mdi:signal-distance-variant" },
+      { id: "telemetry", label: PL("Telemetry"), icon: "mdi:chart-line" },
+      { id: "canned_message", label: PL("Canned Messages"), icon: "mdi:message-reply-text" },
+      { id: "audio", label: PL("Audio"), icon: "mdi:microphone" },
+      { id: "neighbor_info", label: PL("Neighbor Info"), icon: "mdi:account-group" },
+      { id: "ambient_lighting", label: PL("Ambient Lighting"), icon: "mdi:led-on" },
+      { id: "detection_sensor", label: PL("Detection Sensor"), icon: "mdi:motion-sensor" },
+      { id: "paxcounter", label: PL("Paxcounter"), icon: "mdi:counter" },
     ],
   },
   {
     group: "Device",
     items: [
-      { id: "actions", label: "Device Actions", icon: "mdi:cog" },
+      { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
     ],
   },
   {
     group: "Local Data",
     items: [
-      { id: "storage", label: "Storage", icon: "mdi:database" },
+      { id: "storage", label: PL("Storage"), icon: "mdi:database" },
     ],
   },
 ];

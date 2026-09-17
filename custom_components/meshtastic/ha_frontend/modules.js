@@ -14,49 +14,49 @@ import {
 /* ── Enum maps ── */
 
 const SERIAL_BAUD_RATES = [
-  { value: "BAUD_DEFAULT", label: "Default" },
-  { value: "BAUD_110", label: "110" },
-  { value: "BAUD_300", label: "300" },
-  { value: "BAUD_600", label: "600" },
-  { value: "BAUD_1200", label: "1200" },
-  { value: "BAUD_2400", label: "2400" },
-  { value: "BAUD_4800", label: "4800" },
-  { value: "BAUD_9600", label: "9600" },
-  { value: "BAUD_19200", label: "19200" },
-  { value: "BAUD_38400", label: "38400" },
-  { value: "BAUD_57600", label: "57600" },
-  { value: "BAUD_115200", label: "115200" },
-  { value: "BAUD_230400", label: "230400" },
-  { value: "BAUD_460800", label: "460800" },
-  { value: "BAUD_576000", label: "576000" },
-  { value: "BAUD_921600", label: "921600" },
+  { value: "BAUD_DEFAULT", label: PL("Default") },
+  { value: "BAUD_110", label: PL("110") },
+  { value: "BAUD_300", label: PL("300") },
+  { value: "BAUD_600", label: PL("600") },
+  { value: "BAUD_1200", label: PL("1200") },
+  { value: "BAUD_2400", label: PL("2400") },
+  { value: "BAUD_4800", label: PL("4800") },
+  { value: "BAUD_9600", label: PL("9600") },
+  { value: "BAUD_19200", label: PL("19200") },
+  { value: "BAUD_38400", label: PL("38400") },
+  { value: "BAUD_57600", label: PL("57600") },
+  { value: "BAUD_115200", label: PL("115200") },
+  { value: "BAUD_230400", label: PL("230400") },
+  { value: "BAUD_460800", label: PL("460800") },
+  { value: "BAUD_576000", label: PL("576000") },
+  { value: "BAUD_921600", label: PL("921600") },
 ];
 
 const SERIAL_MODES = [
-  { value: "DEFAULT", label: "Default" },
-  { value: "SIMPLE", label: "Simple" },
-  { value: "PROTO", label: "Protobuf" },
-  { value: "TEXTMSG", label: "Text Message" },
-  { value: "NMEA", label: "NMEA" },
-  { value: "CALTOPO", label: "CalTopo" },
+  { value: "DEFAULT", label: PL("Default") },
+  { value: "SIMPLE", label: PL("Simple") },
+  { value: "PROTO", label: PL("Protobuf") },
+  { value: "TEXTMSG", label: PL("Text Message") },
+  { value: "NMEA", label: PL("NMEA") },
+  { value: "CALTOPO", label: PL("CalTopo") },
 ];
 
 const CANNED_MSG_INPUT_EVENTS = [
-  { value: "NONE", label: "None" },
-  { value: "UP_DOWN_SELECT", label: "Up/Down/Select" },
-  { value: "ROTARY", label: "Rotary Encoder" },
+  { value: "NONE", label: PL("None") },
+  { value: "UP_DOWN_SELECT", label: PL("Up/Down/Select") },
+  { value: "ROTARY", label: PL("Rotary Encoder") },
 ];
 
 const CODEC2_RATES = [
-  { value: "CODEC2_DEFAULT", label: "Default" },
-  { value: "CODEC2_3200", label: "3200 bps" },
-  { value: "CODEC2_2400", label: "2400 bps" },
-  { value: "CODEC2_1600", label: "1600 bps" },
-  { value: "CODEC2_1400", label: "1400 bps" },
-  { value: "CODEC2_1300", label: "1300 bps" },
-  { value: "CODEC2_1200", label: "1200 bps" },
-  { value: "CODEC2_700B", label: "700B bps" },
-  { value: "CODEC2_700", label: "700 bps" },
+  { value: "CODEC2_DEFAULT", label: PL("Default") },
+  { value: "CODEC2_3200", label: PL("3200 bps") },
+  { value: "CODEC2_2400", label: PL("2400 bps") },
+  { value: "CODEC2_1600", label: PL("1600 bps") },
+  { value: "CODEC2_1400", label: PL("1400 bps") },
+  { value: "CODEC2_1300", label: PL("1300 bps") },
+  { value: "CODEC2_1200", label: PL("1200 bps") },
+  { value: "CODEC2_700B", label: PL("700B bps") },
+  { value: "CODEC2_700", label: PL("700 bps") },
 ];
 
 /* ── Base class for module config panels ── */

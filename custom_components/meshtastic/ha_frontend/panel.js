@@ -281,6 +281,25 @@ class MeshtasticPanel extends LitElement {
      (meshtastic_ui/...). Tłumaczymy nazwy i kształt odpowiedzi tutaj, żeby
      settings.js i modules.js zostały nietknięte poza przepuszczeniem napisów
      przez PL() — i dały się podmieniać na nowsze ich wydania. */
+  /* Ich komponenty ustawień czytają nazwy pól w snake_case (d.modem_preset),
+     a nasze MessageToDict zwraca camelCase (modemPreset) — ich backend
+     oddawał pierwszą postać. Bez tej konwersji każda sekcja wyglądała na
+     pustą, mimo że dane z radia dochodziły poprawnie. */
+  _toSnake(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => this._toSnake(item));
+    }
+    if (value && typeof value === "object") {
+      const out = {};
+      for (const [key, inner] of Object.entries(value)) {
+        const snake = key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+        out[snake] = this._toSnake(inner);
+      }
+      return out;
+    }
+    return value;
+  }
+
   async _settingsWs(type, data = {}) {
     const entryId = this._primaryEntryId;
     if (!entryId || !this.hass) {
@@ -294,7 +313,30 @@ class MeshtasticPanel extends LitElement {
           const result = await this.hass.callWS({ type: "meshtastic/config", entry_id: entryId });
           this._localConfig = result.local_config || {};
           this._moduleConfig = result.module_config || {};
-          return result;
+          // Ich edytor kanałów czyta config.channels, czego nasza komenda
+          // konfiguracji nie zwraca — dokładamy je z osobnej komendy.
+          let channels = [];
+          try {
+            const raw = await this.hass.callWS({ type: "meshtastic/channels", entry_id: entryId });
+            channels = (raw.channels || []).map((channel) => ({
+              index: channel.index,
+              role: channel.role,
+              settings: {
+                name: channel.name || "",
+                psk: channel.has_psk ? "" : "",
+                uplink_enabled: Boolean(channel.uplink_enabled),
+                downlink_enabled: Boolean(channel.downlink_enabled),
+                module_settings: { position_precision: channel.position_precision ?? 0 },
+              },
+            }));
+          } catch (err) {
+            console.warn("MT_SW: nie udało się pobrać kanałów", err);
+          }
+          return {
+            local_config: this._toSnake(result.local_config || {}),
+            module_config: this._toSnake(result.module_config || {}),
+            channels,
+          };
         }
         case "set_config": {
           // Ich komponenty podają samą nazwę sekcji, więc grupę rozpoznajemy
@@ -302,12 +344,18 @@ class MeshtasticPanel extends LitElement {
           const group = Object.prototype.hasOwnProperty.call(this._localConfig || {}, data.section)
             ? "local"
             : "module";
+          // Radio przyjmuje nazwy pól w camelCase, a ich formularz oddaje je
+          // w snake_case — zamieniamy z powrotem przed zapisem.
+          const values = {};
+          for (const [key, value] of Object.entries(data.values || {})) {
+            values[key.replace(/_([a-z0-9])/g, (_m, c) => c.toUpperCase())] = value;
+          }
           await this.hass.callWS({
             type: "meshtastic/set_config",
             entry_id: entryId,
             group,
             section: data.section,
-            values: data.values || {},
+            values,
           });
           this._configEntryId = null;
           return { success: true };
