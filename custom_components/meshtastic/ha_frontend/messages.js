@@ -8,7 +8,7 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
-import { t } from "./i18n.js";
+import { t, formatRelative } from "./i18n.js";
 
 const MAX_TEXT_LENGTH = 228;
 
@@ -226,13 +226,14 @@ class MeshMessagesTab extends LitElement {
     }
 
     return html`
-      <div class="bubble-row ${message.direction}">
-        <div class="bubble">
+      <div class="bubble-wrapper ${message.direction === "out" ? "outgoing" : "incoming"}">
+        <div class="bubble-row">
+        <div class="bubble ${message.direction === "out" ? "outgoing" : "incoming"}">
           ${message.direction === "in"
             ? html`<div class="sender">${message.from_name || this._nodeName(message.from)}</div>`
             : ""}
           <button
-            class="bubble-delete"
+            class="bubble-action-btn"
             title=${t(this.hass, "messages.delete")}
             ?disabled=${this._deleting}
             @click=${() => this._deleteMessage(message)}
@@ -240,11 +241,14 @@ class MeshMessagesTab extends LitElement {
             ✕
           </button>
           <div class="text">${message.text}</div>
-          <div class="meta">
-            <span>${new Date(message.ts).toLocaleString(this.hass.language)}</span>
+          <div class="time">
+            <span title=${new Date(message.ts).toLocaleString(this.hass.language)}>
+              ${formatRelative(this.hass, message.ts)}
+            </span>
             ${meta.length ? html`<span class="dot">·</span><span>${meta.join(" · ")}</span>` : ""}
             ${this._renderAck(message)}
           </div>
+        </div>
         </div>
       </div>
     `;
@@ -358,7 +362,8 @@ class MeshMessagesTab extends LitElement {
         .split {
           display: grid;
           grid-template-columns: minmax(200px, 280px) 1fr;
-          height: calc(100vh - 176px);
+          flex: 1;
+          min-height: 0;
           border-top: 1px solid var(--divider-color);
         }
 
@@ -432,79 +437,106 @@ class MeshMessagesTab extends LitElement {
           gap: 8px;
         }
 
-        .bubble-row {
+        /* Wygląd dymków zaczerpnięty z meshtastic-ui-ha: zaokrąglenie 16px
+           ze spłaszczonym narożnikiem po stronie nadawcy zamiast jednolitego
+           prostokąta, nazwa nadawcy w kolorze akcentu, czas mniejszą czcionką.
+           Przyciski akcji pojawiają się obok dymka po najechaniu. */
+        .bubble-wrapper {
           display: flex;
+          flex-direction: column;
+          max-width: 80%;
+          margin: 2px 0;
         }
 
-        .bubble-row.out {
-          justify-content: flex-end;
+        .bubble-wrapper.outgoing {
+          align-self: flex-end;
+          align-items: flex-end;
+        }
+
+        .bubble-wrapper.incoming {
+          align-self: flex-start;
+          align-items: flex-start;
+        }
+
+        .bubble-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 4px;
+        }
+
+        .bubble-wrapper.outgoing .bubble-row {
+          flex-direction: row-reverse;
         }
 
         .bubble {
-          position: relative;
-          max-width: min(560px, 80%);
-          padding: 8px 12px;
-          border-radius: 12px;
-          background: var(--card-background-color);
-          border: 1px solid var(--divider-color);
+          padding: 8px 14px;
+          border-radius: 16px;
+          font-size: 14px;
+          line-height: 1.4;
+          word-break: break-word;
+          min-width: 0;
         }
 
-        .bubble-row.out .bubble {
+        .bubble.incoming {
+          background: var(--secondary-background-color);
+          border-bottom-left-radius: 4px;
+        }
+
+        .bubble.outgoing {
           background: var(--primary-color);
           color: var(--text-primary-color, #fff);
-          border-color: transparent;
+          border-bottom-right-radius: 4px;
         }
 
-        .bubble-delete {
-          position: absolute;
-          top: 2px;
-          inset-inline-end: 4px;
-          border: none;
-          background: none;
-          color: inherit;
-          cursor: pointer;
-          font-size: 11px;
-          line-height: 1;
-          opacity: 0;
-          padding: 2px;
-        }
-
-        .bubble:hover .bubble-delete {
-          opacity: 0.6;
-        }
-
-        .bubble-delete:hover {
-          opacity: 1;
-        }
-
-        .conversation {
-          position: relative;
-        }
-
-        .conversation-delete {
-          position: absolute;
-          top: 10px;
-          inset-inline-end: 10px;
-          font-size: 12px;
+        .bubble-action-btn {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 1px solid var(--divider-color);
+          background: var(--card-background-color);
           color: var(--secondary-text-color);
-          opacity: 0;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          flex-shrink: 0;
+          opacity: 0;
+          padding: 0;
         }
 
-        .conversation:hover .conversation-delete {
-          opacity: 0.7;
-        }
-
-        .conversation-delete:hover {
+        .bubble-row:hover .bubble-action-btn {
           opacity: 1;
-          color: var(--error-color, #db4437);
+        }
+
+        .bubble-action-btn:hover {
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
+        }
+
+        .time {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 4px;
+          margin-top: 2px;
+          font-size: 10px;
+          color: var(--secondary-text-color);
+        }
+
+        .bubble.outgoing .time {
+          color: rgba(255, 255, 255, 0.6);
         }
 
         .sender {
-          font-size: 12px;
-          font-weight: 500;
-          color: var(--secondary-text-color);
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--primary-color);
           margin-bottom: 2px;
+        }
+
+        .bubble.outgoing .sender {
+          color: rgba(255, 255, 255, 0.7);
         }
 
         .text {

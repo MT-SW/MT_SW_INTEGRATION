@@ -171,8 +171,25 @@ function precisionRadius(bits) {
    Offset liczony jest w przestrzeni ekranu, żeby odstęp był stały wizualnie. */
 const CLUSTER_PX = 18;
 const SPREAD_PX = 16;
+/* Poniżej tego powiększenia markery zostają na prawdziwych pozycjach.
+   Wcześniej rozsuwanie działało na każdym poziomie, więc z oddali grupa
+   węzłów zamieniała się w okrąg kółek zamiast wyglądać jak jeden punkt. */
+const SPREAD_MIN_ZOOM = 13;
+const SPREAD_FULL_ZOOM = 16;
 
 function spreadOverlapping(map, nodes) {
+  const zoom = map.getZoom();
+  if (zoom < SPREAD_MIN_ZOOM) {
+    return nodes.map((node) => ({
+      node,
+      latlng: [node.latitude, node.longitude],
+      offset: false,
+    }));
+  }
+  // Od progu do pełnego przybliżenia rozsunięcie narasta płynnie,
+  // żeby nie „wystrzeliwało" skokowo przy jednym kliknięciu zoomu.
+  const ramp = Math.min(1, (zoom - SPREAD_MIN_ZOOM) / (SPREAD_FULL_ZOOM - SPREAD_MIN_ZOOM));
+
   const placed = [];
   const groups = [];
 
@@ -197,7 +214,7 @@ function spreadOverlapping(map, nodes) {
       continue;
     }
     // Promień rośnie z liczbą węzłów, żeby przy kilkunastu nadal dało się je rozróżnić.
-    const radius = SPREAD_PX + group.members.length * 1.5;
+    const radius = (SPREAD_PX + group.members.length * 1.5) * ramp;
     group.members.forEach((member, index) => {
       const angle = (2 * Math.PI * index) / group.members.length;
       const shifted = map.layerPointToLatLng([
@@ -590,7 +607,11 @@ class MeshMapTab extends LitElement {
         .mtsw-map {
           display: flex;
           flex-direction: column;
-          height: calc(100vh - 176px);
+          /* Wypełniamy to, co zostało po pasku zakładek, zamiast zgadywać
+             wysokość odejmowaniem od 100vh — przy innym motywie albo na
+             telefonie ta stała zawsze wypadała źle. */
+          flex: 1;
+          min-height: 0;
         }
         .mtsw-map .map-toolbar {
           display: flex;

@@ -14,7 +14,7 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
-import { t, formatUptime } from "./i18n.js";
+import { t, formatUptime, formatRelative } from "./i18n.js";
 
 const COLUMNS = [
   { key: "name", labelKey: "nodes.col.name", numeric: false },
@@ -142,12 +142,15 @@ class MeshNodesTab extends LitElement {
     return suffix ? `${shown}${suffix}` : String(shown);
   }
 
-  /* lastHeard przychodzi z radia jako uniksowy czas w sekundach */
+  /* lastHeard przychodzi z radia jako uniksowy czas w sekundach.
+     Na liście liczy się "jak dawno", nie "kiedy dokładnie" — pełna data
+     zostaje w tooltipie i w szczegółach węzła. */
   _formatLastHeard(seconds) {
-    if (!seconds) {
-      return t(this.hass, "common.unknown");
-    }
-    return new Date(seconds * 1000).toLocaleString(this.hass.language);
+    return formatRelative(this.hass, seconds ? seconds * 1000 : null);
+  }
+
+  _absoluteTime(seconds) {
+    return seconds ? new Date(seconds * 1000).toLocaleString(this.hass.language) : "";
   }
 
   async _call(kind, payload) {
@@ -239,7 +242,9 @@ class MeshNodesTab extends LitElement {
         <td class="num">${this._formatValue(node.snr, " dB", 1)}</td>
         <td class="num">${this._formatValue(node.hops_away)}</td>
         <td class="num">${this._formatValue(node.battery_level, " %")}</td>
-        <td class="num">${this._formatLastHeard(node.last_heard)}</td>
+        <td class="num" title=${this._absoluteTime(node.last_heard)}>
+          ${this._formatLastHeard(node.last_heard)}
+        </td>
       </tr>
     `;
   }
@@ -416,7 +421,7 @@ class MeshNodesTab extends LitElement {
             ${this._detailRow("radio.role", node.role)}
             ${this._detailRow("nodes.col.snr", this._formatValue(node.snr, " dB", 1))}
             ${this._detailRow("nodes.col.hops", node.hops_away)}
-            ${this._detailRow("nodes.col.last_heard", this._formatLastHeard(node.last_heard))}
+            ${this._detailRow("nodes.col.last_heard", this._absoluteTime(node.last_heard))}
             ${this._detailRow("radio.battery", this._formatValue(node.battery_level, " %"))}
             ${this._detailRow("radio.voltage", this._formatValue(node.voltage, " V", 2))}
             ${this._detailRow(
@@ -531,6 +536,9 @@ class MeshNodesTab extends LitElement {
       emptyStateStyles,
       css`
         .tab-content {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
           padding: 16px;
         }
 

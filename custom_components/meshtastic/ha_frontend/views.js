@@ -290,6 +290,9 @@ class MeshRadioTab extends LitElement {
       channelStyles,
       css`
         .tab-content {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
           padding: 16px;
         }
 

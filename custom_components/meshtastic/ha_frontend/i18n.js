@@ -219,6 +219,10 @@ const STRINGS = {
     "neighbors.col.last_heard": "Ostatnio słyszany",
     "neighbors.count": "{count} sąsiadów",
 
+    "relative.now": "teraz",
+    "relative.minutes": "{n} min temu",
+    "relative.hours": "{n} godz. temu",
+    "relative.days": "{n} dni temu",
     "duration.days": "{n} d",
     "duration.hours": "{n} godz.",
     "duration.minutes": "{n} min",
@@ -428,6 +432,10 @@ const STRINGS = {
     "neighbors.col.last_heard": "Last heard",
     "neighbors.count": "{count} neighbors",
 
+    "relative.now": "just now",
+    "relative.minutes": "{n} min ago",
+    "relative.hours": "{n} h ago",
+    "relative.days": "{n} d ago",
     "duration.days": "{n}d",
     "duration.hours": "{n}h",
     "duration.minutes": "{n}m",
@@ -485,4 +493,33 @@ export function formatUptime(hass, seconds) {
   if (minutes && parts.length < 2) parts.push(t(hass, "duration.minutes", { n: minutes }));
   if (!parts.length) parts.push(t(hass, "duration.seconds", { n: secs }));
   return parts.slice(0, 2).join(" ");
+}
+
+/**
+ * Czas względny — "5 min temu" zamiast pełnej daty.
+ *
+ * Przy liście węzłów to jedyna forma, która niesie informację: chodzi o to,
+ * czy węzeł odezwał się minutę czy trzy dni temu, a nie o dokładną godzinę.
+ * Przyjmuje milisekundy; sekundy z radia trzeba przemnożyć przed wywołaniem.
+ */
+export function formatRelative(hass, millis) {
+  if (!millis) {
+    return t(hass, "common.unknown");
+  }
+  const diff = Date.now() - Number(millis);
+  if (!Number.isFinite(diff)) {
+    return t(hass, "common.unknown");
+  }
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) {
+    return t(hass, "relative.now");
+  }
+  if (minutes < 60) {
+    return t(hass, "relative.minutes", { n: minutes });
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return t(hass, "relative.hours", { n: hours });
+  }
+  return t(hass, "relative.days", { n: Math.floor(hours / 24) });
 }

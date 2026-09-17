@@ -12,20 +12,10 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
 
 import "./views.js";
-import "./ui-views.js";
+import "./messages.js";
+import "./nodes.js";
+import "./map.js";
 import "./settings.js";
-import {
-  adaptNodes,
-  adaptMessages,
-  adaptChannels,
-  adaptChannelNames,
-  adaptDms,
-  adaptDeliveryStatuses,
-  favoriteIds,
-  ignoredIds,
-  hexId,
-  numId,
-} from "./adapt.js";
 
 const POLL_MS = 10000;
 const TABS = ["radio", "messages", "nodes", "map", "settings"];
@@ -526,44 +516,25 @@ class MeshtasticPanel extends LitElement {
 
   _renderTab() {
     const entryId = this._primaryEntryId;
-    const nodes = adaptNodes(this._nodes);
-    const channels = entryId ? this._channels[entryId] || [] : [];
-    const gateway = (this._nodes || []).find((n) => n.is_gateway);
 
     switch (this._activeTab) {
       case "messages":
         return html`<mesh-messages-tab
-          .messages=${adaptMessages(this._messages)}
-          .channels=${adaptChannels(channels)}
-          .dms=${adaptDms(this._messages, this._nodes)}
-          .channelNames=${adaptChannelNames(channels)}
-          .selectedConversation=${this._selectedConversation || ""}
-          .deliveryStatuses=${adaptDeliveryStatuses(this._messages)}
-          .nodes=${nodes}
-          .unreadCounts=${{}}
-          @select-conversation=${this._onSelectConversation}
-          @send-message=${this._onSendMessage}
-          @clear-conversation=${this._onClearConversation}
+          .hass=${this.hass}
+          .entryId=${entryId}
+          .messages=${this._messages}
+          .nodes=${this._nodes}
+          .channels=${entryId ? this._channels[entryId] || [] : []}
+          .selectKey=${this._dmKey || null}
         ></mesh-messages-tab>`;
       case "nodes":
         return html`<mesh-nodes-tab
-          .nodes=${nodes}
-          .favoriteNodes=${favoriteIds(this._nodes)}
-          .ignoredNodes=${ignoredIds(this._nodes)}
-          .pendingTraceroute=${this._pending.pendingTraceroute || null}
-          .pendingPosition=${this._pending.pendingPosition || null}
-          .pendingNodeinfo=${this._pending.pendingNodeinfo || null}
-          @node-action=${this._onNodeAction}
+          .hass=${this.hass}
+          .entryId=${entryId}
+          .nodes=${this._nodes}
         ></mesh-nodes-tab>`;
       case "map":
-        return html`<mesh-map-tab
-          .nodes=${nodes}
-          .waypoints=${{}}
-          .traceroutes=${{}}
-          .localNodeId=${gateway ? hexId(gateway.node_id) : ""}
-          @node-action=${this._onNodeAction}
-          @waypoint-create=${this._onWaypointCreate}
-        ></mesh-map-tab>`;
+        return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
       case "settings":
         return html`<mesh-settings-tab
           .hass=${this.hass}
@@ -637,7 +608,8 @@ class MeshtasticPanel extends LitElement {
   static get styles() {
     return css`
       :host {
-        display: block;
+        display: flex;
+        flex-direction: column;
         height: 100%;
         background: var(--primary-background-color);
         color: var(--primary-text-color);
