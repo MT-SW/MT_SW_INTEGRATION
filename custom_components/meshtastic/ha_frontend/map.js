@@ -625,7 +625,7 @@ class MeshMapTab extends LitElement {
         .mtsw-map {
           display: flex;
           flex-direction: column;
-          height: calc(100vh - 176px);
+          height: var(--mtsw-tab-height, calc(100vh - 105px));
           min-height: 320px;
         }
         .mtsw-map .map-toolbar {

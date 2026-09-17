@@ -351,7 +351,7 @@ class MeshSettingsTab extends LitElement {
         .split {
           display: grid;
           grid-template-columns: minmax(180px, 240px) 1fr;
-          height: calc(100vh - 176px);
+          height: var(--mtsw-tab-height, calc(100vh - 105px));
         }
 
         @media (max-width: 700px) {

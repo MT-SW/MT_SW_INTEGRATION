@@ -384,9 +384,14 @@ class MeshtasticPanel extends LitElement {
   static get styles() {
     return css`
       :host {
-        display: flex;
-        flex-direction: column;
+        display: block;
         height: 100%;
+        /* Wysokość obszaru zakładki, liczona z nagłówka Home Assistanta
+           i naszego paska zakładek, zamiast zgadywanej stałej. Definiowana
+           tutaj, bo własności niestandardowe dziedziczą się przez granicę
+           shadow DOM — sięga więc każdej zakładki, także mapy, która
+           renderuje do light DOM. */
+        --mtsw-tab-height: calc(100vh - var(--header-height, 56px) - 49px);
         background: var(--primary-background-color);
         color: var(--primary-text-color);
       }

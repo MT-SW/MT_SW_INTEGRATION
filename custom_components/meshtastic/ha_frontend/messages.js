@@ -360,7 +360,7 @@ class MeshMessagesTab extends LitElement {
         .split {
           display: grid;
           grid-template-columns: minmax(200px, 280px) 1fr;
-          height: calc(100vh - 176px);
+          height: var(--mtsw-tab-height, calc(100vh - 105px));
           border-top: 1px solid var(--divider-color);
         }
 

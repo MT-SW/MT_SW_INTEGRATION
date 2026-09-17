@@ -5,6 +5,11 @@ export const layoutStyles = css`
   :host {
     display: block;
     height: 100%;
+    /* Wysokość obszaru zakładki. Liczona z nagłówka Home Assistanta
+       (--header-height) i naszego paska zakładek (49px), zamiast stałej
+       176px, która była zgadywana i wypadała za mała — pole wpisywania
+       wiadomości lądowało wtedy nad dolną krawędzią, a nie na niej. */
+    --mtsw-tab-height: calc(100vh - var(--header-height, 56px) - 49px);
     background: var(--primary-background-color);
     color: var(--primary-text-color);
   }
