@@ -323,7 +323,7 @@ class MeshtasticPanel extends LitElement {
               role: channel.role,
               settings: {
                 name: channel.name || "",
-                psk: channel.has_psk ? "" : "",
+                psk: channel.psk || "",
                 uplink_enabled: Boolean(channel.uplink_enabled),
                 downlink_enabled: Boolean(channel.downlink_enabled),
                 module_settings: { position_precision: channel.position_precision ?? 0 },

@@ -266,6 +266,32 @@ class MeshMessagesTab extends LitElement {
     }
   }
 
+  _renderConversationItem(conversation, active) {
+    return html`
+      <button
+        class="conversation ${active && conversation.key === active.key ? "active" : ""}"
+        @click=${() => {
+          this._selected = conversation.key;
+          this._error = null;
+        }}
+      >
+        <span class="conversation-name">
+          ${conversation.kind === "channel" ? "#" : ""}${conversation.name}
+        </span>
+        <span
+          class="conversation-delete"
+          title=${t(this.hass, "messages.delete_conversation")}
+          @click=${(e) => {
+            e.stopPropagation();
+            this._deleteConversation(conversation);
+          }}
+        >
+          <ha-icon icon="mdi:trash-can-outline"></ha-icon>
+        </span>
+      </button>
+    `;
+  }
+
   render() {
     if (!this.hass) {
       return html``;
@@ -285,32 +311,14 @@ class MeshMessagesTab extends LitElement {
     return html`
       <div class="split">
         <aside class="sidebar">
-          ${conversations.map(
-            (conversation) => html`
-              <button
-                class="conversation ${active && conversation.key === active.key ? "active" : ""}"
-                @click=${() => {
-                  this._selected = conversation.key;
-                  this._error = null;
-                }}
-              >
-                <span class="conversation-name">
-                  ${conversation.kind === "channel" ? "#" : ""}${conversation.name}
-                </span>
-                <span class="conversation-preview">${conversation.preview}</span>
-                <span
-                  class="conversation-delete"
-                  title=${t(this.hass, "messages.delete_conversation")}
-                  @click=${(e) => {
-                    e.stopPropagation();
-                    this._deleteConversation(conversation);
-                  }}
-                >
-                  <ha-icon icon="mdi:trash-can-outline"></ha-icon>
-                </span>
-              </button>
-            `
-          )}
+          ${conversations.filter((c) => c.kind === "channel").length ? html`
+            <div class="sidebar-header">${t(this.hass, "messages.channels_header")}</div>
+            ${conversations.filter((c) => c.kind === "channel").map((c) => this._renderConversationItem(c, active))}
+          ` : ""}
+          ${conversations.filter((c) => c.kind === "dm").length ? html`
+            <div class="sidebar-header">${t(this.hass, "messages.dms_header")}</div>
+            ${conversations.filter((c) => c.kind === "dm").map((c) => this._renderConversationItem(c, active))}
+          ` : ""}
         </aside>
 
         <section class="pane">
@@ -384,35 +392,29 @@ class MeshMessagesTab extends LitElement {
             -webkit-overflow-scrolling: touch;
           }
 
+          .sidebar-header {
+            display: none;
+          }
+
           .conversation {
             flex: 0 0 auto;
             width: auto;
             max-width: 160px;
-            padding: 10px 14px;
-            border-bottom: none;
-            border-inline-end: 1px solid var(--divider-color);
+            margin: 6px 4px;
           }
 
           .conversation-name {
-            display: block;
-            max-width: 132px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            max-width: 120px;
           }
+        }
 
-          .conversation.active {
-            box-shadow: inset 0 -3px 0 var(--primary-color);
-          }
-
-          .conversation-preview {
-            display: none;
-          }
-
-          .conversation-delete {
-            top: 4px;
-            inset-inline-end: 4px;
-          }
+        .sidebar-header {
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--secondary-text-color);
+          padding: 12px 16px 6px;
         }
 
         .sidebar {
@@ -422,13 +424,15 @@ class MeshMessagesTab extends LitElement {
         }
 
         .conversation {
+          position: relative;
           display: flex;
-          flex-direction: column;
-          gap: 2px;
-          width: 100%;
-          padding: 12px 16px;
+          align-items: center;
+          gap: 6px;
+          width: calc(100% - 16px);
+          margin: 2px 8px;
+          padding: 10px 12px;
           border: none;
-          border-bottom: 1px solid var(--divider-color);
+          border-radius: 8px;
           background: none;
           font-family: inherit;
           text-align: start;
@@ -441,21 +445,43 @@ class MeshMessagesTab extends LitElement {
         }
 
         .conversation.active {
-          background: var(--secondary-background-color);
-          box-shadow: inset 3px 0 0 var(--primary-color);
+          background: var(--primary-color);
+          color: var(--text-primary-color, #fff);
         }
 
         .conversation-name {
+          flex: 1;
+          min-width: 0;
           font-weight: 500;
           font-size: 14px;
-        }
-
-        .conversation-preview {
-          font-size: 12px;
-          color: var(--secondary-text-color);
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+
+        .conversation-delete {
+          flex-shrink: 0;
+          opacity: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2px;
+          border-radius: 4px;
+          color: inherit;
+        }
+
+        .conversation:hover .conversation-delete {
+          opacity: 0.6;
+        }
+
+        .conversation-delete:hover {
+          opacity: 1;
+        }
+
+        @media (hover: none) {
+          .conversation-delete {
+            opacity: 0.5;
+          }
         }
 
         .pane {

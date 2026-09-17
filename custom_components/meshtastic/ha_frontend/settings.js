@@ -675,6 +675,7 @@ class MeshSettingsChannels extends LitElement {
     this._expandedIndex = null;
     this._drafts = {};
     this._dirtyIndexes = new Set();
+    this._pskVisible = new Set();
     this._saving = false;
   }
 
@@ -829,11 +830,15 @@ class MeshSettingsChannels extends LitElement {
               </div>
               <div class="psk-row">
                 <mesh-text-input
-                  type="password"
+                  type=${this._pskVisible.has(index) ? "text" : "password"}
                   .value=${draft.psk}
                   placeholder="Base64 encoded key"
                   @change=${(e) => this._updateChannelField(index, "psk", e.detail.value)}
                 ></mesh-text-input>
+                <button class="gen-btn" @click=${() => {
+                  if (this._pskVisible.has(index)) { this._pskVisible.delete(index); } else { this._pskVisible.add(index); }
+                  this.requestUpdate();
+                }}>${this._pskVisible.has(index) ? PL("Hide") : PL("Show")}</button>
                 <button class="gen-btn" @click=${() => this._generatePsk(index)}>Generate</button>
               </div>
             </div>

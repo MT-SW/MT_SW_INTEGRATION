@@ -88,6 +88,8 @@ const STRINGS = {
     "radio.channels.unnamed": "(bez nazwy)",
 
     "messages.channel": "Kanał",
+    "messages.channels_header": "Kanały",
+    "messages.dms_header": "Wiadomości bezpośrednie",
     "messages.empty": "Brak wiadomości i kanałów do wyświetlenia.",
     "messages.no_messages": "Ta rozmowa jest jeszcze pusta.",
     "messages.placeholder": "Napisz wiadomość… (Enter wysyła, Shift+Enter nowa linia)",
@@ -301,6 +303,8 @@ const STRINGS = {
     "radio.channels.unnamed": "(unnamed)",
 
     "messages.channel": "Channel",
+    "messages.channels_header": "Channels",
+    "messages.dms_header": "Direct Messages",
     "messages.empty": "No messages or channels to show.",
     "messages.no_messages": "This conversation is still empty.",
     "messages.placeholder": "Write a message… (Enter sends, Shift+Enter for a new line)",
