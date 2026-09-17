@@ -324,6 +324,13 @@ class MeshNodesTab extends LitElement {
      Żeby trasa dała się przeczytać, doklejamy oba końce i budujemy łańcuch:
      bramka -> przeskok -> ... -> cel. SNR dotyczy odcinków, więc jest ich
      o jeden mniej niż węzłów; wartości są w czwartych częściach decybela. */
+  _closeDetail() {
+    this._detail = null;
+    this._traceroute = null;
+    this._notice = null;
+    this._error = null;
+  }
+
   _gatewayId() {
     const gateway = (this.nodes || []).find((n) => n.is_gateway);
     return gateway ? gateway.node_id : null;
