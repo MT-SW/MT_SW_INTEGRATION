@@ -237,7 +237,7 @@ class MeshMessagesTab extends LitElement {
             ?disabled=${this._deleting}
             @click=${() => this._deleteMessage(message)}
           >
-            ✕
+            <ha-icon icon="mdi:trash-can-outline"></ha-icon>
           </button>
           <div class="text">${message.text}</div>
           <div class="meta">
@@ -305,8 +305,9 @@ class MeshMessagesTab extends LitElement {
                     e.stopPropagation();
                     this._deleteConversation(conversation);
                   }}
-                  >✕</span
                 >
+                  <ha-icon icon="mdi:trash-can-outline"></ha-icon>
+                </span>
               </button>
             `
           )}
@@ -364,15 +365,45 @@ class MeshMessagesTab extends LitElement {
           border-top: 1px solid var(--divider-color);
         }
 
+        /* Poniżej tej szerokości lista rozmów przestaje być pionową kolumną
+           obok wątku (nie mieści się) — zamienia się w poziomy pasek pigułek
+           u góry, jak zakładki, a wątek zajmuje resztę ekranu pod spodem. */
         @media (max-width: 700px) {
           .split {
             grid-template-columns: 1fr;
             grid-template-rows: auto 1fr;
           }
+
           .sidebar {
-            max-height: 160px;
+            display: flex;
+            flex-direction: row;
+            overflow-x: auto;
+            overflow-y: hidden;
             border-right: none;
             border-bottom: 1px solid var(--divider-color);
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .conversation {
+            flex: 0 0 auto;
+            width: auto;
+            max-width: 160px;
+            padding: 10px 14px;
+            border-bottom: none;
+            border-inline-end: 1px solid var(--divider-color);
+          }
+
+          .conversation.active {
+            box-shadow: inset 0 -3px 0 var(--primary-color);
+          }
+
+          .conversation-preview {
+            display: none;
+          }
+
+          .conversation-delete {
+            top: 4px;
+            inset-inline-end: 4px;
           }
         }
 
@@ -459,16 +490,24 @@ class MeshMessagesTab extends LitElement {
 
         .bubble-delete {
           position: absolute;
-          top: 2px;
+          top: 4px;
           inset-inline-end: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           border: none;
-          background: none;
+          background: rgba(0, 0, 0, 0.15);
+          border-radius: 50%;
           color: inherit;
           cursor: pointer;
-          font-size: 11px;
-          line-height: 1;
+          width: 22px;
+          height: 22px;
+          padding: 0;
           opacity: 0;
-          padding: 2px;
+        }
+
+        .bubble-delete ha-icon {
+          --mdc-icon-size: 14px;
         }
 
         .bubble:hover .bubble-delete {

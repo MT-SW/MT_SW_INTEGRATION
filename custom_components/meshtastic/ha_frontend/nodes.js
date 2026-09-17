@@ -239,10 +239,16 @@ class MeshNodesTab extends LitElement {
           ${node.is_tracked ? html`<span class="dot" title=${t(this.hass, "nodes.tracked_hint")}></span>` : ""}
           <span class="hex">${node.node_hex}</span>
         </td>
-        <td class="num">${this._formatValue(node.snr, " dB", 1)}</td>
-        <td class="num">${this._formatValue(node.hops_away)}</td>
-        <td class="num">${this._formatValue(node.battery_level, " %")}</td>
-        <td class="num" title=${this._absoluteTime(node.last_heard)}>
+        <td class="num" data-label=${t(this.hass, "nodes.col.snr")}>
+          ${this._formatValue(node.snr, " dB", 1)}
+        </td>
+        <td class="num" data-label=${t(this.hass, "nodes.col.hops")}>
+          ${this._formatValue(node.hops_away)}
+        </td>
+        <td class="num" data-label=${t(this.hass, "nodes.col.battery")}>
+          ${this._formatValue(node.battery_level, " %")}
+        </td>
+        <td class="num" data-label=${t(this.hass, "nodes.col.last_heard")} title=${this._absoluteTime(node.last_heard)}>
           ${this._formatLastHeard(node.last_heard)}
         </td>
       </tr>
@@ -594,10 +600,75 @@ class MeshNodesTab extends LitElement {
           color: var(--text-primary-color, #fff);
         }
 
+        .card {
+          overflow-x: auto;
+        }
+
         table {
           width: 100%;
+          min-width: 560px;
           border-collapse: collapse;
           font-size: 14px;
+        }
+
+        /* Poniżej tej szerokości tabela z pięcioma kolumnami się nie
+           mieści — wiersz zamienia się w kartę: nazwa na całą szerokość,
+           reszta jako małe podpisane wartości zawijane pod spodem. */
+        @media (max-width: 640px) {
+          .card {
+            overflow-x: visible;
+          }
+
+          table {
+            display: block;
+            min-width: 0;
+          }
+
+          thead {
+            display: none;
+          }
+
+          tbody {
+            display: block;
+          }
+
+          tr {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 10px;
+            padding: 10px 12px;
+            border-top: none;
+            border-bottom: 1px solid var(--divider-color);
+          }
+
+          td {
+            padding: 0;
+            border: none;
+            white-space: normal;
+          }
+
+          td.star-cell {
+            width: auto;
+            order: 0;
+          }
+
+          tr td:nth-child(2) {
+            order: 1;
+            flex: 1 1 100%;
+            min-width: 0;
+          }
+
+          td.num {
+            order: 2;
+            font-size: 12px;
+            white-space: nowrap;
+          }
+
+          td.num::before {
+            content: attr(data-label) ": ";
+            color: var(--secondary-text-color);
+          }
         }
 
         th,
@@ -668,6 +739,7 @@ class MeshNodesTab extends LitElement {
           font-size: 12px;
           color: var(--secondary-text-color);
           font-family: var(--code-font-family, monospace);
+          overflow-wrap: anywhere;
         }
 
         .tag {

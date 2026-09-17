@@ -332,10 +332,19 @@ class MeshtasticPanel extends LitElement {
           } catch (err) {
             console.warn("MT_SW: nie udało się pobrać kanałów", err);
           }
+          // Sekcja Użytkownik czyta config.owner, którego nasza komenda
+          // konfiguracji nie zwraca — bramka ma tę informację w gateway
+          // node (patrz ws_gateways), więc czytamy ją stamtąd.
+          const gateway = (this._gateways || []).find((g) => g.entry_id === entryId);
           return {
             local_config: this._toSnake(result.local_config || {}),
             module_config: this._toSnake(result.module_config || {}),
             channels,
+            owner: {
+              longName: gateway?.long_name || "",
+              shortName: gateway?.short_name || "",
+              isLicensed: Boolean(gateway?.is_licensed),
+            },
           };
         }
         case "set_config": {

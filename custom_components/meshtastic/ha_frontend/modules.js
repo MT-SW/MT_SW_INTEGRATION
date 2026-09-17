@@ -922,3 +922,198 @@ class MeshSettingsPaxcounter extends ModuleConfigPanel {
   }
 }
 customElements.define("mesh-settings-paxcounter", MeshSettingsPaxcounter);
+
+/* ══════════════════════════════════════════════════════════
+   MT_SW firmware extensions — nieobecne w oficjalnym Meshtastic,
+   ale zwracane przez firmware MT_SW i widoczne w aplikacji MT_SW_APP.
+   ══════════════════════════════════════════════════════════ */
+
+const MESH_BEACON_REGIONS = [
+  { value: "UNSET", label: PL("None") },
+  { value: "US", label: "US" },
+  { value: "EU_433", label: "EU 433" },
+  { value: "EU_868", label: "EU 868" },
+  { value: "CN", label: "CN" },
+  { value: "JP", label: "JP" },
+  { value: "ANZ", label: "ANZ" },
+  { value: "KR", label: "KR" },
+  { value: "TW", label: "TW" },
+  { value: "RU", label: "RU" },
+  { value: "IN", label: "IN" },
+];
+
+const MESH_BEACON_PRESETS = [
+  { value: "LONG_FAST", label: "LONG_FAST" },
+  { value: "MEDIUM_FAST", label: "MEDIUM_FAST" },
+  { value: "SHORT_FAST", label: "SHORT_FAST" },
+  { value: "SHORT_TURBO", label: "SHORT_TURBO" },
+];
+
+class MeshSettingsTrafficManagement extends ModuleConfigPanel {
+  get _section() { return "traffic_management"; }
+
+  render() {
+    const d = this._draft;
+    return html`
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <h3>${PL("Traffic Management")}</h3>
+          <p>${PL("MT_SW firmware extension for shaping mesh traffic — not part of stock Meshtastic.")}</p>
+        </div>
+        <div class="settings-panel-body">
+          <div class="settings-section">
+            <div class="form-grid">
+              <mesh-number-input
+                .label=${PL("Position Min Interval (secs)")}
+                .value=${d.position_min_interval_secs ?? 0}
+                .min=${0}
+                @change=${(e) => this._updateField("position_min_interval_secs", e.detail.value)}
+              ></mesh-number-input>
+              <mesh-number-input
+                .label=${PL("NodeInfo Direct Response Max Hops")}
+                .value=${d.nodeinfo_direct_response_max_hops ?? 0}
+                .min=${0}
+                @change=${(e) => this._updateField("nodeinfo_direct_response_max_hops", e.detail.value)}
+              ></mesh-number-input>
+              <mesh-number-input
+                .label=${PL("Rate Limit Window (secs)")}
+                .value=${d.rate_limit_window_secs ?? 0}
+                .min=${0}
+                @change=${(e) => this._updateField("rate_limit_window_secs", e.detail.value)}
+              ></mesh-number-input>
+              <mesh-number-input
+                .label=${PL("Rate Limit Max Packets")}
+                .value=${d.rate_limit_max_packets ?? 0}
+                .min=${0}
+                @change=${(e) => this._updateField("rate_limit_max_packets", e.detail.value)}
+              ></mesh-number-input>
+              <mesh-number-input
+                .label=${PL("Unknown Packet Threshold")}
+                .value=${d.unknown_packet_threshold ?? 0}
+                .min=${0}
+                @change=${(e) => this._updateField("unknown_packet_threshold", e.detail.value)}
+              ></mesh-number-input>
+            </div>
+          </div>
+        </div>
+        <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}
+          @save=${this._save} @discard=${this._resetDraft}></mesh-save-bar>
+      </div>
+    `;
+  }
+}
+customElements.define("mesh-settings-traffic-management", MeshSettingsTrafficManagement);
+
+class MeshSettingsMeshBeacon extends ModuleConfigPanel {
+  get _section() { return "mesh_beacon"; }
+
+  render() {
+    const d = this._draft;
+    return html`
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <h3>${PL("Mesh Beacon")}</h3>
+          <p>${PL("MT_SW firmware extension: periodically announces this mesh to nearby networks.")}</p>
+        </div>
+        <div class="settings-panel-body">
+          <div class="info-banner">
+            ${PL("Channel and target offers are configured on the device and are not editable here yet.")}
+          </div>
+          <div class="settings-section">
+            <div class="form-grid">
+              <mesh-text-input
+                .label=${PL("Beacon Message")}
+                .value=${d.broadcast_message || ""}
+                .maxlength=${64}
+                @change=${(e) => this._updateField("broadcast_message", e.detail.value)}
+              ></mesh-text-input>
+              <mesh-number-input
+                .label=${PL("Broadcast Interval (secs)")}
+                .value=${d.broadcast_interval_secs ?? 0}
+                .min=${0}
+                @change=${(e) => this._updateField("broadcast_interval_secs", e.detail.value)}
+              ></mesh-number-input>
+              <mesh-select
+                .label=${PL("Offered Region")}
+                .value=${String(d.broadcast_offer_region || "UNSET")}
+                .options=${MESH_BEACON_REGIONS}
+                @change=${(e) => this._updateField("broadcast_offer_region", e.detail.value)}
+              ></mesh-select>
+              <mesh-select
+                .label=${PL("Offered Preset")}
+                .value=${String(d.broadcast_offer_preset || "LONG_FAST")}
+                .options=${MESH_BEACON_PRESETS}
+                @change=${(e) => this._updateField("broadcast_offer_preset", e.detail.value)}
+              ></mesh-select>
+            </div>
+          </div>
+        </div>
+        <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}
+          @save=${this._save} @discard=${this._resetDraft}></mesh-save-bar>
+      </div>
+    `;
+  }
+}
+customElements.define("mesh-settings-mesh-beacon", MeshSettingsMeshBeacon);
+
+class MeshSettingsSniffer extends ModuleConfigPanel {
+  get _section() { return "nodemodadmin"; }
+
+  render() {
+    const d = this._draft;
+    return html`
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <h3>${PL("Sniffer")}</h3>
+          <p>${PL("MT_SW firmware extension: forward packets overheard but not addressed to this node.")}</p>
+        </div>
+        <div class="settings-panel-body">
+          <div class="info-banner">
+            ${PL("Requires MT_SW-branded firmware and app. Other combinations may hang the node.")}
+          </div>
+          <div class="settings-section">
+            <mesh-toggle
+              .label=${PL("Sniffer Mode")}
+              .description=${PL("Forward locally overheard packets not addressed to this node to the app")}
+              .checked=${d.sniffer_enabled === true}
+              @change=${(e) => this._updateField("sniffer_enabled", e.detail.checked)}
+            ></mesh-toggle>
+          </div>
+        </div>
+        <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}
+          @save=${this._save} @discard=${this._resetDraft}></mesh-save-bar>
+      </div>
+    `;
+  }
+}
+customElements.define("mesh-settings-sniffer", MeshSettingsSniffer);
+
+class MeshSettingsStatusMessage extends ModuleConfigPanel {
+  get _section() { return "statusmessage"; }
+
+  render() {
+    const d = this._draft;
+    return html`
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <h3>${PL("Status Message")}</h3>
+          <p>${PL("MT_SW firmware extension: a custom status text broadcast to the mesh.")}</p>
+        </div>
+        <div class="settings-panel-body">
+          <div class="settings-section">
+            <mesh-text-input
+              .label=${PL("Status Text")}
+              .description=${PL("Shown to other nodes on the node list")}
+              .value=${d.node_status || ""}
+              .maxlength=${40}
+              @change=${(e) => this._updateField("node_status", e.detail.value)}
+            ></mesh-text-input>
+          </div>
+        </div>
+        <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}
+          @save=${this._save} @discard=${this._resetDraft}></mesh-save-bar>
+      </div>
+    `;
+  }
+}
+customElements.define("mesh-settings-status-message", MeshSettingsStatusMessage);

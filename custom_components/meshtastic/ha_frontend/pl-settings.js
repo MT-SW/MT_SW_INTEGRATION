@@ -453,6 +453,92 @@ const PL_STRINGS = {
   "Text Message": "Wiadomość tekstowa",
   "Rotary Encoder": "Enkoder obrotowy",
   "Up/Down/Select": "Góra/Dół/Wybór",
+
+  /* ── nowe pola dodane w tym wydaniu ── */
+  "0-255 (0 = default)": "0-255 (0 = domyślnie)",
+  Dark: "Ciemny",
+  Light: "Jasny",
+  Theme: "Motyw",
+  Screen: "Ekran",
+  "Screen Brightness": "Jasność ekranu",
+  "Screen Timeout (secs)": "Wygaszanie ekranu (s)",
+  "Screen Lock": "Blokada ekranu",
+  "Settings Lock": "Blokada ustawień",
+  "PIN Code": "Kod PIN",
+  "Require a PIN to wake the screen": "Wymagaj PIN-u do wybudzenia ekranu",
+  "Require a PIN to change settings on the device":
+    "Wymagaj PIN-u do zmiany ustawień na urządzeniu",
+  "Alerts Enabled": "Alerty włączone",
+  "Banners Enabled": "Banery włączone",
+  "Analog Clock Face": "Analogowa tarcza zegara",
+  "Compass Mode": "Tryb kompasu",
+  Dynamic: "Dynamiczny",
+  "Fixed Ring": "Stały pierścień",
+  "Freeze Heading": "Zamrożony kurs",
+  "GPS Coordinate Format": "Format współrzędnych GPS",
+  Decimal: "Dziesiętny",
+  "Degrees/Minutes/Seconds": "Stopnie/Minuty/Sekundy",
+  "Open Location Code": "Kod lokalizacji otwartej",
+  "On-device UI: theme, brightness, lock and language (firmware 2.8+).":
+    "Interfejs na ekranie urządzenia: motyw, jasność, blokada i język (firmware 2.8+).",
+
+  "Packet Signature Policy": "Polityka podpisu pakietów",
+  "How strictly this node verifies signed packets (firmware 2.8+)":
+    "Jak rygorystycznie ten węzeł weryfikuje podpisane pakiety (firmware 2.8+)",
+  "Compatible — Accept Unsigned": "Kompatybilny — akceptuj niepodpisane",
+  "Balanced — Prefer Authenticated": "Zrównoważony — preferuj uwierzytelnione",
+  "Strict — Require Authentication": "Ścisły — wymagaj uwierzytelnienia",
+
+  "Traffic Management": "Zarządzanie ruchem",
+  "MT_SW firmware extension for shaping mesh traffic — not part of stock Meshtastic.":
+    "Rozszerzenie firmware MT_SW do kształtowania ruchu sieciowego — nieobecne w oficjalnym Meshtastic.",
+  "Position Min Interval (secs)": "Min. interwał pozycji (s)",
+  "NodeInfo Direct Response Max Hops": "Maks. skoków dla bezpośredniej odpowiedzi NodeInfo",
+  "Rate Limit Window (secs)": "Okno ograniczenia (s)",
+  "Rate Limit Max Packets": "Maks. pakietów w oknie",
+  "Unknown Packet Threshold": "Próg nieznanych pakietów",
+
+  "Mesh Beacon": "Sygnał mesh (beacon)",
+  "MT_SW firmware extension: periodically announces this mesh to nearby networks.":
+    "Rozszerzenie firmware MT_SW: okresowo ogłasza tę sieć mesh pobliskim sieciom.",
+  "Channel and target offers are configured on the device and are not editable here yet.":
+    "Oferowany kanał i cele nadawania konfiguruje się na urządzeniu — nie są jeszcze edytowalne z panelu.",
+  "Beacon Message": "Wiadomość beacona",
+  "Broadcast Interval (secs)": "Interwał nadawania (s)",
+  "Offered Region": "Oferowany region",
+  "Offered Preset": "Oferowany preset",
+
+  Sniffer: "Sniffer",
+  "Sniffer Mode": "Tryb sniffera",
+  "MT_SW firmware extension: forward packets overheard but not addressed to this node.":
+    "Rozszerzenie firmware MT_SW: przekazuj pakiety odsłuchane, ale nieadresowane do tego węzła.",
+  "Forward locally overheard packets not addressed to this node to the app":
+    "Przekazuj do aplikacji lokalnie odsłuchane pakiety nieadresowane do tego węzła",
+  "Requires MT_SW-branded firmware and app. Other combinations may hang the node.":
+    "Wymaga brandowanej aplikacji i firmware MT_SW. Inne kombinacje mogą zawiesić węzeł.",
+
+  "Status Message": "Wiadomość statusu",
+  "MT_SW firmware extension: a custom status text broadcast to the mesh.":
+    "Rozszerzenie firmware MT_SW: własny tekst statusu rozgłaszany do sieci mesh.",
+  "Status Text": "Treść statusu",
+  "Shown to other nodes on the node list": "Widoczny innym węzłom na liście węzłów",
+
+  /* baud rate portu szeregowego — liczby zostają, dopisujemy jednostkę */
+  "110": "110 bps", "300": "300 bps", "600": "600 bps", "1200": "1200 bps",
+  "2400": "2400 bps", "4800": "4800 bps", "9600": "9600 bps", "19200": "19200 bps",
+  "38400": "38400 bps", "57600": "57600 bps", "115200": "115200 bps",
+  "230400": "230400 bps", "460800": "460800 bps", "576000": "576000 bps",
+  "921600": "921600 bps",
+  "1200 bps": "1200 bps", "1300 bps": "1300 bps", "1400 bps": "1400 bps",
+  "1600 bps": "1600 bps", "2400 bps": "2400 bps", "3200 bps": "3200 bps",
+  "700 bps": "700 bps", "700B bps": "700B bps",
+
+  CalTopo: "CalTopo",
+  NMEA: "NMEA",
+  Protobuf: "Protobuf",
+  SSD1306: "SSD1306",
+  SH1106: "SH1106",
+  SH1107: "SH1107",
 };
 
 /** Tłumaczenie napisu z przeniesionej zakładki; brak hasła = angielski. */

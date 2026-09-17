@@ -100,6 +100,7 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         "node_hex": f"!{node_id:08x}" if isinstance(node_id, int) else None,
         "long_name": user.get("longName"),
         "short_name": user.get("shortName"),
+        "is_licensed": bool(user.get("isLicensed")),
         "hw_model": user.get("hwModel"),
         "role": user.get("role"),
         "available": bool(coordinator.last_update_success and node_id is not None),

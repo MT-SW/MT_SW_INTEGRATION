@@ -144,6 +144,35 @@ const BT_PAIRING_MODES = [
   { value: "NO_PIN", label: PL("No PIN") },
 ];
 
+/* ── Security enums (fw 2.8) ── */
+const PACKET_SIGNATURE_POLICIES = [
+  { value: "PACKET_SIGNATURE_POLICY_COMPATIBLE", label: PL("Compatible — Accept Unsigned") },
+  { value: "PACKET_SIGNATURE_POLICY_BALANCED", label: PL("Balanced — Prefer Authenticated") },
+  { value: "PACKET_SIGNATURE_POLICY_STRICT", label: PL("Strict — Require Authentication") },
+];
+
+/* ── Screen (Device UI, fw 2.8) enums ── */
+const SCREEN_THEMES = [
+  { value: "DARK", label: PL("Dark") },
+  { value: "LIGHT", label: PL("Light") },
+  { value: "RED", label: PL("Red") },
+];
+
+const COMPASS_MODES = [
+  { value: "DYNAMIC", label: PL("Dynamic") },
+  { value: "FIXED_RING", label: PL("Fixed Ring") },
+  { value: "FREEZE_HEADING", label: PL("Freeze Heading") },
+];
+
+const GPS_FORMATS = [
+  { value: "DEC", label: PL("Decimal") },
+  { value: "DMS", label: PL("Degrees/Minutes/Seconds") },
+  { value: "UTM", label: "UTM" },
+  { value: "MGRS", label: "MGRS" },
+  { value: "OLC", label: PL("Open Location Code") },
+  { value: "OSGR", label: "OSGR" },
+];
+
 /* ── Navigation items ── */
 const NAV_ITEMS = [
   {
@@ -164,6 +193,7 @@ const NAV_ITEMS = [
       { id: "display", label: PL("Display"), icon: "mdi:monitor" },
       { id: "bluetooth", label: PL("Bluetooth"), icon: "mdi:bluetooth" },
       { id: "security", label: PL("Security"), icon: "mdi:shield-lock" },
+      { id: "screen", label: PL("Screen"), icon: "mdi:monitor-dashboard" },
     ],
   },
   {
@@ -181,6 +211,15 @@ const NAV_ITEMS = [
       { id: "ambient_lighting", label: PL("Ambient Lighting"), icon: "mdi:led-on" },
       { id: "detection_sensor", label: PL("Detection Sensor"), icon: "mdi:motion-sensor" },
       { id: "paxcounter", label: PL("Paxcounter"), icon: "mdi:counter" },
+    ],
+  },
+  {
+    group: "MT_SW",
+    items: [
+      { id: "traffic_management", label: PL("Traffic Management"), icon: "mdi:traffic-light" },
+      { id: "mesh_beacon", label: PL("Mesh Beacon"), icon: "mdi:access-point" },
+      { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
+      { id: "status_message", label: PL("Status Message"), icon: "mdi:message-badge" },
     ],
   },
   {
@@ -323,6 +362,12 @@ export class MeshSettingsTab extends LitElement {
           .wsCommand=${(type, data) => this._ws(type, data)}
           @config-saved=${this._loadConfig}
         ></mesh-settings-user>`;
+      case "screen":
+        return html`<mesh-settings-screen
+          .config=${this._config}
+          .wsCommand=${(type, data) => this._ws(type, data)}
+          @config-saved=${this._loadConfig}
+        ></mesh-settings-screen>`;
       case "device":
         return html`<mesh-settings-device
           .config=${this._config}
@@ -389,6 +434,14 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-detection-sensor .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-detection-sensor>`;
       case "paxcounter":
         return html`<mesh-settings-paxcounter .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-paxcounter>`;
+      case "traffic_management":
+        return html`<mesh-settings-traffic-management .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-traffic-management>`;
+      case "mesh_beacon":
+        return html`<mesh-settings-mesh-beacon .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-mesh-beacon>`;
+      case "sniffer":
+        return html`<mesh-settings-sniffer .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-sniffer>`;
+      case "status_message":
+        return html`<mesh-settings-status-message .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-status-message>`;
       case "actions":
         return html`<mesh-settings-actions
           .wsCommand=${(type, data) => this._ws(type, data)}
@@ -2091,6 +2144,18 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
               @change=${(e) => this._updateField("serial_enabled", !e.detail.checked)}
             ></mesh-toggle>
           </div>
+
+          <div class="settings-section">
+            <div class="form-grid">
+              <mesh-select
+                .label=${PL("Packet Signature Policy")}
+                .description=${PL("How strictly this node verifies signed packets (firmware 2.8+)")}
+                .value=${String(d.packet_signature_policy || "PACKET_SIGNATURE_POLICY_COMPATIBLE")}
+                .options=${PACKET_SIGNATURE_POLICIES}
+                @change=${(e) => this._updateField("packet_signature_policy", e.detail.value)}
+              ></mesh-select>
+            </div>
+          </div>
         </div>
         <mesh-save-bar
           .dirty=${this._dirty}
@@ -2103,3 +2168,103 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
   }
 }
 customElements.define("mesh-settings-security", MeshSettingsSecurity);
+
+/* ── Screen (Device UI) — firmware 2.8 ── */
+class MeshSettingsScreen extends ConfigSectionPanel {
+  get _section() { return "device_ui"; }
+
+  render() {
+    const d = this._draft;
+    return html`
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <h3>${PL("Screen")}</h3>
+          <p>${PL("On-device UI: theme, brightness, lock and language (firmware 2.8+).")}</p>
+        </div>
+        <div class="settings-panel-body">
+          <div class="settings-section">
+            <div class="form-grid">
+              <mesh-select
+                .label=${PL("Theme")}
+                .value=${String(d.theme || "DARK")}
+                .options=${SCREEN_THEMES}
+                @change=${(e) => this._updateField("theme", e.detail.value)}
+              ></mesh-select>
+              <mesh-number-input
+                .label=${PL("Screen Brightness")}
+                .description=${PL("0-255 (0 = default)")}
+                .value=${d.screen_brightness ?? 0}
+                .min=${0} .max=${255}
+                @change=${(e) => this._updateField("screen_brightness", e.detail.value)}
+              ></mesh-number-input>
+              <mesh-number-input
+                .label=${PL("Screen Timeout (secs)")}
+                .value=${d.screen_timeout ?? 0}
+                .min=${0}
+                @change=${(e) => this._updateField("screen_timeout", e.detail.value)}
+              ></mesh-number-input>
+              <mesh-toggle
+                .label=${PL("Screen Lock")}
+                .description=${PL("Require a PIN to wake the screen")}
+                .checked=${d.screen_lock === true}
+                @change=${(e) => this._updateField("screen_lock", e.detail.checked)}
+              ></mesh-toggle>
+              <mesh-toggle
+                .label=${PL("Settings Lock")}
+                .description=${PL("Require a PIN to change settings on the device")}
+                .checked=${d.settings_lock === true}
+                @change=${(e) => this._updateField("settings_lock", e.detail.checked)}
+              ></mesh-toggle>
+              ${d.screen_lock || d.settings_lock ? html`
+                <mesh-number-input
+                  .label=${PL("PIN Code")}
+                  .value=${d.pin_code ?? 0}
+                  .min=${0}
+                  @change=${(e) => this._updateField("pin_code", e.detail.value)}
+                ></mesh-number-input>
+              ` : ""}
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="form-grid">
+              <mesh-toggle
+                .label=${PL("Alerts Enabled")}
+                .checked=${d.alert_enabled !== false}
+                @change=${(e) => this._updateField("alert_enabled", e.detail.checked)}
+              ></mesh-toggle>
+              <mesh-toggle
+                .label=${PL("Banners Enabled")}
+                .checked=${d.banner_enabled !== false}
+                @change=${(e) => this._updateField("banner_enabled", e.detail.checked)}
+              ></mesh-toggle>
+              <mesh-toggle
+                .label=${PL("Analog Clock Face")}
+                .checked=${d.is_clockface_analog === true}
+                @change=${(e) => this._updateField("is_clockface_analog", e.detail.checked)}
+              ></mesh-toggle>
+              <mesh-select
+                .label=${PL("Compass Mode")}
+                .value=${String(d.compass_mode || "DYNAMIC")}
+                .options=${COMPASS_MODES}
+                @change=${(e) => this._updateField("compass_mode", e.detail.value)}
+              ></mesh-select>
+              <mesh-select
+                .label=${PL("GPS Coordinate Format")}
+                .value=${String(d.gps_format || "DEC")}
+                .options=${GPS_FORMATS}
+                @change=${(e) => this._updateField("gps_format", e.detail.value)}
+              ></mesh-select>
+            </div>
+          </div>
+        </div>
+        <mesh-save-bar
+          .dirty=${this._dirty}
+          .saving=${this._saving}
+          @save=${this._save}
+          @discard=${this._resetDraft}
+        ></mesh-save-bar>
+      </div>
+    `;
+  }
+}
+customElements.define("mesh-settings-screen", MeshSettingsScreen);
