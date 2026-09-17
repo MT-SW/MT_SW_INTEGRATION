@@ -3,10 +3,8 @@ import { css } from "./vendor/lit/lit-element.js";
 /* ── Layout & Cards ── */
 export const layoutStyles = css`
   :host {
-    display: flex;
-    flex-direction: column;
+    display: block;
     height: 100%;
-    min-height: 0;
     background: var(--primary-background-color);
     color: var(--primary-text-color);
   }

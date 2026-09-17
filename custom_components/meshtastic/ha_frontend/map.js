@@ -180,11 +180,20 @@ const SPREAD_FULL_ZOOM = 16;
 function spreadOverlapping(map, nodes) {
   const zoom = map.getZoom();
   if (zoom < SPREAD_MIN_ZOOM) {
-    return nodes.map((node) => ({
-      node,
-      latlng: [node.latitude, node.longitude],
-      offset: false,
-    }));
+    // Bez rozsuwania markerów nadal grupujemy, żeby policzyć, ile węzłów
+    // dzieli jeden punkt — ta liczba steruje rozsunięciem etykiet.
+    const groups = new Map();
+    return nodes.map((node) => {
+      const key = `${node.latitude.toFixed(5)},${node.longitude.toFixed(5)}`;
+      const index = groups.get(key) || 0;
+      groups.set(key, index + 1);
+      return {
+        node,
+        latlng: [node.latitude, node.longitude],
+        offset: false,
+        stackIndex: index,
+      };
+    });
   }
   // Od progu do pełnego przybliżenia rozsunięcie narasta płynnie,
   // żeby nie „wystrzeliwało" skokowo przy jednym kliknięciu zoomu.
@@ -210,7 +219,12 @@ function spreadOverlapping(map, nodes) {
   for (const group of groups) {
     if (group.members.length === 1) {
       const only = group.members[0];
-      placed.push({ node: only.node, latlng: [only.node.latitude, only.node.longitude], offset: false });
+      placed.push({
+        node: only.node,
+        latlng: [only.node.latitude, only.node.longitude],
+        offset: false,
+        stackIndex: 0,
+      });
       continue;
     }
     // Promień rośnie z liczbą węzłów, żeby przy kilkunastu nadal dało się je rozróżnić.
@@ -458,11 +472,15 @@ class MeshMapTab extends LitElement {
         )
         .addTo(this._markerLayer);
 
+      // Gdy markery nie są rozsunięte (małe powiększenie), same etykiety
+      // rozsuwamy pionowo — inaczej kilka węzłów w jednym punkcie dawałoby
+      // jeden napis i nie byłoby widać, że jest ich więcej.
+      const stack = placement.offset ? 0 : placement.stackIndex || 0;
       marker.bindTooltip(this.showLabels ? node.short_name || name : name, {
         direction: "top",
         permanent: Boolean(this.showLabels),
         className: "mtsw-node-label",
-        offset: [0, -4],
+        offset: [0, -4 - stack * 14],
       });
     }
 
@@ -607,11 +625,8 @@ class MeshMapTab extends LitElement {
         .mtsw-map {
           display: flex;
           flex-direction: column;
-          /* Wypełniamy to, co zostało po pasku zakładek, zamiast zgadywać
-             wysokość odejmowaniem od 100vh — przy innym motywie albo na
-             telefonie ta stała zawsze wypadała źle. */
-          flex: 1;
-          min-height: 0;
+          height: calc(100vh - 176px);
+          min-height: 320px;
         }
         .mtsw-map .map-toolbar {
           display: flex;

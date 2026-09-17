@@ -15,25 +15,8 @@
  */
 
 export const ENUM_LABELS = {
-  ModemPreset: {
-    LONG_FAST: "Daleki zasięg — Szybko",
-    LONG_SLOW: "Daleki zasięg — Wolno",
-    LONG_MODERATE: "Daleki zasięg — Średnio",
-    LONG_TURBO: "Daleki zasięg — Turbo",
-    VERY_LONG_SLOW: "Bardzo daleki zasięg — Wolno",
-    MEDIUM_FAST: "Średni zasięg — Szybko",
-    MEDIUM_SLOW: "Średni zasięg — Wolno",
-    MEDIUM_TURBO: "Średni zasięg — Turbo",
-    SHORT_FAST: "Krótki zasięg — Szybko",
-    SHORT_SLOW: "Bliski zasięg — Wolno",
-    SHORT_TURBO: "Krótki zasięg — Turbo",
-    NARROW_FAST: "Wąski — Szybki",
-    NARROW_SLOW: "Wąski — Wolny",
-    LITE_FAST: "Lite — Szybki",
-    LITE_SLOW: "Lite — Wolny",
-    TINY_FAST: "Mikro — Szybki",
-    TINY_SLOW: "Mikro — Wolny",
-  },
+  /* Presetów modemu nie tłumaczymy — aplikacja MT_SW_APP też ich nie
+     tłumaczy, a LONG_FAST jest nazwą rozpoznawalną w całym ekosystemie. */
 
   Role: {
     CLIENT: "Klient",
@@ -128,21 +111,12 @@ export const ENUM_LABELS = {
   },
 };
 
-/* Fallback dla wartości bez tłumaczenia.
-   Kody i oznaczenia sprzętu (EU_868, OLED_SSD1306, BAUD_9600) zostawiamy
-   wielkimi literami — "Eu 868" wyglądałoby na literówkę. Resztę zamieniamy
-   na zdanie: SHORT_FAST -> "Short fast". */
+/* Wartość bez tłumaczenia pokazujemy dokładnie tak, jak podaje ją radio.
+   Aplikacja MT_SW_APP robi to samo — LONG_FAST czy EU_868 to nazwy
+   rozpoznawalne w całym ekosystemie i upiększanie ich na "Long fast"
+   tylko utrudniało szukanie odpowiedzi w dokumentacji. */
 function humanize(value) {
-  const raw = String(value);
-  const spaced = raw.replace(/_/g, " ").trim();
-  if (/\d/.test(raw) || spaced.length <= 4) {
-    return spaced;
-  }
-  if (spaced === spaced.toUpperCase()) {
-    const lower = spaced.toLowerCase();
-    return lower.charAt(0).toUpperCase() + lower.slice(1);
-  }
-  return spaced;
+  return String(value);
 }
 
 /** Etykieta wartości wyliczeniowej — tłumaczenie albo czytelny fallback. */
