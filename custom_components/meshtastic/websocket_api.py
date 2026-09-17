@@ -698,6 +698,94 @@ async def ws_delete_conversation(
     connection.send_result(msg["id"], {"deleted": store.delete_conversation(msg["key"])})
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/set_owner",
+        vol.Required("entry_id"): str,
+        vol.Required("long_name"): str,
+        vol.Required("short_name"): str,
+        vol.Optional("is_licensed", default=False): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_owner(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Zmień nazwę długą i krótką bramki."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    try:
+        await entry.runtime_data.client.async_set_owner(
+            msg["long_name"], msg["short_name"], is_licensed=msg["is_licensed"]
+        )
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Zapis właściciela nie powiódł się: %s", err)
+        connection.send_error(msg["id"], "set_owner_failed", str(err))
+        return
+    connection.send_result(msg["id"], {"saved": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/set_channel",
+        vol.Required("entry_id"): str,
+        vol.Required("channel"): dict,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_channel(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Zapisz jeden kanał bramki."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    try:
+        await entry.runtime_data.client.async_set_channel(msg["channel"])
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Zapis kanału nie powiódł się: %s", err)
+        connection.send_error(msg["id"], "set_channel_failed", str(err))
+        return
+    connection.send_result(msg["id"], {"saved": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/device_action",
+        vol.Required("entry_id"): str,
+        vol.Required("action"): vol.In(["reboot", "shutdown", "factory_reset", "nodedb_reset"]),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_device_action(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Restart, wyłączenie, reset fabryczny albo reset bazy węzłów."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    try:
+        await entry.runtime_data.client.async_device_action(msg["action"])
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Akcja urządzenia %s nie powiodła się: %s", msg["action"], err)
+        connection.send_error(msg["id"], "device_action_failed", str(err))
+        return
+    connection.send_result(msg["id"], {"done": True})
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -719,5 +807,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_set_config,
         ws_delete_message,
         ws_delete_conversation,
+        ws_set_owner,
+        ws_set_channel,
+        ws_device_action,
     ):
         websocket_api.async_register_command(hass, handler)

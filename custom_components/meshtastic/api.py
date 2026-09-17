@@ -511,8 +511,28 @@ class MeshtasticApiClient:
             await self._interface.write_config_section(section, values, is_module=is_module)
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
+
+    async def set_node_favorite(self, node_num: int, favorite: bool) -> None:
         try:
             await self._interface.set_node_favorite(node_num, favorite)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def async_set_owner(self, long_name: str, short_name: str, *, is_licensed: bool = False) -> None:
+        try:
+            await self._interface.set_owner(long_name, short_name, is_licensed=is_licensed)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def async_set_channel(self, channel: Mapping[str, Any]) -> None:
+        try:
+            await self._interface.set_channel(channel)
+        except MeshtasticError as e:
+            raise MeshtasticApiClientError(str(e)) from e
+
+    async def async_device_action(self, action: str) -> None:
+        try:
+            await self._interface.device_action(action)
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 

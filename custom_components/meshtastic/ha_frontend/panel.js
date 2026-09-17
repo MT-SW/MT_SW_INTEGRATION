@@ -12,10 +12,20 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
 
 import "./views.js";
-import "./messages.js";
-import "./nodes.js";
-import "./map.js";
+import "./ui-views.js";
 import "./settings.js";
+import {
+  adaptNodes,
+  adaptMessages,
+  adaptChannels,
+  adaptChannelNames,
+  adaptDms,
+  adaptDeliveryStatuses,
+  favoriteIds,
+  ignoredIds,
+  hexId,
+  numId,
+} from "./adapt.js";
 
 const POLL_MS = 10000;
 const TABS = ["radio", "messages", "nodes", "map", "settings"];
@@ -41,6 +51,8 @@ class MeshtasticPanel extends LitElement {
       _messages: { type: Array },
       _timeseries: { type: Array },
       _selectedEntryId: { type: String },
+      _selectedConversation: { type: String },
+      _pending: { type: Object },
       _localConfig: { type: Object },
       _moduleConfig: { type: Object },
       _configError: { type: Boolean },
@@ -58,6 +70,8 @@ class MeshtasticPanel extends LitElement {
     this._messages = [];
     this._timeseries = [];
     this._selectedEntryId = null;
+    this._selectedConversation = null;
+    this._pending = {};
     this._localConfig = null;
     this._moduleConfig = null;
     this._configError = false;
@@ -272,6 +286,234 @@ class MeshtasticPanel extends LitElement {
     this._messages = [...this._messages, incoming];
   }
 
+  /* Mostek do przeniesionej zakładki ustawień.
+   *
+   * Jej komponenty wołają polecenia pod nazwami z projektu źródłowego
+   * (meshtastic_ui/...). Zamiast przepisywać kilka tysięcy linii ich kodu,
+   * tłumaczymy nazwy i kształt odpowiedzi tutaj — pliki settings.js
+   * i modules.js zostają nietknięte, więc kolejne ich wydania da się
+   * podmienić jeden do jednego.
+   */
+  async _settingsWs(type, data = {}) {
+    const entryId = this._primaryEntryId;
+    if (!entryId || !this.hass) {
+      return null;
+    }
+    const name = String(type).replace(/^meshtastic_ui\//, "");
+
+    try {
+      switch (name) {
+        case "get_config": {
+          const result = await this.hass.callWS({ type: "meshtastic/config", entry_id: entryId });
+          this._localConfig = result.local_config || {};
+          this._moduleConfig = result.module_config || {};
+          return result;
+        }
+        case "set_config": {
+          // Grupę rozpoznajemy po tym, w której części konfiguracji leży
+          // sekcja — ich komponenty przekazują samą nazwę sekcji.
+          const group = Object.prototype.hasOwnProperty.call(this._localConfig || {}, data.section)
+            ? "local"
+            : "module";
+          await this.hass.callWS({
+            type: "meshtastic/set_config",
+            entry_id: entryId,
+            group,
+            section: data.section,
+            values: data.values || {},
+          });
+          this._configEntryId = null;
+          return { success: true };
+        }
+        case "set_owner":
+          await this.hass.callWS({
+            type: "meshtastic/set_owner",
+            entry_id: entryId,
+            long_name: data.long_name ?? data.longName ?? "",
+            short_name: data.short_name ?? data.shortName ?? "",
+            is_licensed: Boolean(data.is_licensed ?? data.isLicensed),
+          });
+          return { success: true };
+        case "set_channel":
+          await this.hass.callWS({
+            type: "meshtastic/set_channel",
+            entry_id: entryId,
+            channel: data.channel || data,
+          });
+          return { success: true };
+        case "device_action":
+          await this.hass.callWS({
+            type: "meshtastic/device_action",
+            entry_id: entryId,
+            action: data.action,
+          });
+          return { success: true };
+        case "storage_stats": {
+          // Nasz magazyn trzyma historię wiadomości i telemetrię bramki.
+          const messages = await this.hass.callWS({
+            type: "meshtastic/messages",
+            entry_id: entryId,
+            limit: 2000,
+          });
+          const points = await this.hass.callWS({ type: "meshtastic/timeseries", entry_id: entryId });
+          return {
+            success: true,
+            messages: (messages.messages || []).length,
+            nodes: (this._nodes || []).length,
+            telemetry: (points.points || []).length,
+          };
+        }
+        default:
+          console.warn("MT_SW: nieobsługiwane polecenie ustawień", name);
+          return null;
+      }
+    } catch (err) {
+      console.error("MT_SW: polecenie ustawień nie powiodło się", name, err);
+      return null;
+    }
+  }
+
+  /* ── Obsługa zdarzeń przeniesionych zakładek ──────────────────────────
+     Ich komponenty emitują zdarzenia w swoim własnym słownictwie
+     ("trace-route", "unfavorite", klucze rozmów "ch_0" / "dm_!hex").
+     Tłumaczymy je tutaj na nasze komendy, żeby ui-views.js pozostał
+     nietknięty i dał się podmieniać na nowsze wydania. */
+
+  _conversationId(conversation) {
+    if (!conversation) {
+      return null;
+    }
+    return typeof conversation === "string" ? conversation : conversation.id || null;
+  }
+
+  /* "ch_0" -> { channel_index: 0 }, "dm_!7feb2bc5" -> { node_id: … } */
+  _targetFromConversation(id) {
+    if (!id) {
+      return null;
+    }
+    if (id.startsWith("ch_")) {
+      return { channel_index: Number(id.slice(3)) };
+    }
+    if (id.startsWith("dm_")) {
+      const node = numId(id.slice(3));
+      return node === null ? null : { node_id: node };
+    }
+    return null;
+  }
+
+  /* Klucz rozmowy w postaci używanej przez nasz magazyn. */
+  _storeKeyFromConversation(id) {
+    if (!id) {
+      return null;
+    }
+    if (id.startsWith("ch_")) {
+      return `ch:${id.slice(3)}`;
+    }
+    if (id.startsWith("dm_")) {
+      const node = numId(id.slice(3));
+      return node === null ? null : `dm:${node}`;
+    }
+    return null;
+  }
+
+  _onSelectConversation(event) {
+    this._selectedConversation = this._conversationId(event.detail.conversation);
+  }
+
+  async _onSendMessage(event) {
+    const entryId = this._primaryEntryId;
+    const id = this._conversationId(event.detail.conversation) || this._selectedConversation;
+    const target = this._targetFromConversation(id);
+    if (!entryId || !target || !event.detail.text) {
+      return;
+    }
+    try {
+      await this.hass.callWS({
+        type: "meshtastic/send_message",
+        entry_id: entryId,
+        text: event.detail.text,
+        ...target,
+      });
+    } catch (err) {
+      console.error("MT_SW: wysyłka nie powiodła się", err);
+    }
+  }
+
+  async _onClearConversation(event) {
+    const entryId = this._primaryEntryId;
+    const key = this._storeKeyFromConversation(this._conversationId(event.detail.conversation));
+    if (!entryId || !key) {
+      return;
+    }
+    try {
+      await this.hass.callWS({
+        type: "meshtastic/delete_conversation",
+        entry_id: entryId,
+        key,
+      });
+    } catch (err) {
+      console.error("MT_SW: nie udało się usunąć rozmowy", err);
+    }
+  }
+
+  async _onNodeAction(event) {
+    const entryId = this._primaryEntryId;
+    const { action } = event.detail;
+    const nodeId = numId(event.detail.nodeId);
+    if (!entryId || nodeId === null) {
+      return;
+    }
+
+    // Akcje czysto nawigacyjne nie jadą do radia.
+    if (action === "send-message") {
+      this._selectedConversation = `dm_${hexId(nodeId)}`;
+      this._selectTab("messages");
+      return;
+    }
+    if (action === "view-node") {
+      this._selectTab("nodes");
+      return;
+    }
+
+    const calls = {
+      favorite: { type: "meshtastic/set_favorite", favorite: true },
+      unfavorite: { type: "meshtastic/set_favorite", favorite: false },
+      ignore: { type: "meshtastic/set_ignored", ignored: true },
+      unignore: { type: "meshtastic/set_ignored", ignored: false },
+      remove: { type: "meshtastic/remove_node" },
+      "request-position": { type: "meshtastic/request_position", pending: "pendingPosition" },
+      "request-nodeinfo": { type: "meshtastic/request_neighbors", pending: "pendingNodeinfo" },
+      "trace-route": { type: "meshtastic/traceroute", pending: "pendingTraceroute" },
+    };
+    const call = calls[action];
+    if (!call) {
+      console.warn("MT_SW: nieobsługiwana akcja węzła", action);
+      return;
+    }
+
+    const { type, pending, ...payload } = call;
+    if (pending) {
+      this._pending = { ...this._pending, [pending]: hexId(nodeId) };
+    }
+    try {
+      await this.hass.callWS({ type, entry_id: entryId, node_id: nodeId, ...payload });
+      await this._refresh();
+    } catch (err) {
+      console.error("MT_SW: akcja węzła nie powiodła się", action, err);
+    } finally {
+      if (pending) {
+        const { [pending]: _done, ...rest } = this._pending;
+        this._pending = rest;
+      }
+    }
+  }
+
+  _onWaypointCreate() {
+    // Punkty trasy wymagają dopisania obsługi po stronie api.py — na razie
+    // nie udajemy, że działają.
+    console.warn("MT_SW: tworzenie punktów trasy nie jest jeszcze obsługiwane");
+  }
+
   _selectTab(tab) {
     if (tab === this._activeTab) {
       return;
@@ -284,42 +526,58 @@ class MeshtasticPanel extends LitElement {
 
   _renderTab() {
     const entryId = this._primaryEntryId;
+    const nodes = adaptNodes(this._nodes);
+    const channels = entryId ? this._channels[entryId] || [] : [];
+    const gateway = (this._nodes || []).find((n) => n.is_gateway);
+
     switch (this._activeTab) {
       case "messages":
         return html`<mesh-messages-tab
-          .hass=${this.hass}
-          .entryId=${entryId}
-          .messages=${this._messages}
-          .nodes=${this._nodes}
-          .channels=${entryId ? this._channels[entryId] || [] : []}
-          .selectKey=${this._dmKey || null}
+          .messages=${adaptMessages(this._messages)}
+          .channels=${adaptChannels(channels)}
+          .dms=${adaptDms(this._messages, this._nodes)}
+          .channelNames=${adaptChannelNames(channels)}
+          .selectedConversation=${this._selectedConversation || ""}
+          .deliveryStatuses=${adaptDeliveryStatuses(this._messages)}
+          .nodes=${nodes}
+          .unreadCounts=${{}}
+          @select-conversation=${this._onSelectConversation}
+          @send-message=${this._onSendMessage}
+          @clear-conversation=${this._onClearConversation}
         ></mesh-messages-tab>`;
       case "nodes":
         return html`<mesh-nodes-tab
-          .hass=${this.hass}
-          .entryId=${entryId}
-          .nodes=${this._nodes}
+          .nodes=${nodes}
+          .favoriteNodes=${favoriteIds(this._nodes)}
+          .ignoredNodes=${ignoredIds(this._nodes)}
+          .pendingTraceroute=${this._pending.pendingTraceroute || null}
+          .pendingPosition=${this._pending.pendingPosition || null}
+          .pendingNodeinfo=${this._pending.pendingNodeinfo || null}
+          @node-action=${this._onNodeAction}
         ></mesh-nodes-tab>`;
       case "map":
-        return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
+        return html`<mesh-map-tab
+          .nodes=${nodes}
+          .waypoints=${{}}
+          .traceroutes=${{}}
+          .localNodeId=${gateway ? hexId(gateway.node_id) : ""}
+          @node-action=${this._onNodeAction}
+          @waypoint-create=${this._onWaypointCreate}
+        ></mesh-map-tab>`;
       case "settings":
         return html`<mesh-settings-tab
           .hass=${this.hass}
-          .entryId=${entryId}
-          .schema=${this._configSchema}
-          .localConfig=${this._localConfig}
-          .moduleConfig=${this._moduleConfig}
-          .configError=${this._configError}
+          .wsCommand=${(type, data) => this._settingsWs(type, data)}
         ></mesh-settings-tab>`;
       case "radio":
       default:
-        return html`<mesh-radio-tab
+        return html`<mtsw-radio-tab
           .hass=${this.hass}
           .gateways=${this._gateways}
           .channels=${this._channels}
           .channelsError=${this._channelsError}
           .timeseries=${this._timeseries}
-        ></mesh-radio-tab>`;
+        ></mtsw-radio-tab>`;
     }
   }
 

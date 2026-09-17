@@ -923,7 +923,37 @@ class MeshInterface:
         admin_message.reboot_seconds = seconds
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
-    async def set_node_favorite(self, node_num: int, favorite: bool, node: int | None = None) -> None:
+    async def set_owner(
+        self, long_name: str, short_name: str, *, is_licensed: bool = False, node: int | None = None
+    ) -> None:
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.set_owner.long_name = long_name
+        admin_message.set_owner.short_name = short_name
+        admin_message.set_owner.is_licensed = is_licensed
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
+    async def set_channel(self, channel: Mapping[str, Any], node: int | None = None) -> None:
+        from google.protobuf.json_format import ParseDict  # noqa: PLC0415
+
+        admin_message = admin_pb2.AdminMessage()
+        ParseDict(dict(channel), admin_message.set_channel, ignore_unknown_fields=True)
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
+    async def device_action(self, action: str, node: int | None = None) -> None:
+        """Restart, wyłączenie, reset fabryczny albo reset bazy węzłów."""
+        admin_message = admin_pb2.AdminMessage()
+        if action == "reboot":
+            admin_message.reboot_seconds = 5
+        elif action == "shutdown":
+            admin_message.shutdown_seconds = 5
+        elif action == "factory_reset":
+            admin_message.factory_reset_config = 1
+        elif action == "nodedb_reset":
+            admin_message.nodedb_reset = 1
+        else:
+            msg = f"Unknown device action: {action}"
+            raise ValueError(msg)
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
         admin_message = admin_pb2.AdminMessage()
         if favorite:
             admin_message.set_favorite_node = node_num

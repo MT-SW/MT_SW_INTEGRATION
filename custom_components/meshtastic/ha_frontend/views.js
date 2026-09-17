@@ -399,6 +399,6 @@ class MeshRadioTab extends LitElement {
   }
 }
 
-if (!customElements.get("mesh-radio-tab")) {
-  customElements.define("mesh-radio-tab", MeshRadioTab);
+if (!customElements.get("mtsw-radio-tab")) {
+  customElements.define("mtsw-radio-tab", MeshRadioTab);
 }
