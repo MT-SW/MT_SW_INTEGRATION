@@ -85,7 +85,11 @@ const CHANNEL_ROLES = [
   { value: "SECONDARY", label: PL("Secondary") },
 ];
 
-/* ── Device role enum ── */
+/* ── Device role enum ──
+   ROUTER_CLIENT i REPEATER mają w aktualnym firmware flagę deprecated
+   (sprawdzone w protobuf Config.DeviceConfig.Role) — nie proponujemy
+   ich nowym userom, ale _deviceRoleOptions() dokłada je z powrotem,
+   jeśli to akurat aktualna rola urządzenia. */
 const DEVICE_ROLES = [
   { value: "CLIENT", label: PL("Client") },
   { value: "CLIENT_MUTE", label: PL("Client Mute") },
@@ -93,14 +97,25 @@ const DEVICE_ROLES = [
   { value: "CLIENT_BASE", label: PL("Client Base") },
   { value: "ROUTER", label: PL("Router") },
   { value: "ROUTER_LATE", label: PL("Router Late") },
-  { value: "ROUTER_CLIENT", label: PL("Router Client") },
-  { value: "REPEATER", label: PL("Repeater") },
   { value: "TRACKER", label: PL("Tracker") },
   { value: "SENSOR", label: PL("Sensor") },
   { value: "TAK", label: PL("TAK") },
   { value: "TAK_TRACKER", label: PL("TAK Tracker") },
   { value: "LOST_AND_FOUND", label: PL("Lost and Found") },
 ];
+
+const DEPRECATED_DEVICE_ROLES = [
+  { value: "ROUTER_CLIENT", label: `${PL("Router Client")} (${PL("Deprecated")})` },
+  { value: "REPEATER", label: `${PL("Repeater")} (${PL("Deprecated")})` },
+];
+
+function _deviceRoleOptions(currentValue) {
+  if (!currentValue || DEVICE_ROLES.some((r) => r.value === currentValue)) {
+    return DEVICE_ROLES;
+  }
+  const deprecated = DEPRECATED_DEVICE_ROLES.find((r) => r.value === currentValue);
+  return deprecated ? [...DEVICE_ROLES, deprecated] : DEVICE_ROLES;
+}
 
 const REBROADCAST_MODES = [
   { value: "ALL", label: PL("All") },
@@ -1435,7 +1450,7 @@ class MeshSettingsDevice extends ConfigSectionPanel {
               .label=${PL("Device Role")}
               .description=${PL("Determines how the device behaves on the mesh")}
               .value=${String(d.role || "CLIENT")}
-              .options=${DEVICE_ROLES}
+              .options=${_deviceRoleOptions(d.role)}
               @change=${(e) => this._updateField("role", e.detail.value)}
             ></mesh-select>
 
@@ -2076,6 +2091,17 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
           margin-bottom: 4px;
         }
         .key-section { margin-bottom: 16px; }
+        .key-reveal {
+          margin-inline-start: 8px;
+          font-size: 11px;
+          text-transform: none;
+          font-weight: 500;
+          color: var(--primary-color);
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 0;
+        }
       `,
     ];
   }
@@ -2084,8 +2110,9 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
     const d = this._draft;
 
     // Try to display public key from config
-    const pubKey = this.config?.owner?.publicKey || d.public_key || "";
-    const privKey = d.private_key ? "(set)" : "(not set)";
+    const pubKey = d.public_key || this.config?.owner?.publicKey || "";
+    const privKey = d.private_key || "";
+    const adminKeys = Array.isArray(d.admin_key) ? d.admin_key.filter(Boolean) : [];
 
     return html`
       <div class="settings-panel">
@@ -2103,22 +2130,33 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
               <div class="key-display">${pubKey || "Not available"}</div>
             </div>
             <div class="key-section">
-              <div class="key-label">Private Key</div>
-              <div class="key-display">${privKey}</div>
+              <div class="key-label">
+                Private Key
+                ${privKey
+                  ? html`<button class="key-reveal" @click=${() => { this._showPrivateKey = !this._showPrivateKey; this.requestUpdate(); }}>
+                      ${this._showPrivateKey ? PL("Hide") : PL("Show")}
+                    </button>`
+                  : ""}
+              </div>
+              <div class="key-display">
+                ${privKey ? (this._showPrivateKey ? privKey : "•".repeat(44)) : "Not available"}
+              </div>
+            </div>
+            <div class="key-section">
+              <div class="key-label">${PL("Admin Keys")} (${adminKeys.length})</div>
+              ${adminKeys.length
+                ? adminKeys.map((key) => html`<div class="key-display" style="margin-bottom: 6px;">${key}</div>`)
+                : html`<div class="key-display">${PL("No admin keys configured")}</div>`}
             </div>
           </div>
 
           <div class="settings-section">
-            <div class="form-grid">
-              <mesh-number-input
-                .label=${PL("Admin Channel Index")}
-                .description=${PL("Channel index used for admin messages (0 = primary)")}
-                .value=${d.admin_channel_enabled ?? 0}
-                .min=${0}
-                .max=${7}
-                @change=${(e) => this._updateField("admin_channel_enabled", e.detail.value)}
-              ></mesh-number-input>
-            </div>
+            <mesh-toggle
+              .label=${PL("Admin Channel Enabled")}
+              .description=${PL("Allow configuration via a dedicated admin channel")}
+              .checked=${d.admin_channel_enabled === true}
+              @change=${(e) => this._updateField("admin_channel_enabled", e.detail.checked)}
+            ></mesh-toggle>
           </div>
 
           <div class="settings-section">

@@ -179,6 +179,7 @@ async def ws_channels(
                 "index": channel.get("index", 0),
                 "role": channel.get("role", "DISABLED"),
                 "name": settings.get("name") or "",
+                "psk": settings.get("psk") or "",
                 "has_psk": bool(settings.get("psk")),
                 "uplink_enabled": bool(settings.get("uplinkEnabled")),
                 "downlink_enabled": bool(settings.get("downlinkEnabled")),

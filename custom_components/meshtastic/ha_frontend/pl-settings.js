@@ -198,6 +198,14 @@ const PL_STRINGS = {
   "Admin Channel Index": "Indeks kanału administracyjnego",
   "Channel index used for admin messages (0 = primary)":
     "Indeks kanału dla wiadomości administracyjnych (0 = podstawowy)",
+  "Admin Channel Enabled": "Kanał administracyjny włączony",
+  "Allow configuration via a dedicated admin channel":
+    "Zezwól na konfigurację przez dedykowany kanał administracyjny",
+  "Admin Keys": "Klucze administratora",
+  "No admin keys configured": "Brak skonfigurowanych kluczy administratora",
+  Show: "Pokaż",
+  Hide: "Ukryj",
+  Deprecated: "przestarzałe",
   "Debug Log Enabled": "Dziennik diagnostyczny włączony",
   "Enable verbose debug logging on the device":
     "Włącz szczegółowe logowanie diagnostyczne na urządzeniu",

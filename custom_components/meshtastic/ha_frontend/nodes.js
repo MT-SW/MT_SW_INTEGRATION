@@ -611,63 +611,14 @@ class MeshNodesTab extends LitElement {
           font-size: 14px;
         }
 
-        /* Poniżej tej szerokości tabela z pięcioma kolumnami się nie
-           mieści — wiersz zamienia się w kartę: nazwa na całą szerokość,
-           reszta jako małe podpisane wartości zawijane pod spodem. */
+        /* Jak w oryginalnym meshtastic-ui-ha: tabela zostaje tabelą,
+           tylko przewija się poziomo (.card { overflow-x: auto } już
+           jest domyślne), z mniejszą czcionką i węższym paddingiem. */
         @media (max-width: 640px) {
-          .card {
-            overflow-x: visible;
-          }
-
-          table {
-            display: block;
-            min-width: 0;
-          }
-
-          thead {
-            display: none;
-          }
-
-          tbody {
-            display: block;
-          }
-
-          tr {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 4px 10px;
-            padding: 10px 12px;
-            border-top: none;
-            border-bottom: 1px solid var(--divider-color);
-          }
-
+          th,
           td {
-            padding: 0;
-            border: none;
-            white-space: normal;
-          }
-
-          td.star-cell {
-            width: auto;
-            order: 0;
-          }
-
-          tr td:nth-child(2) {
-            order: 1;
-            flex: 1 1 100%;
-            min-width: 0;
-          }
-
-          td.num {
-            order: 2;
-            font-size: 12px;
-            white-space: nowrap;
-          }
-
-          td.num::before {
-            content: attr(data-label) ": ";
-            color: var(--secondary-text-color);
+            padding: 8px 6px;
+            font-size: 13px;
           }
         }
 

@@ -393,6 +393,14 @@ class MeshMessagesTab extends LitElement {
             border-inline-end: 1px solid var(--divider-color);
           }
 
+          .conversation-name {
+            display: block;
+            max-width: 132px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
           .conversation.active {
             box-shadow: inset 0 -3px 0 var(--primary-color);
           }
