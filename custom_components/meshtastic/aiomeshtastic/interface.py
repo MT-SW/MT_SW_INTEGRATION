@@ -954,6 +954,9 @@ class MeshInterface:
             msg = f"Unknown device action: {action}"
             raise ValueError(msg)
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
+    async def set_node_favorite(self, node_num: int, favorite: bool, node: int | None = None) -> None:
+        """Oznacz węzeł jako ulubiony na urządzeniu (albo zdejmij oznaczenie)."""
         admin_message = admin_pb2.AdminMessage()
         if favorite:
             admin_message.set_favorite_node = node_num
