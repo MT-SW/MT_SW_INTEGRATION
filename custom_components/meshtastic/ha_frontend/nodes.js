@@ -237,6 +237,8 @@ class MeshNodesTab extends LitElement {
           ${node.via_mqtt ? html`<span class="tag mqtt">MQTT</span>` : ""}
           ${node.is_ignored ? html`<span class="tag muted">${t(this.hass, "nodes.ignored")}</span>` : ""}
           ${node.is_tracked ? html`<span class="dot" title=${t(this.hass, "nodes.tracked_hint")}></span>` : ""}
+          ${node.signed ? html`<ha-icon class="row-icon" icon="mdi:shield-check" title=${t(this.hass, "nodes.signed_hint")}></ha-icon>` : ""}
+          ${typeof node.latitude === "number" ? html`<ha-icon class="row-icon" icon="mdi:earth" title=${t(this.hass, "nodes.positioned_hint")}></ha-icon>` : ""}
           <span class="hex">${node.node_hex}</span>
         </td>
         <td class="num" data-label=${t(this.hass, "nodes.col.snr")}>
@@ -715,6 +717,13 @@ class MeshNodesTab extends LitElement {
           margin-inline-start: 6px;
           background: var(--primary-color);
           vertical-align: middle;
+        }
+
+        .row-icon {
+          --mdc-icon-size: 14px;
+          color: var(--secondary-text-color);
+          vertical-align: middle;
+          margin-inline-start: 6px;
         }
 
         .scrim {

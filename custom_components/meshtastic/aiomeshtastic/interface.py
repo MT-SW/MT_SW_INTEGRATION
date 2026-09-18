@@ -742,7 +742,7 @@ class MeshInterface:
        # rx_time == 0 dla pakietów, których radio nie zdołało oznaczyć czasem —
         # zapis nadpisałby dobry lastHeard epoką
         if p.from_id and p.rx_time:
-            await self._node_database_update(p.from_id, lastHeard=p.rx_time, snr=p.rx_snr)
+            await self._node_database_update(p.from_id, lastHeard=p.rx_time, snr=p.rx_snr, signed=p.xeddsa_signed)
 
     def _get_or_create_node(self, node_num: int) -> MutableMapping[str, Any]:
         if node_num == self.BROADCAST_NUM:

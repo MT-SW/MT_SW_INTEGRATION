@@ -63,6 +63,18 @@ const TILE_PRESETS = {
     maxZoom: 20,
     needsKey: true,
   },
+  /* Klasyczny wygląd OSM (Mapnik), ale nie z tile.openstreetmap.org — ich
+     polityka wprost zabrania takiego użycia bez wcześniejszej zgody (zob.
+     operations.osmfoundation.org/policies/tiles). Stadia renderuje z tych
+     samych danych OSM i ma darmowy poziom. */
+  osm_bright: {
+    labelKey: "map.tiles.osm_bright",
+    url: "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png",
+    attribution: `${OSM_ATTR} &copy; <a href="https://stadiamaps.com/">Stadia Maps</a>`,
+    maxZoom: 20,
+    needsKey: true,
+    keyParam: "api_key",
+  },
   custom: {
     labelKey: "map.tiles.custom",
     url: "",
@@ -313,7 +325,8 @@ class MeshMapTab extends LitElement {
       url = preset.darkUrl;
     }
     if (preset.needsKey && this._tiles.key && url) {
-      url += `${url.includes("?") ? "&" : "?"}key=${encodeURIComponent(this._tiles.key)}`;
+      const keyParam = preset.keyParam || "key";
+      url += `${url.includes("?") ? "&" : "?"}${keyParam}=${encodeURIComponent(this._tiles.key)}`;
     }
 
     return {

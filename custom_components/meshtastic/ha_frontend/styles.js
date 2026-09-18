@@ -337,6 +337,7 @@ export const settingsStyles = css`
   .settings-layout {
     display: flex;
     gap: 16px;
+    height: var(--mtsw-tab-height, calc(100vh - 105px));
   }
 
   .settings-nav {

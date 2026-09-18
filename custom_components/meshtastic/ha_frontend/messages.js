@@ -210,16 +210,23 @@ class MeshMessagesTab extends LitElement {
     if (!message.ack) {
       return html`<span class="ack pending" title=${t(this.hass, "messages.ack.pending")}>○</span>`;
     }
+    if (message.ack === "SENT") {
+      return html`<span class="ack sent" title=${t(this.hass, "messages.ack.sent")}>✓</span>`;
+    }
     if (message.ack === "ACK") {
-      return html`<span class="ack ok" title=${t(this.hass, "messages.ack.ok")}>✓</span>`;
+      return html`<span class="ack ok" title=${t(this.hass, "messages.ack.ok")}>✓✓</span>`;
     }
     return html`<span class="ack nak" title=${message.ack_error || t(this.hass, "messages.ack.failed")}>✗</span>`;
   }
 
   _renderMessage(message) {
     const meta = [];
+    const isDm = message.to_node !== null && message.to_node !== undefined;
     if (typeof message.rx_snr === "number") {
       meta.push(`SNR ${message.rx_snr.toFixed(1)} dB`);
+    }
+    if (isDm && typeof message.rx_rssi === "number") {
+      meta.push(`RSSI ${message.rx_rssi} dBm`);
     }
     if (typeof message.hops_away === "number") {
       meta.push(t(this.hass, "messages.hops", { n: message.hops_away }));
@@ -245,6 +252,9 @@ class MeshMessagesTab extends LitElement {
               ${formatRelative(this.hass, message.ts)}
             </span>
             ${meta.length ? html`<span class="dot">·</span><span>${meta.join(" · ")}</span>` : ""}
+            ${message.xeddsa_signed
+              ? html`<ha-icon class="signed-icon" icon="mdi:shield-check" title=${t(this.hass, "messages.signed")}></ha-icon>`
+              : ""}
             ${this._renderAck(message)}
           </div>
         </div>
@@ -588,8 +598,23 @@ class MeshMessagesTab extends LitElement {
           font-weight: 700;
         }
 
+        .ack.ok {
+          color: var(--success-color, #4caf50);
+        }
+
+        .ack.sent {
+          color: var(--secondary-text-color);
+        }
+
         .ack.nak {
           color: var(--error-color, #db4437);
+        }
+
+        .signed-icon {
+          --mdc-icon-size: 14px;
+          color: var(--secondary-text-color);
+          vertical-align: middle;
+          margin-inline-start: 4px;
         }
 
         .composer {

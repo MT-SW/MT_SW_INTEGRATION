@@ -258,6 +258,7 @@ async def ws_nodes(
                 "channel": _as_int(node.get("channel")),
                 "last_heard": node.get("lastHeard"),
                 "snr": _as_float(node.get("snr")),
+                "signed": bool(node.get("signed")),
                 "hops_away": _as_int(node.get("hopsAway")),
                 "via_mqtt": bool(node.get("viaMqtt")),
                 "latitude": position.get("latitude"),

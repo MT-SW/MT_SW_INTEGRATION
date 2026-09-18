@@ -209,7 +209,7 @@ class PanelStore:
             "emoji": data.get("emoji") or 0,
             "ack": None,
         }
-        for key in ("rx_snr", "rx_rssi", "hops_away"):
+        for key in ("rx_snr", "rx_rssi", "hops_away", "xeddsa_signed"):
             if key in event.data:
                 message[key] = event.data[key]
         return message

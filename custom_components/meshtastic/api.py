@@ -360,9 +360,16 @@ class MeshtasticApiClient:
 
         gateway_node_id = self.get_own_node()["num"]
         from_node_id = packet.from_id or 0
-        # pomiń niejawny ACK od własnej bramy — interesują nas tylko
-        # potwierdzenia faktycznie nadesłane przez węzeł docelowy
-        if from_node_id == gateway_node_id:
+        to_node_id = packet.to_id or 0
+        is_broadcast = to_node_id == MeshInterface.BROADCAST_NUM
+        # Dla wiadomości do konkretnego węzła interesuje nas tylko potwierdzenie
+        # faktycznie nadesłane przez węzeł docelowy — niejawny ACK od własnej
+        # bramy tu pomijamy. Przy broadcastcie/kanale nie ma jednak węzła
+        # docelowego, który mógłby to potwierdzić — jedyny sygnał, jaki
+        # kiedykolwiek dostaniemy, to właśnie ten niejawny ACK od bramy,
+        # oznaczający że pakiet trafił na eter. Traktujemy go wtedy jako
+        # "wysłano do sieci", zamiast pomijać.
+        if from_node_id == gateway_node_id and not is_broadcast:
             return
 
         error = routing.error_reason
@@ -370,8 +377,13 @@ class MeshtasticApiClient:
             "message_id": packet.mesh_packet.id if packet.mesh_packet else 0,
             "request_id": packet.data.request_id if packet.data else 0,
             "from_node": from_node_id,
-            "to_node": packet.to_id or 0,
-            "ack_type": "ACK" if error == mesh_pb2.Routing.Error.NONE else "NAK",
+            "to_node": to_node_id,
+            "ack_type": (
+                "SENT"
+                if is_broadcast and from_node_id == gateway_node_id and error == mesh_pb2.Routing.Error.NONE
+                else "ACK" if error == mesh_pb2.Routing.Error.NONE
+                else "NAK"
+            ),
         }
         if error != mesh_pb2.Routing.Error.NONE:
             event_data["error"] = mesh_pb2.Routing.Error.Name(error)
@@ -404,6 +416,7 @@ class MeshtasticApiClient:
         if packet.mesh_packet:
             event_data["rx_snr"] = packet.mesh_packet.rx_snr
             event_data["rx_rssi"] = packet.mesh_packet.rx_rssi
+            event_data["xeddsa_signed"] = packet.mesh_packet.xeddsa_signed
         event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = {"name": node.long_name}
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TEXT_MESSAGE, event_data)
 
