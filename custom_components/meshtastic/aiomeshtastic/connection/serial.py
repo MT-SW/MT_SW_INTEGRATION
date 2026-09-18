@@ -85,8 +85,20 @@ class SerialConnection(StreamingClientTransport, asyncio.Protocol):
 
     async def _disconnect(self) -> None:
         if self._writer:
+            serial_port = cast("serial_asyncio.SerialTransport", self._writer.transport).serial
+            try:
+                fd = serial_port.fileno()
+            except serial.SerialException:
+                fd = None
             self._writer.close()
-            cast("serial_asyncio.SerialTransport", self._writer.transport).serial.close()
+            if fd is not None:
+                # transport.close() keeps the writer registered while data is still pending. Closing the port
+                # under it leaves a stale entry for this fd in the event loop; when the next connection gets the
+                # same fd number, add_reader() fails with FileNotFoundError and the reader never starts.
+                loop = asyncio.get_running_loop()
+                loop.remove_reader(fd)
+                loop.remove_writer(fd)
+            serial_port.close()
             self._writer = None
             self._reader = None
 

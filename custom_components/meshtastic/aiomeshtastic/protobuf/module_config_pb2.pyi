@@ -1597,30 +1597,6 @@ class ModuleConfig(_message.Message):
         def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
         def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    @_typing.final
-    class NodeModAdminConfig(_message.Message):
-        """
-        Sniffer mode config (MT-SW)
-        """
-
-        DESCRIPTOR: _descriptor.Descriptor
-
-        SNIFFER_ENABLED_FIELD_NUMBER: _builtins.int
-        sniffer_enabled: _builtins.bool
-        """
-        sniffer enabled
-        """
-        def __init__(
-            self,
-            *,
-            sniffer_enabled: _builtins.bool = ...,
-        ) -> None: ...
-        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-        _ClearFieldArgType: _TypeAlias = _typing.Literal["sniffer_enabled", b"sniffer_enabled"]  # noqa: Y015
-        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-        def WhichOneof(self, oneof_group: _Never) -> None: ...
-
     MQTT_FIELD_NUMBER: _builtins.int
     SERIAL_FIELD_NUMBER: _builtins.int
     EXTERNAL_NOTIFICATION_FIELD_NUMBER: _builtins.int
@@ -1638,7 +1614,6 @@ class ModuleConfig(_message.Message):
     TRAFFIC_MANAGEMENT_FIELD_NUMBER: _builtins.int
     TAK_FIELD_NUMBER: _builtins.int
     MESH_BEACON_FIELD_NUMBER: _builtins.int
-    NODEMODADMIN_FIELD_NUMBER: _builtins.int
     @_builtins.property
     def mqtt(self) -> Global___ModuleConfig.MQTTConfig:
         """
@@ -1741,12 +1716,6 @@ class ModuleConfig(_message.Message):
         MeshBeacon module config
         """
 
-    @_builtins.property
-    def nodemodadmin(self) -> Global___ModuleConfig.NodeModAdminConfig:
-        """
-        Sniffer mode (MT-SW)
-        """
-
     def __init__(
         self,
         *,
@@ -1767,13 +1736,12 @@ class ModuleConfig(_message.Message):
         traffic_management: Global___ModuleConfig.TrafficManagementConfig | None = ...,
         tak: Global___ModuleConfig.TAKConfig | None = ...,
         mesh_beacon: Global___ModuleConfig.MeshBeaconConfig | None = ...,
-        nodemodadmin: Global___ModuleConfig.NodeModAdminConfig | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["ambient_lighting", b"ambient_lighting", "audio", b"audio", "canned_message", b"canned_message", "detection_sensor", b"detection_sensor", "external_notification", b"external_notification", "mesh_beacon", b"mesh_beacon", "mqtt", b"mqtt", "neighbor_info", b"neighbor_info", "nodemodadmin", b"nodemodadmin", "paxcounter", b"paxcounter", "payload_variant", b"payload_variant", "range_test", b"range_test", "remote_hardware", b"remote_hardware", "serial", b"serial", "statusmessage", b"statusmessage", "store_forward", b"store_forward", "tak", b"tak", "telemetry", b"telemetry", "traffic_management", b"traffic_management"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["ambient_lighting", b"ambient_lighting", "audio", b"audio", "canned_message", b"canned_message", "detection_sensor", b"detection_sensor", "external_notification", b"external_notification", "mesh_beacon", b"mesh_beacon", "mqtt", b"mqtt", "neighbor_info", b"neighbor_info", "paxcounter", b"paxcounter", "payload_variant", b"payload_variant", "range_test", b"range_test", "remote_hardware", b"remote_hardware", "serial", b"serial", "statusmessage", b"statusmessage", "store_forward", b"store_forward", "tak", b"tak", "telemetry", b"telemetry", "traffic_management", b"traffic_management"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["ambient_lighting", b"ambient_lighting", "audio", b"audio", "canned_message", b"canned_message", "detection_sensor", b"detection_sensor", "external_notification", b"external_notification", "mesh_beacon", b"mesh_beacon", "mqtt", b"mqtt", "neighbor_info", b"neighbor_info", "nodemodadmin", b"nodemodadmin", "paxcounter", b"paxcounter", "payload_variant", b"payload_variant", "range_test", b"range_test", "remote_hardware", b"remote_hardware", "serial", b"serial", "statusmessage", b"statusmessage", "store_forward", b"store_forward", "tak", b"tak", "telemetry", b"telemetry", "traffic_management", b"traffic_management"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["ambient_lighting", b"ambient_lighting", "audio", b"audio", "canned_message", b"canned_message", "detection_sensor", b"detection_sensor", "external_notification", b"external_notification", "mesh_beacon", b"mesh_beacon", "mqtt", b"mqtt", "neighbor_info", b"neighbor_info", "paxcounter", b"paxcounter", "payload_variant", b"payload_variant", "range_test", b"range_test", "remote_hardware", b"remote_hardware", "serial", b"serial", "statusmessage", b"statusmessage", "store_forward", b"store_forward", "tak", b"tak", "telemetry", b"telemetry", "traffic_management", b"traffic_management"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType_payload_variant: _TypeAlias = _typing.Literal["mqtt", "serial", "external_notification", "store_forward", "range_test", "telemetry", "canned_message", "audio", "remote_hardware", "neighbor_info", "ambient_lighting", "detection_sensor", "paxcounter", "statusmessage", "traffic_management", "tak", "mesh_beacon", "nodemodadmin"]  # noqa: Y015
+    _WhichOneofReturnType_payload_variant: _TypeAlias = _typing.Literal["mqtt", "serial", "external_notification", "store_forward", "range_test", "telemetry", "canned_message", "audio", "remote_hardware", "neighbor_info", "ambient_lighting", "detection_sensor", "paxcounter", "statusmessage", "traffic_management", "tak", "mesh_beacon"]  # noqa: Y015
     _WhichOneofArgType_payload_variant: _TypeAlias = _typing.Literal["payload_variant", b"payload_variant"]  # noqa: Y015
     def WhichOneof(self, oneof_group: _WhichOneofArgType_payload_variant) -> _WhichOneofReturnType_payload_variant | None: ...
 

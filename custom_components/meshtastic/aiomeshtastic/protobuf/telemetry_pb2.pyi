@@ -1856,47 +1856,6 @@ class LocalStats(_message.Message):
 Global___LocalStats: _TypeAlias = LocalStats  # noqa: Y015
 
 @_typing.final
-class LocalStatsExtended(_message.Message):
-    """
-    Extended local device statistics (custom firmware)
-    """
-
-    DESCRIPTOR: _descriptor.Descriptor
-
-    MEMORY_FREE_CHEAP_FIELD_NUMBER: _builtins.int
-    MEMORY_TOTAL_FIELD_NUMBER: _builtins.int
-    CPU_USAGE_PERCENT_FIELD_NUMBER: _builtins.int
-    FLASH_USED_BYTES_FIELD_NUMBER: _builtins.int
-    FLASH_TOTAL_BYTES_FIELD_NUMBER: _builtins.int
-    MEMORY_PSRAM_FREE_FIELD_NUMBER: _builtins.int
-    MEMORY_PSRAM_TOTAL_FIELD_NUMBER: _builtins.int
-    memory_free_cheap: _builtins.int
-    memory_total: _builtins.int
-    cpu_usage_percent: _builtins.int
-    flash_used_bytes: _builtins.int
-    flash_total_bytes: _builtins.int
-    memory_psram_free: _builtins.int
-    memory_psram_total: _builtins.int
-    def __init__(
-        self,
-        *,
-        memory_free_cheap: _builtins.int = ...,
-        memory_total: _builtins.int = ...,
-        cpu_usage_percent: _builtins.int = ...,
-        flash_used_bytes: _builtins.int = ...,
-        flash_total_bytes: _builtins.int = ...,
-        memory_psram_free: _builtins.int = ...,
-        memory_psram_total: _builtins.int = ...,
-    ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["cpu_usage_percent", b"cpu_usage_percent", "flash_total_bytes", b"flash_total_bytes", "flash_used_bytes", b"flash_used_bytes", "memory_free_cheap", b"memory_free_cheap", "memory_psram_free", b"memory_psram_free", "memory_psram_total", b"memory_psram_total", "memory_total", b"memory_total"]  # noqa: Y015
-    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
-
-Global___LocalStatsExtended: _TypeAlias = LocalStatsExtended  # noqa: Y015
-
-@_typing.final
 class TrafficManagementStats(_message.Message):
     """
     Traffic management statistics for mesh network optimization
@@ -2111,7 +2070,6 @@ class Telemetry(_message.Message):
     HOST_METRICS_FIELD_NUMBER: _builtins.int
     TRAFFIC_MANAGEMENT_STATS_FIELD_NUMBER: _builtins.int
     SOIL_WATER_METRICS_FIELD_NUMBER: _builtins.int
-    LOCAL_STATS_EXTENDED_FIELD_NUMBER: _builtins.int
     time: _builtins.int
     """
     Seconds since 1970 - or 0 for unknown/unset
@@ -2170,12 +2128,6 @@ class Telemetry(_message.Message):
         Soil and water probe metrics
         """
 
-    @_builtins.property
-    def local_stats_extended(self) -> Global___LocalStatsExtended:
-        """
-        Extended local device statistics (custom firmware)
-        """
-
     def __init__(
         self,
         *,
@@ -2189,13 +2141,12 @@ class Telemetry(_message.Message):
         host_metrics: Global___HostMetrics | None = ...,
         traffic_management_stats: Global___TrafficManagementStats | None = ...,
         soil_water_metrics: Global___SoilWaterMetrics | None = ...,
-        local_stats_extended: Global___LocalStatsExtended | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["air_quality_metrics", b"air_quality_metrics", "device_metrics", b"device_metrics", "environment_metrics", b"environment_metrics", "health_metrics", b"health_metrics", "host_metrics", b"host_metrics", "local_stats", b"local_stats", "local_stats_extended", b"local_stats_extended", "power_metrics", b"power_metrics", "soil_water_metrics", b"soil_water_metrics", "traffic_management_stats", b"traffic_management_stats", "variant", b"variant"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["air_quality_metrics", b"air_quality_metrics", "device_metrics", b"device_metrics", "environment_metrics", b"environment_metrics", "health_metrics", b"health_metrics", "host_metrics", b"host_metrics", "local_stats", b"local_stats", "power_metrics", b"power_metrics", "soil_water_metrics", b"soil_water_metrics", "traffic_management_stats", b"traffic_management_stats", "variant", b"variant"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["air_quality_metrics", b"air_quality_metrics", "device_metrics", b"device_metrics", "environment_metrics", b"environment_metrics", "health_metrics", b"health_metrics", "host_metrics", b"host_metrics", "local_stats", b"local_stats", "local_stats_extended", b"local_stats_extended", "power_metrics", b"power_metrics", "soil_water_metrics", b"soil_water_metrics", "time", b"time", "traffic_management_stats", b"traffic_management_stats", "variant", b"variant"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["air_quality_metrics", b"air_quality_metrics", "device_metrics", b"device_metrics", "environment_metrics", b"environment_metrics", "health_metrics", b"health_metrics", "host_metrics", b"host_metrics", "local_stats", b"local_stats", "power_metrics", b"power_metrics", "soil_water_metrics", b"soil_water_metrics", "time", b"time", "traffic_management_stats", b"traffic_management_stats", "variant", b"variant"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType_variant: _TypeAlias = _typing.Literal["device_metrics", "environment_metrics", "air_quality_metrics", "power_metrics", "local_stats", "health_metrics", "host_metrics", "traffic_management_stats", "soil_water_metrics", "local_stats_extended"]  # noqa: Y015
+    _WhichOneofReturnType_variant: _TypeAlias = _typing.Literal["device_metrics", "environment_metrics", "air_quality_metrics", "power_metrics", "local_stats", "health_metrics", "host_metrics", "traffic_management_stats", "soil_water_metrics"]  # noqa: Y015
     _WhichOneofArgType_variant: _TypeAlias = _typing.Literal["variant", b"variant"]  # noqa: Y015
     def WhichOneof(self, oneof_group: _WhichOneofArgType_variant) -> _WhichOneofReturnType_variant | None: ...
 
@@ -2234,9 +2185,9 @@ class Nau7802Config(_message.Message):
 Global___Nau7802Config: _TypeAlias = Nau7802Config  # noqa: Y015
 
 @_typing.final
-class AS3935Config(_message.Message):
+class AS3935State(_message.Message):
     """
-    AS3935 lightning sensor configuration, for saving to flash
+    AS3935 lightning sensor state, for saving to flash
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -2258,7 +2209,7 @@ class AS3935Config(_message.Message):
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___AS3935Config: _TypeAlias = AS3935Config  # noqa: Y015
+Global___AS3935State: _TypeAlias = AS3935State  # noqa: Y015
 
 @_typing.final
 class SEN5XState(_message.Message):

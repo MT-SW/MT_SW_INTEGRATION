@@ -260,10 +260,6 @@ class _PortNumEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_PortNum.Value
     ATAK Forwarder Module https://github.com/paulmandal/atak-forwarder
     ENCODING: libcotshrink
     """
-    ON_DEMAND_APP: _PortNum.ValueType  # 354
-    """
-    OnDemand diagnostics/query protocol (MT-SW)
-    """
     MAX: _PortNum.ValueType  # 511
     """
     Currently we limit port nums to no higher than this value
@@ -522,10 +518,6 @@ ATAK_FORWARDER: PortNum.ValueType  # 257
 """
 ATAK Forwarder Module https://github.com/paulmandal/atak-forwarder
 ENCODING: libcotshrink
-"""
-ON_DEMAND_APP: PortNum.ValueType  # 354
-"""
-OnDemand diagnostics/query protocol (MT-SW)
 """
 MAX: PortNum.ValueType  # 511
 """

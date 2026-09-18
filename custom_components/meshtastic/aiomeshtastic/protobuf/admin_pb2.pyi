@@ -245,10 +245,6 @@ class AdminMessage(_message.Message):
         """
         Mesh Beacon module config
         """
-        NODEMODADMIN_CONFIG: AdminMessage._ModuleConfigType.ValueType  # 17
-        """
-        Sniffer mode config (MT-SW)
-        """
 
     class ModuleConfigType(_ModuleConfigType, metaclass=_ModuleConfigTypeEnumTypeWrapper):
         """
@@ -322,10 +318,6 @@ class AdminMessage(_message.Message):
     MESHBEACON_CONFIG: AdminMessage.ModuleConfigType.ValueType  # 16
     """
     Mesh Beacon module config
-    """
-    NODEMODADMIN_CONFIG: AdminMessage.ModuleConfigType.ValueType  # 17
-    """
-    Sniffer mode config (MT-SW)
     """
 
     class _BackupLocation:

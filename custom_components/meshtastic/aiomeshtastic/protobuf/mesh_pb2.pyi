@@ -643,6 +643,10 @@ class _HardwareModelEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Hardwar
     """
     Lilygo T-CONNECT PRO
     """
+    AXIOMETA_GENESIS_MINI: _HardwareModel.ValueType  # 148
+    """
+    Axiometa Axiometa Genesis Mini
+    """
     PRIVATE_HW: _HardwareModel.ValueType  # 255
     """
     ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1263,6 +1267,10 @@ Seeed Studio MeshPager X2
 T_CONNECT_PRO: HardwareModel.ValueType  # 147
 """
 Lilygo T-CONNECT PRO
+"""
+AXIOMETA_GENESIS_MINI: HardwareModel.ValueType  # 148
+"""
+Axiometa Axiometa Genesis Mini
 """
 PRIVATE_HW: HardwareModel.ValueType  # 255
 """
@@ -2338,10 +2346,38 @@ class Routing(_message.Message):
     ROUTE_REQUEST_FIELD_NUMBER: _builtins.int
     ROUTE_REPLY_FIELD_NUMBER: _builtins.int
     ERROR_REASON_FIELD_NUMBER: _builtins.int
+    ACK_PROOF_FIELD_NUMBER: _builtins.int
     error_reason: Global___Routing.Error.ValueType
     """
     A failure in delivering a message (usually used for routing control messages, but might be provided
     in addition to ack.fail_id to provide details on the type of failure).
+    """
+    ack_proof: _builtins.bytes
+    """
+    Optional proof that this ack/nak was produced by the node that actually received the packet
+    identified by Data.request_id, rather than by anyone holding the channel key.
+
+    Explicit acks are usually sent on the channel, and channel traffic is encrypted but not
+    authenticated, so such an ack can be forged by any listener holding the PSK. When the
+    acknowledged packet WAS PKI encrypted, the two endpoints already share a Curve25519 secret, so
+    the receiver can prove receipt cheaply rather than signing the ack:
+
+      ack_proof = HMAC-SHA256(shared_key,
+                              "ack" | LE32(from) | LE32(to) | LE32(request_id) | routing)[0..8)
+
+    where shared_key is the same SHA256(X25519(sender_private, receiver_public)) used for PKI
+    packet encryption, and `routing` is this encoded Routing message without the ack_proof field.
+
+    Each input is load-bearing. request_id stops a captured proof being replayed against a
+    different outstanding packet. The Routing bytes stop a bit-flip turning a proven success into a
+    failure: an ack and a nak for one packet otherwise share every other input, and channel
+    encryption is CTR with no integrity check. Integers are little-endian so the value is a
+    property of the protocol rather than of the host that computed it.
+
+    Unset when no pairwise key is available, including the PKI_UNKNOWN_PUBKEY and NO_CHANNEL naks,
+    which are emitted precisely because the packet could not be decrypted. Receivers that do not
+    understand this field ignore it. It does not replace xeddsa_signature, which remains the only
+    option for traffic with no pairwise key and the only proof a third party can check.
     """
     @_builtins.property
     def route_request(self) -> Global___RouteDiscovery:
@@ -2361,10 +2397,11 @@ class Routing(_message.Message):
         route_request: Global___RouteDiscovery | None = ...,
         route_reply: Global___RouteDiscovery | None = ...,
         error_reason: Global___Routing.Error.ValueType = ...,
+        ack_proof: _builtins.bytes = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["error_reason", b"error_reason", "route_reply", b"route_reply", "route_request", b"route_request", "variant", b"variant"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["error_reason", b"error_reason", "route_reply", b"route_reply", "route_request", b"route_request", "variant", b"variant"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["ack_proof", b"ack_proof", "error_reason", b"error_reason", "route_reply", b"route_reply", "route_request", b"route_request", "variant", b"variant"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType_variant: _TypeAlias = _typing.Literal["route_request", "route_reply", "error_reason"]  # noqa: Y015
     _WhichOneofArgType_variant: _TypeAlias = _typing.Literal["variant", b"variant"]  # noqa: Y015
@@ -3570,14 +3607,20 @@ class NodeInfo(_message.Message):
     """
     heard_on_current_lora: _builtins.bool
     """
-    True if we have heard this node over RF since our current LoRa
-    configuration took effect. Cleared for every node whenever the region,
-    modem preset (or the custom bandwidth/spread factor/coding rate when
-    use_preset is false), override_frequency, channel_num or the primary
-    channel name changes - the frequency slot is derived from that name.
-    Not set for nodes heard over MQTT, which reach us over the internet
-    rather than over our own radio - see via_mqtt.
-    LSB 11 of the bitfield
+    True if we have heard this node over RF on the LoRa configuration the
+    radio is using right now. Derived on the device rather than stored: each
+    node records the frequency slot it was last heard on, and this reports
+    whether that slot matches the one the radio is currently committed to.
+    The slot covers the region, modem preset (or the custom bandwidth/spread
+    factor/coding rate when use_preset is false), override_frequency,
+    channel_num and the primary channel name.
+    Because it is derived, leaving a configuration and returning to it
+    restores the previous answers, so a client sweeping through presets to
+    listen for traffic does not disturb them.
+    Not set for nodes heard only over MQTT, which reach us over the internet
+    rather than over our own radio - see via_mqtt - nor for nodes added as a
+    shared contact, which have never been heard over RF at all.
+    Derived from LSB 11 and bits 12..23 of NodeInfoLite.bitfield.
     """
     @_builtins.property
     def user(self) -> Global___User:
