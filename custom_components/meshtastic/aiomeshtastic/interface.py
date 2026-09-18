@@ -576,7 +576,13 @@ class MeshInterface:
         elif packet.HasField("metadata"):
             self._connected_node_metadata = packet.metadata
         elif packet.HasField("channel"):
-            self._connected_node_channels.append(packet.channel)
+            # A warm reconnect (minimal config) re-sends every channel - replace by index instead of
+            # appending duplicates, other code uses the list position as the channel index.
+            channels = self._connected_node_channels
+            if packet.channel.index < len(channels):
+                channels[packet.channel.index] = packet.channel
+            else:
+                channels.append(packet.channel)
         elif packet.HasField("queueStatus"):
             self._connected_node_queue_status = packet.queueStatus
         elif packet.HasField("log_record"):
