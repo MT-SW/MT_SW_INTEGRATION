@@ -797,6 +797,25 @@ async def ws_set_channel(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{WS_PREFIX}/node_history",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Required("kind"): vol.In(
+            ["neighbor_count", "position", "device_metrics", "environment_metrics", "power_metrics"]
+        ),
+    }
+)
+@websocket_api.async_response
+async def ws_node_history(hass, connection, msg) -> None:
+    """Zwróć zapisaną historię jednej serii dla węzła (telemetria, pozycja, sąsiedzi)."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], {"points": store.node_history(msg["node_id"], msg["kind"])})
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{WS_PREFIX}/device_action",
         vol.Required("entry_id"): str,
         vol.Required("action"): vol.In(["reboot", "shutdown", "factory_reset", "nodedb_reset"]),
@@ -842,6 +861,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_request_neighbors,
         ws_traceroute,
         ws_traceroute_history,
+        ws_node_history,
         ws_set_config,
         ws_delete_message,
         ws_delete_conversation,

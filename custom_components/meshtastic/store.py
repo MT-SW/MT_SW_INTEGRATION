@@ -27,9 +27,13 @@ from .api import (
     ATTR_EVENT_MESHTASTIC_API_DATA,
     ATTR_EVENT_MESHTASTIC_API_NODE,
     ATTR_EVENT_MESHTASTIC_API_NODE_INFO,
+    ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE,
     EVENT_MESHTASTIC_API_NEIGHBOR_INFO,
+    EVENT_MESHTASTIC_API_POSITION,
+    EVENT_MESHTASTIC_API_TELEMETRY,
     EVENT_MESHTASTIC_API_TEXT_MESSAGE,
     EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT,
+    EventMeshtasticApiTelemetryType,
 )
 from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER
 
@@ -46,6 +50,7 @@ SAVE_DELAY = 10
 MAX_MESSAGES = 2000
 MAX_TIMESERIES_POINTS = 1500
 MAX_TRACEROUTES_PER_NODE = 10
+MAX_NODE_HISTORY_POINTS = 300
 # Próbkujemy z koordynatora, nie ze zdarzeń telemetrii — dzięki temu wykresy
 # rosną także wtedy, gdy nikt nie ma otwartego panelu.
 TIMESERIES_SAMPLE_SECONDS = 60
@@ -73,6 +78,9 @@ class PanelStore:
         # czy ostatnia wiadomość od węzła była podpisana.
         self._node_state: dict[str, dict[str, Any]] = {}
         self._traceroutes: dict[str, list[dict[str, Any]]] = {}
+        # Historia w czasie per węzeł: neighbor_count, position,
+        # device_metrics, environment_metrics, power_metrics.
+        self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
         self._listeners: list[Callable[[str, dict[str, Any]], None]] = []
         self._unsubscribes: list[Callable[[], None]] = []
 
@@ -84,6 +92,7 @@ class PanelStore:
         self._timeseries = data.get("timeseries", [])
         self._node_state = data.get("node_state", {})
         self._traceroutes = data.get("traceroutes", {})
+        self._node_history = data.get("node_history", {})
         LOGGER.debug(
             "Panel store %s: wczytano %d wiadomości, %d próbek, %d węzłów ze stanem",
             self._entry_id,
@@ -100,6 +109,8 @@ class PanelStore:
             bus.async_listen(EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT, self._handle_message_out),
             bus.async_listen(EVENT_MESHTASTIC_MESSAGE_ACK, self._handle_ack),
             bus.async_listen(EVENT_MESHTASTIC_API_NEIGHBOR_INFO, self._handle_neighbor_info),
+            bus.async_listen(EVENT_MESHTASTIC_API_TELEMETRY, self._handle_telemetry),
+            bus.async_listen(EVENT_MESHTASTIC_API_POSITION, self._handle_position),
             async_track_time_interval(
                 self._hass, self._sample_gateway, timedelta(seconds=TIMESERIES_SAMPLE_SECONDS)
             ),
@@ -119,6 +130,7 @@ class PanelStore:
             "timeseries": self._timeseries,
             "node_state": self._node_state,
             "traceroutes": self._traceroutes,
+            "node_history": self._node_history,
         }
 
     def _schedule_save(self) -> None:
@@ -280,6 +292,49 @@ class PanelStore:
         state = self._node_state.setdefault(str(node_id), {})
         state["neighbor_info"] = data
         self._schedule_save()
+        self._record_node_point(node_id, "neighbor_count", {"count": len(data.get("neighbors") or [])})
+
+    def _handle_telemetry(self, event: Event) -> None:
+        node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)
+        data = event.data.get(ATTR_EVENT_MESHTASTIC_API_DATA)
+        telemetry_type = event.data.get(ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE)
+        if node_id is None or not data:
+            return
+        if telemetry_type not in (
+            EventMeshtasticApiTelemetryType.DEVICE_METRICS,
+            EventMeshtasticApiTelemetryType.ENVIRONMENT_METRICS,
+            EventMeshtasticApiTelemetryType.POWER_METRICS,
+        ):
+            return
+        self._record_node_point(node_id, telemetry_type.value, dict(data))
+
+    def _handle_position(self, event: Event) -> None:
+        node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)
+        data = event.data.get(ATTR_EVENT_MESHTASTIC_API_DATA)
+        if node_id is None or not data or "latitude" not in data:
+            return
+        self._record_node_point(
+            node_id,
+            "position",
+            {
+                "latitude": data.get("latitude"),
+                "longitude": data.get("longitude"),
+                "altitude": data.get("altitude"),
+            },
+        )
+
+    def _record_node_point(self, node_id: Any, kind: str, point: dict[str, Any]) -> None:
+        series = self._node_history.setdefault(str(node_id), {}).setdefault(kind, [])
+        series.append({"ts": _now_ms(), **point})
+        if len(series) > MAX_NODE_HISTORY_POINTS:
+            del series[: len(series) - MAX_NODE_HISTORY_POINTS]
+        self._schedule_save()
+
+    def node_history(self, node_id: int, kind: str, limit: int | None = None) -> list[dict[str, Any]]:
+        series = self._node_history.get(str(node_id), {}).get(kind, [])
+        if limit is None or limit >= len(series):
+            return list(series)
+        return series[-limit:]
 
     def _remember_signed(self, node_id: Any, signed: Any) -> None:
         if node_id is None or signed is None:

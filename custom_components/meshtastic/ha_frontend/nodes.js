@@ -15,6 +15,7 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatUptime, formatRelative } from "./i18n.js";
+import "./chart.js";
 
 const COLUMNS = [
   { key: "name", labelKey: "nodes.col.name", numeric: false },
@@ -49,6 +50,9 @@ class MeshNodesTab extends LitElement {
       _notice: { type: String },
       _traceroute: { type: Object },
       _traceHistory: { type: Array },
+      _neighborHistory: { type: Array },
+      _positionHistory: { type: Array },
+      _telemetryHistory: { type: Object },
     };
   }
 
@@ -65,6 +69,9 @@ class MeshNodesTab extends LitElement {
     this._notice = null;
     this._traceroute = null;
     this._traceHistory = [];
+    this._neighborHistory = [];
+    this._positionHistory = [];
+    this._telemetryHistory = null;
   }
 
   _displayName(node) {
@@ -231,7 +238,13 @@ class MeshNodesTab extends LitElement {
 
   _renderRow(node) {
     return html`
-      <tr class=${node.is_ignored ? "ignored" : ""} @click=${() => { this._detail = node; this._traceHistory = []; }}>
+      <tr class=${node.is_ignored ? "ignored" : ""} @click=${() => {
+        this._detail = node;
+        this._traceHistory = [];
+        this._neighborHistory = [];
+        this._positionHistory = [];
+        this._telemetryHistory = null;
+      }}>
         <td class="star-cell">${this._renderStar(node)}</td>
         <td>
           <span class="name">${this._displayName(node)}</span>
@@ -328,6 +341,15 @@ class MeshNodesTab extends LitElement {
         <button class="action" ?disabled=${busy} @click=${() => this._loadTraceHistory(node)}>
           ${t(this.hass, "nodes.action.trace_history")}
         </button>
+        <button class="action" ?disabled=${busy} @click=${() => this._loadNeighborHistory(node)}>
+          ${t(this.hass, "nodes.action.neighbor_history")}
+        </button>
+        <button class="action" ?disabled=${busy} @click=${() => this._loadPositionHistory(node)}>
+          ${t(this.hass, "nodes.action.position_history")}
+        </button>
+        <button class="action" ?disabled=${busy} @click=${() => this._loadTelemetryHistory(node)}>
+          ${t(this.hass, "nodes.action.telemetry_history")}
+        </button>
         <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
           ${t(this.hass, "nodes.action.remove")}
         </button>
@@ -346,6 +368,9 @@ class MeshNodesTab extends LitElement {
     this._detail = null;
     this._traceroute = null;
     this._traceHistory = [];
+    this._neighborHistory = [];
+    this._positionHistory = [];
+    this._telemetryHistory = null;
     this._notice = null;
     this._error = null;
   }
@@ -365,6 +390,47 @@ class MeshNodesTab extends LitElement {
       console.error("MT_SW: nie udało się pobrać historii tras", err);
       this._traceHistory = [];
     }
+  }
+
+  async _loadNodeHistory(node, kind) {
+    try {
+      const result = await this.hass.callWS({
+        type: "meshtastic/node_history",
+        entry_id: this.entryId,
+        node_id: node.node_id,
+        kind,
+      });
+      return (result && result.points) || [];
+    } catch (err) {
+      console.error("MT_SW: nie udało się pobrać historii", kind, err);
+      return [];
+    }
+  }
+
+  async _loadNeighborHistory(node) {
+    if (!this.entryId) {
+      return;
+    }
+    this._neighborHistory = await this._loadNodeHistory(node, "neighbor_count");
+  }
+
+  async _loadPositionHistory(node) {
+    if (!this.entryId) {
+      return;
+    }
+    this._positionHistory = await this._loadNodeHistory(node, "position");
+  }
+
+  async _loadTelemetryHistory(node) {
+    if (!this.entryId) {
+      return;
+    }
+    const [device, environment, power] = await Promise.all([
+      this._loadNodeHistory(node, "device_metrics"),
+      this._loadNodeHistory(node, "environment_metrics"),
+      this._loadNodeHistory(node, "power_metrics"),
+    ]);
+    this._telemetryHistory = { device, environment, power };
   }
 
   _gatewayId() {
@@ -452,6 +518,101 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
+  _renderNeighborHistory() {
+    if (!this._neighborHistory || this._neighborHistory.length < 2) {
+      return html``;
+    }
+    return html`
+      <div class="detail-section">${t(this.hass, "nodes.action.neighbor_history")}</div>
+      <div class="chart-wrap">
+        <mesh-line-chart
+          .points=${this._neighborHistory}
+          .language=${this.hass.language}
+          .emptyLabel=${t(this.hass, "nodes.history.empty")}
+          .series=${[{ key: "count", label: t(this.hass, "nodes.history.neighbor_count"), color: "#4FC3F7" }]}
+        ></mesh-line-chart>
+      </div>
+    `;
+  }
+
+  _renderPositionHistory() {
+    if (!this._positionHistory || !this._positionHistory.length) {
+      return html``;
+    }
+    return html`
+      <div class="detail-section">${t(this.hass, "nodes.action.position_history")}</div>
+      <div class="position-history">
+        ${this._positionHistory
+          .slice()
+          .reverse()
+          .slice(0, 20)
+          .map(
+            (p) => html`
+              <div class="position-history-row">
+                <span>${this._absoluteTime(p.ts / 1000)}</span>
+                <span>${Number(p.latitude).toFixed(5)}, ${Number(p.longitude).toFixed(5)}</span>
+                <span>${p.altitude !== null && p.altitude !== undefined ? `${p.altitude} m` : "—"}</span>
+              </div>
+            `
+          )}
+      </div>
+    `;
+  }
+
+  _renderTelemetryHistory() {
+    const hist = this._telemetryHistory;
+    if (!hist) {
+      return html``;
+    }
+    const charts = [
+      {
+        points: hist.environment,
+        series: [
+          { key: "temperature", label: t(this.hass, "nodes.history.temperature"), color: "#F5C839" },
+          { key: "relativeHumidity", label: t(this.hass, "nodes.history.humidity"), color: "#4FC3F7" },
+        ],
+      },
+      {
+        points: hist.device,
+        series: [
+          { key: "voltage", label: t(this.hass, "nodes.history.voltage"), color: "#81C784" },
+          { key: "batteryLevel", label: t(this.hass, "nodes.history.battery"), color: "#9575CD" },
+        ],
+      },
+      {
+        points: hist.power,
+        series: [
+          { key: "ch1Voltage", label: "CH1 V", color: "#4FC3F7" },
+          { key: "ch2Voltage", label: "CH2 V", color: "#81C784" },
+          { key: "ch3Voltage", label: "CH3 V", color: "#F5C839" },
+        ],
+      },
+    ].filter((c) => c.points && c.points.length >= 2);
+
+    if (!charts.length) {
+      return html`
+        <div class="detail-section">${t(this.hass, "nodes.action.telemetry_history")}</div>
+        <div class="route-note">${t(this.hass, "nodes.history.empty")}</div>
+      `;
+    }
+
+    return html`
+      <div class="detail-section">${t(this.hass, "nodes.action.telemetry_history")}</div>
+      ${charts.map(
+        (chart) => html`
+          <div class="chart-wrap">
+            <mesh-line-chart
+              .points=${chart.points}
+              .language=${this.hass.language}
+              .emptyLabel=${t(this.hass, "nodes.history.empty")}
+              .series=${chart.series}
+            ></mesh-line-chart>
+          </div>
+        `
+      )}
+    `;
+  }
+
   _renderDetail() {
     const node = this._current();
     if (!node) {
@@ -498,6 +659,9 @@ class MeshNodesTab extends LitElement {
 
             ${this._renderTraceroute(node)}
             ${this._renderTraceHistory()}
+            ${this._renderNeighborHistory()}
+            ${this._renderPositionHistory()}
+            ${this._renderTelemetryHistory()}
 
             ${node.neighbors && node.neighbors.length
               ? html`
@@ -861,6 +1025,29 @@ class MeshNodesTab extends LitElement {
         .trace-history-item:hover {
           background: var(--secondary-background-color);
           color: var(--primary-text-color);
+        }
+
+        .chart-wrap {
+          background: var(--card-background-color);
+          border-radius: 8px;
+          padding: 8px;
+          margin-bottom: 12px;
+        }
+
+        .position-history {
+          margin-bottom: 12px;
+        }
+
+        .position-history-row {
+          display: flex;
+          gap: 16px;
+          padding: 6px 0;
+          border-top: 1px solid var(--divider-color);
+          font-size: 12px;
+        }
+
+        .position-history-row:first-child {
+          border-top: none;
         }
 
         .action[disabled] {
