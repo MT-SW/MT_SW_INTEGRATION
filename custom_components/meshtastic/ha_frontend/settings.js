@@ -470,7 +470,9 @@ export class MeshSettingsTab extends LitElement {
     }
   }
 }
-customElements.define("mesh-settings-tab", MeshSettingsTab);
+if (!customElements.get("mesh-settings-tab")) {
+  customElements.define("mesh-settings-tab", MeshSettingsTab);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-lora>  —  LoRa radio configuration
@@ -656,7 +658,9 @@ class MeshSettingsLora extends LitElement {
     `;
   }
 }
-customElements.define("mesh-settings-lora", MeshSettingsLora);
+if (!customElements.get("mesh-settings-lora")) {
+  customElements.define("mesh-settings-lora", MeshSettingsLora);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-channels>  —  Channel editor for all 8 channels
@@ -874,7 +878,9 @@ class MeshSettingsChannels extends LitElement {
     `;
   }
 }
-customElements.define("mesh-settings-channels", MeshSettingsChannels);
+if (!customElements.get("mesh-settings-channels")) {
+  customElements.define("mesh-settings-channels", MeshSettingsChannels);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-user>  —  Owner / user configuration
@@ -996,7 +1002,9 @@ class MeshSettingsUser extends LitElement {
     `;
   }
 }
-customElements.define("mesh-settings-user", MeshSettingsUser);
+if (!customElements.get("mesh-settings-user")) {
+  customElements.define("mesh-settings-user", MeshSettingsUser);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-actions>  —  Device management actions
@@ -1158,7 +1166,9 @@ class MeshSettingsActions extends LitElement {
     }, 5000);
   }
 }
-customElements.define("mesh-settings-actions", MeshSettingsActions);
+if (!customElements.get("mesh-settings-actions")) {
+  customElements.define("mesh-settings-actions", MeshSettingsActions);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-storage> — Local data management (#37)
@@ -1361,7 +1371,9 @@ class MeshSettingsStorage extends LitElement {
     setTimeout(() => { this._feedback = ""; }, 5000);
   }
 }
-customElements.define("mesh-settings-storage", MeshSettingsStorage);
+if (!customElements.get("mesh-settings-storage")) {
+  customElements.define("mesh-settings-storage", MeshSettingsStorage);
+}
 
 /* ══════════════════════════════════════════════════════════
    Reusable base class for simple config-section panels
@@ -1522,7 +1534,9 @@ class MeshSettingsDevice extends ConfigSectionPanel {
     `;
   }
 }
-customElements.define("mesh-settings-device", MeshSettingsDevice);
+if (!customElements.get("mesh-settings-device")) {
+  customElements.define("mesh-settings-device", MeshSettingsDevice);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-position>  —  GPS mode, fixed position, broadcast intervals
@@ -1661,7 +1675,9 @@ class MeshSettingsPosition extends ConfigSectionPanel {
     `;
   }
 }
-customElements.define("mesh-settings-position", MeshSettingsPosition);
+if (!customElements.get("mesh-settings-position")) {
+  customElements.define("mesh-settings-position", MeshSettingsPosition);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-power>  —  Power saving, sleep, ADC
@@ -1744,7 +1760,9 @@ class MeshSettingsPower extends ConfigSectionPanel {
     `;
   }
 }
-customElements.define("mesh-settings-power", MeshSettingsPower);
+if (!customElements.get("mesh-settings-power")) {
+  customElements.define("mesh-settings-power", MeshSettingsPower);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-network>  —  WiFi, Ethernet, NTP, Syslog
@@ -1880,7 +1898,9 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
     return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
   }
 }
-customElements.define("mesh-settings-network", MeshSettingsNetwork);
+if (!customElements.get("mesh-settings-network")) {
+  customElements.define("mesh-settings-network", MeshSettingsNetwork);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-display>  —  Screen, units, OLED, flip
@@ -1982,7 +2002,9 @@ class MeshSettingsDisplay extends ConfigSectionPanel {
     `;
   }
 }
-customElements.define("mesh-settings-display", MeshSettingsDisplay);
+if (!customElements.get("mesh-settings-display")) {
+  customElements.define("mesh-settings-display", MeshSettingsDisplay);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-bluetooth>  —  Enable, pairing, PIN
@@ -2044,7 +2066,9 @@ class MeshSettingsBluetooth extends ConfigSectionPanel {
     `;
   }
 }
-customElements.define("mesh-settings-bluetooth", MeshSettingsBluetooth);
+if (!customElements.get("mesh-settings-bluetooth")) {
+  customElements.define("mesh-settings-bluetooth", MeshSettingsBluetooth);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-security>  —  PKI keys (display), admin channel, debug
@@ -2210,7 +2234,9 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
     `;
   }
 }
-customElements.define("mesh-settings-security", MeshSettingsSecurity);
+if (!customElements.get("mesh-settings-security")) {
+  customElements.define("mesh-settings-security", MeshSettingsSecurity);
+}
 
 /* ── Screen (Device UI) — firmware 2.8 ── */
 class MeshSettingsScreen extends ConfigSectionPanel {
@@ -2310,4 +2336,6 @@ class MeshSettingsScreen extends ConfigSectionPanel {
     `;
   }
 }
-customElements.define("mesh-settings-screen", MeshSettingsScreen);
+if (!customElements.get("mesh-settings-screen")) {
+  customElements.define("mesh-settings-screen", MeshSettingsScreen);
+}

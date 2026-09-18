@@ -43,7 +43,9 @@ export class MeshFormField extends LitElement {
     `;
   }
 }
-customElements.define("mesh-form-field", MeshFormField);
+if (!customElements.get("mesh-form-field")) {
+  customElements.define("mesh-form-field", MeshFormField);
+}
 
 /* ── <mesh-toggle> ── */
 export class MeshToggle extends LitElement {
@@ -148,7 +150,9 @@ export class MeshToggle extends LitElement {
     );
   }
 }
-customElements.define("mesh-toggle", MeshToggle);
+if (!customElements.get("mesh-toggle")) {
+  customElements.define("mesh-toggle", MeshToggle);
+}
 
 /* ── <mesh-select> ── */
 export class MeshSelect extends LitElement {
@@ -224,7 +228,9 @@ export class MeshSelect extends LitElement {
     );
   }
 }
-customElements.define("mesh-select", MeshSelect);
+if (!customElements.get("mesh-select")) {
+  customElements.define("mesh-select", MeshSelect);
+}
 
 /* ── <mesh-number-input> ── */
 export class MeshNumberInput extends LitElement {
@@ -301,7 +307,9 @@ export class MeshNumberInput extends LitElement {
     );
   }
 }
-customElements.define("mesh-number-input", MeshNumberInput);
+if (!customElements.get("mesh-number-input")) {
+  customElements.define("mesh-number-input", MeshNumberInput);
+}
 
 /* ── <mesh-text-input> ── */
 export class MeshTextInput extends LitElement {
@@ -422,7 +430,9 @@ export class MeshTextInput extends LitElement {
     );
   }
 }
-customElements.define("mesh-text-input", MeshTextInput);
+if (!customElements.get("mesh-text-input")) {
+  customElements.define("mesh-text-input", MeshTextInput);
+}
 
 /* ── <mesh-confirm-dialog> ── */
 export class MeshConfirmDialog extends LitElement {
@@ -542,7 +552,9 @@ export class MeshConfirmDialog extends LitElement {
     this.dispatchEvent(new CustomEvent("confirm", { bubbles: true, composed: true }));
   }
 }
-customElements.define("mesh-confirm-dialog", MeshConfirmDialog);
+if (!customElements.get("mesh-confirm-dialog")) {
+  customElements.define("mesh-confirm-dialog", MeshConfirmDialog);
+}
 
 /* ── <mesh-save-bar> ── */
 export class MeshSaveBar extends LitElement {
@@ -626,4 +638,6 @@ export class MeshSaveBar extends LitElement {
     this.dispatchEvent(new CustomEvent("save", { bubbles: true, composed: true }));
   }
 }
-customElements.define("mesh-save-bar", MeshSaveBar);
+if (!customElements.get("mesh-save-bar")) {
+  customElements.define("mesh-save-bar", MeshSaveBar);
+}

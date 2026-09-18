@@ -241,7 +241,9 @@ class MeshSettingsMqtt extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-mqtt", MeshSettingsMqtt);
+if (!customElements.get("mesh-settings-mqtt")) {
+  customElements.define("mesh-settings-mqtt", MeshSettingsMqtt);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-serial>
@@ -297,7 +299,9 @@ class MeshSettingsSerial extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-serial", MeshSettingsSerial);
+if (!customElements.get("mesh-settings-serial")) {
+  customElements.define("mesh-settings-serial", MeshSettingsSerial);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-ext-notification>
@@ -376,7 +380,9 @@ class MeshSettingsExtNotification extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-ext-notification", MeshSettingsExtNotification);
+if (!customElements.get("mesh-settings-ext-notification")) {
+  customElements.define("mesh-settings-ext-notification", MeshSettingsExtNotification);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-store-forward>
@@ -428,7 +434,9 @@ class MeshSettingsStoreForward extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-store-forward", MeshSettingsStoreForward);
+if (!customElements.get("mesh-settings-store-forward")) {
+  customElements.define("mesh-settings-store-forward", MeshSettingsStoreForward);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-range-test>
@@ -470,7 +478,9 @@ class MeshSettingsRangeTest extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-range-test", MeshSettingsRangeTest);
+if (!customElements.get("mesh-settings-range-test")) {
+  customElements.define("mesh-settings-range-test", MeshSettingsRangeTest);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-telemetry>
@@ -570,7 +580,9 @@ class MeshSettingsTelemetry extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-telemetry", MeshSettingsTelemetry);
+if (!customElements.get("mesh-settings-telemetry")) {
+  customElements.define("mesh-settings-telemetry", MeshSettingsTelemetry);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-canned-message>
@@ -674,7 +686,9 @@ class MeshSettingsCannedMessage extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-canned-message", MeshSettingsCannedMessage);
+if (!customElements.get("mesh-settings-canned-message")) {
+  customElements.define("mesh-settings-canned-message", MeshSettingsCannedMessage);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-audio>
@@ -728,7 +742,9 @@ class MeshSettingsAudio extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-audio", MeshSettingsAudio);
+if (!customElements.get("mesh-settings-audio")) {
+  customElements.define("mesh-settings-audio", MeshSettingsAudio);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-neighbor-info>
@@ -767,7 +783,9 @@ class MeshSettingsNeighborInfo extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-neighbor-info", MeshSettingsNeighborInfo);
+if (!customElements.get("mesh-settings-neighbor-info")) {
+  customElements.define("mesh-settings-neighbor-info", MeshSettingsNeighborInfo);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-ambient-lighting>
@@ -814,7 +832,9 @@ class MeshSettingsAmbientLighting extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-ambient-lighting", MeshSettingsAmbientLighting);
+if (!customElements.get("mesh-settings-ambient-lighting")) {
+  customElements.define("mesh-settings-ambient-lighting", MeshSettingsAmbientLighting);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-detection-sensor>
@@ -874,7 +894,9 @@ class MeshSettingsDetectionSensor extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-detection-sensor", MeshSettingsDetectionSensor);
+if (!customElements.get("mesh-settings-detection-sensor")) {
+  customElements.define("mesh-settings-detection-sensor", MeshSettingsDetectionSensor);
+}
 
 /* ══════════════════════════════════════════════════════════
    <mesh-settings-paxcounter>
@@ -921,7 +943,9 @@ class MeshSettingsPaxcounter extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-paxcounter", MeshSettingsPaxcounter);
+if (!customElements.get("mesh-settings-paxcounter")) {
+  customElements.define("mesh-settings-paxcounter", MeshSettingsPaxcounter);
+}
 
 /* ══════════════════════════════════════════════════════════
    MT_SW firmware extensions — nieobecne w oficjalnym Meshtastic,
@@ -1002,7 +1026,9 @@ class MeshSettingsTrafficManagement extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-traffic-management", MeshSettingsTrafficManagement);
+if (!customElements.get("mesh-settings-traffic-management")) {
+  customElements.define("mesh-settings-traffic-management", MeshSettingsTrafficManagement);
+}
 
 class MeshSettingsMeshBeacon extends ModuleConfigPanel {
   get _section() { return "mesh_beacon"; }
@@ -1054,7 +1080,9 @@ class MeshSettingsMeshBeacon extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-mesh-beacon", MeshSettingsMeshBeacon);
+if (!customElements.get("mesh-settings-mesh-beacon")) {
+  customElements.define("mesh-settings-mesh-beacon", MeshSettingsMeshBeacon);
+}
 
 class MeshSettingsSniffer extends ModuleConfigPanel {
   get _section() { return "nodemodadmin"; }
@@ -1086,7 +1114,9 @@ class MeshSettingsSniffer extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-sniffer", MeshSettingsSniffer);
+if (!customElements.get("mesh-settings-sniffer")) {
+  customElements.define("mesh-settings-sniffer", MeshSettingsSniffer);
+}
 
 class MeshSettingsStatusMessage extends ModuleConfigPanel {
   get _section() { return "statusmessage"; }
@@ -1116,4 +1146,6 @@ class MeshSettingsStatusMessage extends ModuleConfigPanel {
     `;
   }
 }
-customElements.define("mesh-settings-status-message", MeshSettingsStatusMessage);
+if (!customElements.get("mesh-settings-status-message")) {
+  customElements.define("mesh-settings-status-message", MeshSettingsStatusMessage);
+}
