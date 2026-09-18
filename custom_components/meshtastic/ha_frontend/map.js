@@ -183,6 +183,9 @@ function precisionRadius(bits) {
    Offset liczony jest w przestrzeni ekranu, żeby odstęp był stały wizualnie. */
 const CLUSTER_PX = 18;
 const SPREAD_PX = 16;
+/* Powyżej tylu węzłów w jednym miejscu pojedyncze etykiety i tak nie dadzą
+   się przeczytać — zwijamy je w jeden znacznik z liczbą, tak jak w apce. */
+const CLUSTER_COLLAPSE_MIN = 5;
 /* Poniżej tego powiększenia markery zostają na prawdziwych pozycjach.
    Wcześniej rozsuwanie działało na każdym poziomie, więc z oddali grupa
    węzłów zamieniała się w okrąg kółek zamiast wyglądać jak jeden punkt. */
@@ -192,20 +195,45 @@ const SPREAD_FULL_ZOOM = 16;
 function spreadOverlapping(map, nodes) {
   const zoom = map.getZoom();
   if (zoom < SPREAD_MIN_ZOOM) {
-    // Bez rozsuwania markerów nadal grupujemy, żeby policzyć, ile węzłów
-    // dzieli jeden punkt — ta liczba steruje rozsunięciem etykiet.
-    const groups = new Map();
-    return nodes.map((node) => {
-      const key = `${node.latitude.toFixed(5)},${node.longitude.toFixed(5)}`;
-      const index = groups.get(key) || 0;
-      groups.set(key, index + 1);
-      return {
-        node,
-        latlng: [node.latitude, node.longitude],
-        offset: false,
-        stackIndex: index,
-      };
-    });
+    // Grupujemy po odległości w pikselach na ekranie, nie po dokładnej
+    // współrzędnej — węzły oddalone od siebie o kilkadziesiąt metrów i tak
+    // renderują się w tym samym miejscu przy dużym oddaleniu, a poprzednie
+    // grupowanie po współrzędnej ich nie łapało.
+    const groups = [];
+    for (const node of nodes) {
+      const point = map.latLngToLayerPoint([node.latitude, node.longitude]);
+      let group = groups.find((g) => {
+        const dx = g.point.x - point.x;
+        const dy = g.point.y - point.y;
+        return Math.sqrt(dx * dx + dy * dy) <= CLUSTER_PX;
+      });
+      if (!group) {
+        group = { point, members: [] };
+        groups.push(group);
+      }
+      group.members.push(node);
+    }
+
+    const placed = [];
+    for (const group of groups) {
+      if (group.members.length > CLUSTER_COLLAPSE_MIN) {
+        // Zbyt wiele węzłów, żeby czytelnie rozpisać etykiety — jeden
+        // znacznik z liczbą, klik przybliża i rozsuwa je pojedynczo.
+        const lat = group.members.reduce((sum, n) => sum + n.latitude, 0) / group.members.length;
+        const lng = group.members.reduce((sum, n) => sum + n.longitude, 0) / group.members.length;
+        placed.push({ isCluster: true, count: group.members.length, latlng: [lat, lng] });
+        continue;
+      }
+      group.members.forEach((node, index) => {
+        placed.push({
+          node,
+          latlng: [node.latitude, node.longitude],
+          offset: false,
+          stackIndex: index,
+        });
+      });
+    }
+    return placed;
   }
   // Od progu do pełnego przybliżenia rozsunięcie narasta płynnie,
   // żeby nie „wystrzeliwało" skokowo przy jednym kliknięciu zoomu.
@@ -468,6 +496,23 @@ class MeshMapTab extends LitElement {
     // Linie topologii łączą prawdziwe pozycje; rozsuwamy tylko markery,
     // żeby obraz zasięgu pozostał zgodny z rzeczywistością.
     for (const placement of spreadOverlapping(this._map, nodes)) {
+      if (placement.isCluster) {
+        L.circleMarker(placement.latlng, {
+          radius: Math.min(10 + placement.count * 0.4, 18),
+          color: "#2C2D3C",
+          weight: 2,
+          fillColor: "#F5C839",
+          fillOpacity: 0.95,
+        })
+          .bindTooltip(`${placement.count}`, {
+            direction: "center",
+            permanent: true,
+            className: "mtsw-node-cluster",
+          })
+          .on("click", () => this._map.flyTo(placement.latlng, SPREAD_MIN_ZOOM + 1, { duration: 0.5 }))
+          .addTo(this._markerLayer);
+        continue;
+      }
       const node = placement.node;
       const name = node.long_name || node.short_name || node.node_hex;
       const marker = L.circleMarker(placement.latlng, {
@@ -738,6 +783,19 @@ class MeshMapTab extends LitElement {
           white-space: nowrap;
         }
         .mtsw-map .mtsw-node-label::before {
+          display: none;
+        }
+        .mtsw-map .mtsw-node-cluster {
+          background: #f5c839;
+          border: 2px solid #2c2d3c;
+          border-radius: 50%;
+          box-shadow: none;
+          color: #2c2d3c;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 2px 6px;
+        }
+        .mtsw-map .mtsw-node-cluster::before {
           display: none;
         }
         .mtsw-map .leaflet-container {
