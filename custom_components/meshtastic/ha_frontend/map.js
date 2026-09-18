@@ -493,7 +493,7 @@ class MeshMapTab extends LitElement {
         direction: "top",
         permanent: Boolean(this.showLabels),
         className: "mtsw-node-label",
-        offset: [0, -4 - stack * 14],
+        offset: [0, -4 - stack * 9],
       });
     }
 
@@ -733,7 +733,8 @@ class MeshMapTab extends LitElement {
           color: #fff;
           font-size: 11px;
           font-weight: 500;
-          padding: 1px 5px;
+          line-height: 13px;
+          padding: 0px 4px;
           white-space: nowrap;
         }
         .mtsw-map .mtsw-node-label::before {
