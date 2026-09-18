@@ -149,6 +149,7 @@ const STRINGS = {
     "nodes.action.position": "Poproś o pozycję",
     "nodes.action.neighbors": "Pobierz sąsiadów",
     "nodes.action.traceroute": "Pokaż trasę",
+    "nodes.action.trace_history": "Historia tras",
     "nodes.action.remove": "Usuń z bazy",
     "nodes.action.remove_confirm": "Usunąć węzeł {name} z bazy urządzenia? Pojawi się ponownie, gdy radio znów go usłyszy.",
     "nodes.action.working": "Wysyłanie polecenia do radia…",
@@ -159,6 +160,7 @@ const STRINGS = {
     "nodes.traceroute.towards": "Trasa do węzła",
     "nodes.traceroute.back": "Trasa powrotna",
     "nodes.traceroute.direct": "Połączenie bezpośrednie, bez przeskoków",
+    "nodes.traceroute.history": "Zapisane trasy",
     "nodes.action.failed": "Nie udało się wykonać polecenia.",
 
     "map.show_links": "Pokaż połączenia",
@@ -369,6 +371,7 @@ const STRINGS = {
     "nodes.action.position": "Request position",
     "nodes.action.neighbors": "Request neighbours",
     "nodes.action.traceroute": "Trace route",
+    "nodes.action.trace_history": "Route history",
     "nodes.action.remove": "Remove from database",
     "nodes.action.remove_confirm": "Remove node {name} from the device database? It will reappear once the radio hears it again.",
     "nodes.action.working": "Sending the command to the radio…",
@@ -379,6 +382,7 @@ const STRINGS = {
     "nodes.traceroute.towards": "Route to the node",
     "nodes.traceroute.back": "Return route",
     "nodes.traceroute.direct": "Direct link, no hops",
+    "nodes.traceroute.history": "Saved routes",
     "nodes.action.failed": "The command failed.",
 
     "map.show_links": "Show links",

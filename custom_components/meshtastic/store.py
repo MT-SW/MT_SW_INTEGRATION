@@ -25,7 +25,9 @@ from homeassistant.helpers.storage import Store
 from .api import (
     ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID,
     ATTR_EVENT_MESHTASTIC_API_DATA,
+    ATTR_EVENT_MESHTASTIC_API_NODE,
     ATTR_EVENT_MESHTASTIC_API_NODE_INFO,
+    EVENT_MESHTASTIC_API_NEIGHBOR_INFO,
     EVENT_MESHTASTIC_API_TEXT_MESSAGE,
     EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT,
 )
@@ -43,6 +45,7 @@ SAVE_DELAY = 10
 
 MAX_MESSAGES = 2000
 MAX_TIMESERIES_POINTS = 1500
+MAX_TRACEROUTES_PER_NODE = 10
 # Próbkujemy z koordynatora, nie ze zdarzeń telemetrii — dzięki temu wykresy
 # rosną także wtedy, gdy nikt nie ma otwartego panelu.
 TIMESERIES_SAMPLE_SECONDS = 60
@@ -65,6 +68,11 @@ class PanelStore:
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.panel.{entry_id}")
         self._messages: list[dict[str, Any]] = []
         self._timeseries: list[dict[str, Any]] = []
+        # Stan węzłów, który inaczej żyje tylko w pamięci koordynatora i
+        # znika po restarcie: ostatnia znana informacja o sąsiadach i to,
+        # czy ostatnia wiadomość od węzła była podpisana.
+        self._node_state: dict[str, dict[str, Any]] = {}
+        self._traceroutes: dict[str, list[dict[str, Any]]] = {}
         self._listeners: list[Callable[[str, dict[str, Any]], None]] = []
         self._unsubscribes: list[Callable[[], None]] = []
 
@@ -74,11 +82,14 @@ class PanelStore:
         data = await self._store.async_load() or {}
         self._messages = data.get("messages", [])
         self._timeseries = data.get("timeseries", [])
+        self._node_state = data.get("node_state", {})
+        self._traceroutes = data.get("traceroutes", {})
         LOGGER.debug(
-            "Panel store %s: wczytano %d wiadomości, %d próbek",
+            "Panel store %s: wczytano %d wiadomości, %d próbek, %d węzłów ze stanem",
             self._entry_id,
             len(self._messages),
             len(self._timeseries),
+            len(self._node_state),
         )
 
     def async_start(self) -> None:
@@ -88,6 +99,7 @@ class PanelStore:
             bus.async_listen(EVENT_MESHTASTIC_API_TEXT_MESSAGE, self._handle_message_in),
             bus.async_listen(EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT, self._handle_message_out),
             bus.async_listen(EVENT_MESHTASTIC_MESSAGE_ACK, self._handle_ack),
+            bus.async_listen(EVENT_MESHTASTIC_API_NEIGHBOR_INFO, self._handle_neighbor_info),
             async_track_time_interval(
                 self._hass, self._sample_gateway, timedelta(seconds=TIMESERIES_SAMPLE_SECONDS)
             ),
@@ -102,7 +114,12 @@ class PanelStore:
         await self._store.async_save(self._as_dict())
 
     def _as_dict(self) -> dict[str, Any]:
-        return {"messages": self._messages, "timeseries": self._timeseries}
+        return {
+            "messages": self._messages,
+            "timeseries": self._timeseries,
+            "node_state": self._node_state,
+            "traceroutes": self._traceroutes,
+        }
 
     def _schedule_save(self) -> None:
         self._store.async_delay_save(self._as_dict, SAVE_DELAY)
@@ -220,6 +237,8 @@ class PanelStore:
         message = self._build_message(event, "in")
         if message is not None:
             self._append_message(message)
+            if "xeddsa_signed" in message:
+                self._remember_signed(message.get("from"), message["xeddsa_signed"])
 
     def _handle_message_out(self, event: Event) -> None:
         if not self._belongs_to_entry(event):
@@ -247,6 +266,40 @@ class PanelStore:
                 self._schedule_save()
                 self._notify("ack", message)
                 return
+
+    # ── stan węzłów (sąsiedzi, podpisywanie, trasy) ──────────────────────
+
+    def node_state(self, node_id: int) -> dict[str, Any]:
+        return dict(self._node_state.get(str(node_id), {}))
+
+    def _handle_neighbor_info(self, event: Event) -> None:
+        node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)
+        data = event.data.get(ATTR_EVENT_MESHTASTIC_API_DATA)
+        if node_id is None or data is None:
+            return
+        state = self._node_state.setdefault(str(node_id), {})
+        state["neighbor_info"] = data
+        self._schedule_save()
+
+    def _remember_signed(self, node_id: Any, signed: Any) -> None:
+        if node_id is None or signed is None:
+            return
+        state = self._node_state.setdefault(str(node_id), {})
+        if state.get("signed") == bool(signed):
+            return
+        state["signed"] = bool(signed)
+        self._schedule_save()
+
+    def add_traceroute(self, node_id: int, route: dict[str, Any]) -> None:
+        """Zachowaj wynik traceroute, żeby przeżył restart integracji."""
+        entries = self._traceroutes.setdefault(str(node_id), [])
+        entries.append({"ts": _now_ms(), "route": route})
+        if len(entries) > MAX_TRACEROUTES_PER_NODE:
+            del entries[: len(entries) - MAX_TRACEROUTES_PER_NODE]
+        self._schedule_save()
+
+    def traceroutes(self, node_id: int) -> list[dict[str, Any]]:
+        return list(self._traceroutes.get(str(node_id), []))
 
     # ── szeregi czasowe ─────────────────────────────────────────────────
 

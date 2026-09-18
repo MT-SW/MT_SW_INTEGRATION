@@ -48,6 +48,7 @@ class MeshNodesTab extends LitElement {
       _error: { type: String },
       _notice: { type: String },
       _traceroute: { type: Object },
+      _traceHistory: { type: Array },
     };
   }
 
@@ -63,6 +64,7 @@ class MeshNodesTab extends LitElement {
     this._error = null;
     this._notice = null;
     this._traceroute = null;
+    this._traceHistory = [];
   }
 
   _displayName(node) {
@@ -229,7 +231,7 @@ class MeshNodesTab extends LitElement {
 
   _renderRow(node) {
     return html`
-      <tr class=${node.is_ignored ? "ignored" : ""} @click=${() => (this._detail = node)}>
+      <tr class=${node.is_ignored ? "ignored" : ""} @click=${() => { this._detail = node; this._traceHistory = []; }}>
         <td class="star-cell">${this._renderStar(node)}</td>
         <td>
           <span class="name">${this._displayName(node)}</span>
@@ -323,6 +325,9 @@ class MeshNodesTab extends LitElement {
         >
           ${t(this.hass, "nodes.action.traceroute")}
         </button>
+        <button class="action" ?disabled=${busy} @click=${() => this._loadTraceHistory(node)}>
+          ${t(this.hass, "nodes.action.trace_history")}
+        </button>
         <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
           ${t(this.hass, "nodes.action.remove")}
         </button>
@@ -340,8 +345,26 @@ class MeshNodesTab extends LitElement {
   _closeDetail() {
     this._detail = null;
     this._traceroute = null;
+    this._traceHistory = [];
     this._notice = null;
     this._error = null;
+  }
+
+  async _loadTraceHistory(node) {
+    if (!this.entryId) {
+      return;
+    }
+    try {
+      const result = await this.hass.callWS({
+        type: "meshtastic/traceroute_history",
+        entry_id: this.entryId,
+        node_id: node.node_id,
+      });
+      this._traceHistory = (result && result.routes) || [];
+    } catch (err) {
+      console.error("MT_SW: nie udało się pobrać historii tras", err);
+      this._traceHistory = [];
+    }
   }
 
   _gatewayId() {
@@ -408,6 +431,27 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
+  _renderTraceHistory() {
+    if (!this._traceHistory || !this._traceHistory.length) {
+      return html``;
+    }
+    return html`
+      <div class="detail-section">${t(this.hass, "nodes.traceroute.history")}</div>
+      <div class="trace-history">
+        ${this._traceHistory
+          .slice()
+          .reverse()
+          .map(
+            (entry) => html`
+              <button class="trace-history-item" @click=${() => (this._traceroute = entry.route)}>
+                ${this._absoluteTime(entry.ts / 1000)}
+              </button>
+            `
+          )}
+      </div>
+    `;
+  }
+
   _renderDetail() {
     const node = this._current();
     if (!node) {
@@ -453,6 +497,7 @@ class MeshNodesTab extends LitElement {
             ${this._detailRow("nodes.tracked", node.is_tracked ? t(this.hass, "common.yes") : t(this.hass, "common.no"))}
 
             ${this._renderTraceroute(node)}
+            ${this._renderTraceHistory()}
 
             ${node.neighbors && node.neighbors.length
               ? html`
@@ -793,6 +838,29 @@ class MeshNodesTab extends LitElement {
 
         .action:hover:not([disabled]) {
           background: var(--secondary-background-color);
+        }
+
+        .trace-history {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 12px;
+        }
+
+        .trace-history-item {
+          border: 1px solid var(--divider-color);
+          border-radius: 6px;
+          background: var(--card-background-color);
+          color: var(--secondary-text-color);
+          font-family: inherit;
+          font-size: 11px;
+          padding: 4px 8px;
+          cursor: pointer;
+        }
+
+        .trace-history-item:hover {
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
         }
 
         .action[disabled] {

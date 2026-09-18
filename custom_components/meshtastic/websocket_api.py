@@ -223,6 +223,7 @@ async def ws_nodes(
         return
 
     tracked = set(entry.runtime_data.coordinator.data or {})
+    store = get_store(msg["entry_id"])
 
     nodes = []
     for node_id, node in all_nodes.items():
@@ -230,7 +231,15 @@ async def ws_nodes(
         position = node.get("position", {}) or {}
         device_metrics = node.get("deviceMetrics", {}) or {}
         environment_metrics = node.get("environmentMetrics", {}) or {}
-        neighbor_info = node.get("neighborInfo", {}) or {}
+        # Sąsiedzi i status podpisywania żyją tylko w pamięci połączenia z
+        # radiem i znikają po restarcie integracji — dopóki nie przyjdzie
+        # świeży pakiet od danego węzła, sięgamy do tego, co zdążyliśmy
+        # zapisać na dysk przed restartem.
+        saved_state = store.node_state(node_id) if store is not None else {}
+        neighbor_info = node.get("neighborInfo") or saved_state.get("neighbor_info") or {}
+        signed = node.get("signed")
+        if signed is None:
+            signed = saved_state.get("signed", False)
 
         neighbors = [
             {
@@ -258,7 +267,7 @@ async def ws_nodes(
                 "channel": _as_int(node.get("channel")),
                 "last_heard": node.get("lastHeard"),
                 "snr": _as_float(node.get("snr")),
-                "signed": bool(node.get("signed")),
+                "signed": bool(signed),
                 "hops_away": _as_int(node.get("hopsAway")),
                 "via_mqtt": bool(node.get("viaMqtt")),
                 "latitude": position.get("latitude"),
@@ -614,8 +623,33 @@ async def ws_request_neighbors(hass, connection, msg) -> None:
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_traceroute(hass, connection, msg) -> None:
-    """Prześledź trasę do węzła."""
-    await _run_node_action(hass, connection, msg, lambda c, m: c.request_traceroute(m["node_id"]))
+    """Prześledź trasę do węzła — i zachowaj wynik, żeby przeżył restart."""
+
+    async def _action(c, m):
+        result = await c.request_traceroute(m["node_id"])
+        store = get_store(m["entry_id"])
+        if store is not None and isinstance(result, dict):
+            store.add_traceroute(m["node_id"], result)
+        return result
+
+    await _run_node_action(hass, connection, msg, _action)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/traceroute_history",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+    }
+)
+@websocket_api.async_response
+async def ws_traceroute_history(hass, connection, msg) -> None:
+    """Zwróć wcześniej zapisane trasy do węzła."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], {"routes": store.traceroutes(msg["node_id"])})
 
 
 @websocket_api.websocket_command(
@@ -807,6 +841,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_request_position,
         ws_request_neighbors,
         ws_traceroute,
+        ws_traceroute_history,
         ws_set_config,
         ws_delete_message,
         ws_delete_conversation,
