@@ -586,6 +586,15 @@ class MeshNodesTab extends LitElement {
           { key: "ch2Voltage", label: "CH2 V", color: "#81C784" },
           { key: "ch3Voltage", label: "CH3 V", color: "#F5C839" },
         ],
+        unit: " V",
+      },
+      {
+        points: hist.device,
+        series: [
+          { key: "channelUtilization", label: t(this.hass, "nodes.history.chutil"), color: "#F5C839" },
+          { key: "airUtilTx", label: t(this.hass, "nodes.history.airutil"), color: "#4FC3F7" },
+        ],
+        unit: " %",
       },
     ].filter((c) => c.points && c.points.length >= 2);
 
@@ -604,6 +613,7 @@ class MeshNodesTab extends LitElement {
             <mesh-line-chart
               .points=${chart.points}
               .language=${this.hass.language}
+              .unit=${chart.unit || ""}
               .emptyLabel=${t(this.hass, "nodes.history.empty")}
               .series=${chart.series}
             ></mesh-line-chart>

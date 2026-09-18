@@ -170,6 +170,8 @@ const STRINGS = {
     "nodes.history.humidity": "Wilgotność",
     "nodes.history.voltage": "Napięcie",
     "nodes.history.battery": "Poziom baterii",
+    "nodes.history.chutil": "Obciążenie kanału",
+    "nodes.history.airutil": "Wykorzystanie eteru (TX)",
     "nodes.action.failed": "Nie udało się wykonać polecenia.",
 
     "map.show_links": "Pokaż połączenia",
@@ -401,6 +403,8 @@ const STRINGS = {
     "nodes.history.humidity": "Humidity",
     "nodes.history.voltage": "Voltage",
     "nodes.history.battery": "Battery level",
+    "nodes.history.chutil": "Channel utilization",
+    "nodes.history.airutil": "Air utilization (TX)",
     "nodes.action.failed": "The command failed.",
 
     "map.show_links": "Show links",
