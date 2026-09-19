@@ -20,6 +20,7 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { PL } from "./pl-settings.js";
 import { settingsStyles, badgeStyles } from "./styles.js";
 import "./components.js";
+import { portLabel } from "./port-names.js";
 
 const POLL_MS = 2000;
 const NAMES_REFRESH_MS = 30000;
@@ -240,6 +241,10 @@ class MeshSettingsSniffer extends LitElement {
     return parts.length ? parts.join(" / ") : "—";
   }
 
+  _portText(entry) {
+    return entry.port === "ENCRYPTED" ? PL("Encrypted") : portLabel("pl", entry.port);
+  }
+
   _time(ts) {
     const date = new Date(ts);
     return `${date.toLocaleTimeString([], { hour12: false })}.${String(date.getMilliseconds()).padStart(3, "0")}`;
@@ -251,7 +256,7 @@ class MeshSettingsSniffer extends LitElement {
       return this._entries;
     }
     return this._entries.filter((entry) =>
-      [this._label(entry.from), this._label(entry.to), entry.port, entry.info]
+      [this._label(entry.from), this._label(entry.to), entry.port, this._portText(entry), entry.info]
         .join(" ")
         .toLowerCase()
         .includes(needle)
@@ -449,7 +454,7 @@ class MeshSettingsSniffer extends LitElement {
                           <td class="time">${this._time(entry.ts)}</td>
                           <td>${this._label(entry.from)}</td>
                           <td>${this._label(entry.to)}</td>
-                          <td>${entry.port}</td>
+                          <td title=${entry.port}>${this._portText(entry)}</td>
                           <td class="info">${entry.info || (entry.encrypted ? PL("Encrypted") : "")}</td>
                           <td>${this._signal(entry)}</td>
                           <td>${entry.hops_away ?? "—"}</td>

@@ -61,6 +61,20 @@ class MeshRadioTab extends LitElement {
    * są encje bramek z rejestru, nie payload WS. Renderujemy je jako osobny blok
    * zamiast dopasowywać do kart bramek — dopasowanie po nazwie byłoby kruche.
    */
+  /* Encja bramki nazywa się "Status połączenia", więc jej friendly_name to
+     "<urządzenie> Status połączenia". Na wyrzutni klienta WWW interesuje nas
+     samo urządzenie — status i tak widać na karcie bramki — więc bierzemy
+     nazwę z rejestru urządzeń, a przy jego braku obcinamy końcówkę. */
+  _gatewayDisplayName(entity, state) {
+    const device = entity.device_id && this.hass.devices ? this.hass.devices[entity.device_id] : null;
+    const deviceName = device && (device.name_by_user || device.name);
+    if (deviceName) {
+      return deviceName;
+    }
+    const friendly = (state && state.attributes.friendly_name) || entity.entity_id;
+    return friendly.replace(/\s*(Status połączenia|Connection status)\s*$/i, "").trim() || friendly;
+  }
+
   _gatewayEntities() {
     if (!this.hass || !this.hass.entities) {
       return [];
@@ -72,7 +86,7 @@ class MeshRadioTab extends LitElement {
         return {
           entity_id: e.entity_id,
           gateway_id: e.entity_id.replace("meshtastic.", ""),
-          name: (state && state.attributes.friendly_name) || e.entity_id,
+          name: this._gatewayDisplayName(e, state),
           device_class: state && state.attributes.device_class,
           unavailable: !state || state.state === "unavailable",
         };

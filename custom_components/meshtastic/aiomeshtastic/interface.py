@@ -940,13 +940,22 @@ class MeshInterface:
         admin_message.reboot_seconds = seconds
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
-    async def set_owner(
-        self, long_name: str, short_name: str, *, is_licensed: bool = False, node: int | None = None
+    async def set_owner(  # noqa: PLR0913
+        self,
+        long_name: str,
+        short_name: str,
+        *,
+        is_licensed: bool = False,
+        is_unmessagable: bool | None = None,
+        node: int | None = None,
     ) -> None:
         admin_message = admin_pb2.AdminMessage()
         admin_message.set_owner.long_name = long_name
         admin_message.set_owner.short_name = short_name
         admin_message.set_owner.is_licensed = is_licensed
+        # optional w protobufie: bez tej gałęzi radio zostawia dotychczasową wartość
+        if is_unmessagable is not None:
+            admin_message.set_owner.is_unmessagable = is_unmessagable
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
     async def set_channel(self, channel: Mapping[str, Any], node: int | None = None) -> None:

@@ -364,6 +364,7 @@ class MeshtasticPanel extends LitElement {
               longName: gateway?.long_name || "",
               shortName: gateway?.short_name || "",
               isLicensed: Boolean(gateway?.is_licensed),
+              isUnmessagable: Boolean(gateway?.is_unmessagable),
             },
           };
         }
@@ -396,6 +397,10 @@ class MeshtasticPanel extends LitElement {
             long_name: data.long_name ?? data.longName ?? "",
             short_name: data.short_name ?? data.shortName ?? "",
             is_licensed: Boolean(data.is_licensed ?? data.isLicensed),
+            // pomijamy, gdy panel go nie podał — wtedy radio zostawia dotychczasową wartość
+            ...(data.is_unmessagable === undefined && data.isUnmessagable === undefined
+              ? {}
+              : { is_unmessagable: Boolean(data.is_unmessagable ?? data.isUnmessagable) }),
           });
           return { success: true };
         case "set_channel":

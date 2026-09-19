@@ -925,6 +925,7 @@ class MeshSettingsUser extends LitElement {
       longName: owner.longName || "",
       shortName: owner.shortName || "",
       isLicensed: owner.isLicensed || false,
+      isUnmessagable: owner.isUnmessagable || false,
     };
     this._dirty = false;
     this.requestUpdate();
@@ -944,6 +945,7 @@ class MeshSettingsUser extends LitElement {
       long_name: this._draft.longName || undefined,
       short_name: this._draft.shortName || undefined,
       is_licensed: this._draft.isLicensed,
+      is_unmessagable: this._draft.isUnmessagable,
     });
 
     this._saving = false;
@@ -990,6 +992,12 @@ class MeshSettingsUser extends LitElement {
               .description=${PL("If enabled, your node will use HAM mode with longer names and no encryption")}
               .checked=${d.isLicensed === true}
               @change=${(e) => this._updateField("isLicensed", e.detail.checked)}
+            ></mesh-toggle>
+            <mesh-toggle
+              .label=${PL("Unmessageable")}
+              .description=${PL("Unmonitored or Infrastructure")}
+              .checked=${d.isUnmessagable === true}
+              @change=${(e) => this._updateField("isUnmessagable", e.detail.checked)}
             ></mesh-toggle>
           </div>
         </div>

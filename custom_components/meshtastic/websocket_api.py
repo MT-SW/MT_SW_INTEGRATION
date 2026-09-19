@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.helpers.storage import Store
 
 from . import ondemand
 from .const import DOMAIN
@@ -123,6 +124,7 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         "long_name": user.get("longName"),
         "short_name": user.get("shortName"),
         "is_licensed": bool(user.get("isLicensed")),
+        "is_unmessagable": bool(user.get("isUnmessagable")),
         "hw_model": user.get("hwModel"),
         "role": user.get("role"),
         "available": bool(coordinator.last_update_success and node_id is not None),
@@ -774,6 +776,7 @@ async def ws_delete_conversation(
         vol.Required("long_name"): str,
         vol.Required("short_name"): str,
         vol.Optional("is_licensed", default=False): bool,
+        vol.Optional("is_unmessagable"): bool,
     }
 )
 @websocket_api.require_admin
@@ -790,7 +793,10 @@ async def ws_set_owner(
         return
     try:
         await entry.runtime_data.client.async_set_owner(
-            msg["long_name"], msg["short_name"], is_licensed=msg["is_licensed"]
+            msg["long_name"],
+            msg["short_name"],
+            is_licensed=msg["is_licensed"],
+            is_unmessagable=msg.get("is_unmessagable"),
         )
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
         _LOGGER.warning("Zapis właściciela nie powiódł się: %s", err)
@@ -1111,6 +1117,63 @@ async def ws_storage_clear(
     connection.send_result(msg["id"], {"cleared": msg["kind"]})
 
 
+# ── Ustawienia mapy (źródło kafli i klucze API) ──────────────────────
+# Trzymane po stronie serwera, a nie w localStorage przeglądarki: klucz
+# wpisany raz ma być widoczny w każdej przeglądarce i w aplikacji mobilnej HA.
+# Jeden zestaw na całą integrację, nie na wpis — mapa nie zależy od bramki.
+
+MAP_SETTINGS_VERSION = 1
+
+
+def _map_settings_store(hass: HomeAssistant) -> Store:
+    key = f"{DOMAIN}_map_settings_store"
+    store = hass.data.get(key)
+    if store is None:
+        store = Store(hass, MAP_SETTINGS_VERSION, f"{DOMAIN}.map_settings")
+        hass.data[key] = store
+    return store
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/map_settings"})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_map_settings(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Zapisane źródło kafli mapy i klucze API dostawców (puste, gdy nic nie zapisano)."""
+    data = await _map_settings_store(hass).async_load()
+    connection.send_result(msg["id"], {"settings": data or {}})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/map_settings_set",
+        vol.Required("settings"): vol.Schema(
+            {
+                vol.Optional("preset"): vol.All(str, vol.Length(max=64)),
+                vol.Optional("custom_url"): vol.All(str, vol.Length(max=1000)),
+                vol.Optional("keys"): {vol.All(str, vol.Length(max=64)): vol.All(str, vol.Length(max=500))},
+            }
+        ),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_map_settings_set(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Zapisz źródło kafli mapy i klucze API dostawców."""
+    settings = dict(msg["settings"])
+    # puste klucze nie mają sensu w pliku — kasujemy je, zamiast trzymać ""
+    settings["keys"] = {name: value for name, value in settings.get("keys", {}).items() if value}
+    await _map_settings_store(hass).async_save(settings)
+    connection.send_result(msg["id"], {"saved": True})
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -1138,6 +1201,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_sniffer_clear,
         ws_storage_stats,
         ws_storage_clear,
+        ws_map_settings,
+        ws_map_settings_set,
         ws_set_config,
         ws_delete_message,
         ws_delete_conversation,

@@ -16,6 +16,7 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { t, formatUptime, formatRelative } from "./i18n.js";
 import { formatKb, formatNumber } from "./stats-history.js";
+import { portLabel, routingErrorLabel } from "./port-names.js";
 
 export const ONDEMAND_QUERIES = [
   "node_stats",
@@ -152,13 +153,12 @@ class MeshNodeOnDemand extends LitElement {
     `;
   }
 
-  _series(values, hintKey) {
+  _series(values) {
     if (!values.length) {
       return html`<div class="route-note">${t(this.hass, "ondemand.empty")}</div>`;
     }
     const sum = values.reduce((acc, value) => acc + value, 0);
     return html`
-      <div class="route-note">${t(this.hass, hintKey)}</div>
       <div class="chart-wrap">${this._bars(values)}</div>
       ${this._row(t(this.hass, "ondemand.series.last"), this._num(values[values.length - 1]))}
       ${this._row(t(this.hass, "ondemand.series.min"), this._num(Math.min(...values)))}
@@ -233,10 +233,10 @@ class MeshNodeOnDemand extends LitElement {
         [tr("ondemand.stats.nodes"), nodes],
       ])}
       ${section("ondemand.stats.section.packets", [
-        [tr("nodes.packets.rx"), packet("numPacketsRx")],
-        [tr("nodes.packets.rx_bad"), packet("numPacketsRxBad")],
+        [tr("ondemand.stats.rx"), packet("numPacketsRx")],
+        [tr("ondemand.stats.rx_bad"), packet("numPacketsRxBad")],
         [tr("nodes.packets.rx_dupe"), packet("numRxDupe")],
-        [tr("nodes.packets.tx"), packet("numPacketsTx")],
+        [tr("ondemand.stats.tx"), packet("numPacketsTx")],
         [tr("nodes.packets.tx_relay"), packet("numTxRelay")],
         [tr("nodes.packets.tx_relay_canceled"), packet("numTxRelayCanceled")],
         [tr("ondemand.stats.blocked_hoplimit"), packet("blockedByHoplimit")],
@@ -325,7 +325,7 @@ class MeshNodeOnDemand extends LitElement {
             ${list.map(
               (entry) => html`
                 <tr class=${entry.counter ? "" : "zero"}>
-                  <td class="text">${entry.name || entry.num}</td>
+                  <td class="text" title=${entry.name}>${routingErrorLabel(this._lang, entry.name) || entry.num}</td>
                   <td>${this._num(entry.counter)}</td>
                 </tr>
               `
@@ -355,7 +355,9 @@ class MeshNodeOnDemand extends LitElement {
             ${list.map(
               (entry) => html`
                 <tr class=${entry.count ? "" : "zero"}>
-                  <td class="text">${entry.name} <span class="pct">(${entry.port})</span></td>
+                  <td class="text" title=${entry.name}>
+                    ${portLabel(this._lang, entry.name)} <span class="pct">(${entry.port})</span>
+                  </td>
                   <td>${this._num(entry.count)} ${this._pct(entry.count, total)}</td>
                 </tr>
               `
@@ -373,7 +375,6 @@ class MeshNodeOnDemand extends LitElement {
     }
     const tr = (key) => t(this.hass, key);
     return html`
-      <div class="route-note">${tr("ondemand.air.hint")}</div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -407,7 +408,6 @@ class MeshNodeOnDemand extends LitElement {
       return html`<div class="route-note">${t(this.hass, "ondemand.empty")}</div>`;
     }
     return html`
-      <div class="route-note">${t(this.hass, "ondemand.exchange.hint")}</div>
       <div class="table-wrap">
         <table>
           <tbody>
@@ -415,7 +415,7 @@ class MeshNodeOnDemand extends LitElement {
               (entry) => html`
                 <tr>
                   <td class="text">${this._label(entry.fromNode)} → ${this._label(entry.toNode)}</td>
-                  <td class="text">${entry.portName || entry.portNum}</td>
+                  <td class="text" title=${entry.portName}>${portLabel(this._lang, entry.portName) || entry.portNum}</td>
                 </tr>
               `
             )}
@@ -451,9 +451,9 @@ class MeshNodeOnDemand extends LitElement {
       case "exchange_packet_log":
         return this._renderExchange(d);
       case "rx_avg_time_history":
-        return this._series(d.rxAvgHistory || [], "ondemand.rx_avg.hint");
+        return this._series(d.rxAvgHistory || []);
       case "rx_packet_history":
-        return this._series(d.rxPacketHistory || [], "ondemand.rx_packets.hint");
+        return this._series(d.rxPacketHistory || []);
       case "fw_plus_version":
         return this._renderFwPlus(d);
       default:
@@ -473,6 +473,7 @@ class MeshNodeOnDemand extends LitElement {
         : "";
     return html`
       <div class="detail-section">${t(this.hass, `ondemand.q.${query}`)}</div>
+      <div class="route-note">${t(this.hass, `ondemand.desc.${query}`)}</div>
       <div class="route-note">
         ${t(this.hass, "ondemand.received", { time, rtt: this._rtt(result.rtt_ms) })}${parts}
       </div>

@@ -38,14 +38,14 @@ const PL_STRINGS = {
   Blue: "Niebieski",
   Environment: "Środowisko",
   "Air Quality": "Jakość powietrza",
-  "Device Metrics": "Metryki urządzenia",
+  "Device Metrics": "Metryka urządzenia",
   "Power Metrics": "Metryki zasilania",
   "Input Source": "Źródło wejściowe",
 
   /* ── LoRa ── */
   Region: "Region",
-  "Modem Preset": "Preset modemu",
-  "Use Preset": "Użyj presetu",
+  "Modem Preset": "Presety",
+  "Use Preset": "Użyj predefiniowanych ustawień",
   "Use the modem preset or custom values":
     "Użyj predefiniowanych ustawień albo wartości własnych",
   "Bandwidth (kHz)": "Pasmo (kHz)",
@@ -77,17 +77,14 @@ const PL_STRINGS = {
   "Rebroadcast Mode": "Tryb retransmisji",
   "Controls which messages this node rebroadcasts":
     "Decyduje, które pakiety ten węzeł przekazuje dalej",
-  "Node Info Broadcast Secs": "Interwał rozgłaszania informacji o węźle",
+  "Node Info Broadcast Secs": "Interwał transmisji informacji o węźle (s)",
   "How often to broadcast node info (seconds, 0 = default)":
     "Jak często rozgłaszać informacje o węźle (sekundy, 0 = domyślnie)",
   "Button GPIO": "Przycisk GPIO",
   "GPIO pin for user button (0 = default)":
     "Pin GPIO przycisku użytkownika (0 = domyślny)",
-  "Buzzer GPIO": "Buzzer GPIO",
   "GPIO pin for buzzer (0 = default)": "Pin GPIO buzzera (0 = domyślny)",
   "Double Tap as Button Press": "Podwójne dotknięcie jako naciśnięcie przycisku",
-  "Use double-tap on the device as a button press":
-    "Traktuj podwójne dotknięcie urządzenia jako naciśnięcie przycisku",
   "LED Heartbeat Disabled": "Wyłącz LED bicia serca",
   "Disable the LED heartbeat indicator": "Wyłącza migającą diodę bicia serca",
   "Serial Console Disabled": "Konsola szeregowa wyłączona",
@@ -97,22 +94,16 @@ const PL_STRINGS = {
   /* ── pozycja ── */
   "GPS Enabled": "GPS włączony",
   "Enable the onboard GPS hardware": "Włącz wbudowany moduł GPS",
-  "GPS Mode": "Tryb GPS",
+  "GPS Mode": "Tryb GPS (sprzęt fizyczny)",
   "How the device obtains its position": "Sposób ustalania pozycji przez urządzenie",
   "GPS Update Interval (secs)": "Interwał odpytywania GPS (s)",
-  "How often the GPS hardware checks position": "Jak często moduł GPS sprawdza pozycję",
-  "Position Broadcast Secs": "Interwał rozgłaszania pozycji (s)",
-  "How often to broadcast position (seconds, 0 = default)":
-    "Jak często rozgłaszać pozycję (sekundy, 0 = domyślnie)",
-  "Smart Position Broadcast": "Inteligentne rozgłaszanie pozycji",
+  "How often the GPS hardware checks position": "Jak często powinniśmy próbować uzyskać pozycję GPS (<10 sekund utrzymuje GPS włączony).",
+  "Position Broadcast Secs": "Interwał transmisji pozycji (s)",
+  "Smart Position Broadcast": "Inteligentne Pozycjonowanie",
   "Only broadcast position when movement is detected":
     "Rozgłaszaj pozycję tylko po wykryciu ruchu",
-  "Broadcast Smart Min Distance (m)": "Minimalny dystans inteligentny (m)",
-  "Min distance to move before broadcasting (0 = disabled)":
-    "Minimalna zmiana odległości przed rozgłoszeniem (0 = wyłączone)",
-  "Broadcast Smart Min Interval (secs)": "Minimalny interwał inteligentny (s)",
-  "Min interval between smart broadcasts":
-    "Minimalny odstęp między inteligentnymi rozgłoszeniami",
+  "Broadcast Smart Min Distance (m)": "Inteligentny dystans (m)",
+  "Broadcast Smart Min Interval (secs)": "Inteligentny interwał (s)",
   "Fixed Position": "Położenie stałe",
   "Use a fixed position instead of GPS": "Użyj stałej pozycji zamiast GPS",
   "Latitude": "Szerokość geograficzna",
@@ -124,9 +115,7 @@ const PL_STRINGS = {
   "GPIO pin for GPS TX (0 = default)": "Pin GPIO dla GPS TX (0 = domyślny)",
 
   /* ── zasilanie ── */
-  "Power Saving": "Oszczędzanie energii",
-  "Enable power saving mode (light sleep between operations)":
-    "Włącz tryb oszczędzania energii (lekkie uśpienie między operacjami)",
+  "Power Saving": "Włącz tryb oszczędzania energii",
   "On Battery Shutdown After (secs)": "Wyłączenie na baterii po (s)",
   "Auto-shutdown after this many seconds on battery (0 = disabled)":
     "Automatyczne wyłączenie po tylu sekundach na baterii (0 = wyłączone)",
@@ -143,15 +132,14 @@ const PL_STRINGS = {
 
   /* ── sieć ── */
   "WiFi Enabled": "WiFi włączone",
-  "Enable WiFi connectivity": "Włącz łączność WiFi",
+  "Enable WiFi connectivity": "Włączenie WiFi spowoduje wyłączenie bluetooth.",
   "WiFi SSID": "Nazwa sieci WiFi (SSID)",
-  "Network name": "Nazwa sieci",
   "WiFi Password": "Hasło WiFi",
   "Ethernet Enabled": "Ethernet włączony",
-  "Enable Ethernet connectivity": "Włącz łączność Ethernet",
+  "Enable Ethernet connectivity": "Włączenie połączenia Ethernet spowoduje wyłączenie bluetootha. Połączania TCP nie są dostępne na urządzeniach Apple.",
   "NTP Server": "Serwer NTP",
   "Custom NTP server address": "Własny adres serwera NTP",
-  "Syslog Server": "Serwer syslog",
+  "Syslog Server": "Serwer rsyslog",
   "Remote syslog server (host:port)": "Zdalny serwer syslog (host:port)",
   "IPv4 Address": "Adres IPv4",
   "Static IPv4 address (leave empty for DHCP)":
@@ -160,27 +148,19 @@ const PL_STRINGS = {
   "DNS Server": "Serwer DNS",
 
   /* ── wyświetlacz ── */
-  "Screen On Secs": "Ekran włączony przez (s)",
-  "How long the screen stays on (0 = always on)":
-    "Jak długo ekran pozostaje włączony (0 = zawsze)",
+  "Screen On Secs": "Ekran włączony na (s)",
   "Auto Carousel Secs": "Interwał karuzeli (s)",
-  "Seconds between auto-cycling pages (0 = disabled)":
-    "Odstęp między automatyczną zmianą stron (0 = wyłączone)",
-  "Display Units": "Jednostki",
+  "Display Units": "Wyświetlana jednostka",
   "Display Mode": "Tryb wyświetlania",
-  "Color mode for the display": "Tryb kolorów wyświetlacza",
+  "Color mode for the display": "Nadpisz domyślny układ ekranu.",
   "OLED Type": "Typ ekranu OLED",
-  "OLED display hardware type": "Typ sprzętowy wyświetlacza OLED",
+  "OLED display hardware type": "Nadpisz automatyczne wykrywanie ekranu OLED.",
   "Flip Screen": "Odwróć ekran",
-  "Rotate the display 180 degrees": "Obróć obraz o 180 stopni",
+  "Rotate the display 180 degrees": "Odwróć ekran pionowo.",
   "Heading Bold": "Pogrubiony nagłówek",
-  "Use bold for heading text (0 = no, 1 = yes)":
-    "Pogrub tekst nagłówka (0 = nie, 1 = tak)",
   "Compass North Top": "Północ u góry kompasu",
-  "Always orient compass with north at top":
-    "Kompas zawsze zwrócony północą do góry",
   "Wake on Tap or Motion": "Wybudź przy dotknięciu lub ruchu",
-  "Wake the screen when motion is detected": "Wybudź ekran po wykryciu ruchu",
+  "Wake the screen when motion is detected": "Wymagany jest akcelerometr na urządzeniu.",
 
   /* ── Bluetooth ── */
   "Bluetooth Enabled": "Bluetooth włączony",
@@ -198,7 +178,7 @@ const PL_STRINGS = {
   "Admin Channel Index": "Indeks kanału administracyjnego",
   "Channel index used for admin messages (0 = primary)":
     "Indeks kanału dla wiadomości administracyjnych (0 = podstawowy)",
-  "Admin Channel Enabled": "Kanał administracyjny włączony",
+  "Admin Channel Enabled": "Stary kanał administracyjny",
   "Allow configuration via a dedicated admin channel":
     "Zezwól na konfigurację przez dedykowany kanał administracyjny",
   "Admin Keys": "Klucze administratora",
@@ -206,21 +186,15 @@ const PL_STRINGS = {
   Show: "Pokaż",
   Hide: "Ukryj",
   Deprecated: "przestarzałe",
-  "Debug Log Enabled": "Dziennik diagnostyczny włączony",
-  "Enable verbose debug logging on the device":
-    "Włącz szczegółowe logowanie diagnostyczne na urządzeniu",
+  "Debug Log Enabled": "API dziennika debugowania włączone",
   "Long Name": "Długa nazwa",
   "Your radio's display name on the mesh (max 39 chars)":
     "Nazwa urządzenia widoczna w sieci (maks. 39 znaków)",
   "Short Name": "Krótka nazwa",
   "4-character abbreviation shown on compact displays":
     "Czteroznakowy skrót pokazywany na małych ekranach",
-  "Licensed Operator": "Radioamator licencjonowany",
-  "If enabled, your node will use HAM mode with longer names and no encryption":
-    "Włącza tryb radioamatorski: dłuższe nazwy i brak szyfrowania",
-  "Base64 encoded key": "Klucz zakodowany w Base64",
-  "Channel name": "Nazwa kanału",
-  "Uplink Enabled": "Wysyłanie włączone",
+  "Licensed Operator": "Radioamator licencjonowany (Ham)",
+  "Uplink Enabled": "Wysył włączony",
   "Forward packets from this channel to MQTT":
     "Przekazuj pakiety z tego kanału do MQTT",
   "Downlink Enabled": "Odbiór włączony",
@@ -228,21 +202,21 @@ const PL_STRINGS = {
     "Przekazuj pakiety z MQTT na ten kanał",
 
   /* ── MQTT ── */
-  "MQTT Enabled": "MQTT włączone",
+  "MQTT Enabled": "Włącz MQTT",
   "Enable MQTT client on this device": "Włącz klienta MQTT na tym urządzeniu",
   "MQTT broker hostname or IP": "Nazwa hosta lub IP brokera MQTT",
   "Root Topic": "Główny temat",
   "MQTT root topic": "Główny temat MQTT",
   "Encryption Enabled": "Szyfrowanie włączone",
   "Encrypt MQTT traffic": "Szyfruj ruch MQTT",
-  "JSON Enabled": "Wyjście JSON",
+  "JSON Enabled": "Włącz wyjście JSON",
   "Send JSON-formatted messages to MQTT": "Wysyłaj wiadomości w formacie JSON do MQTT",
-  "TLS Enabled": "TLS włączone",
+  "TLS Enabled": "Włącz TLS",
   "Use TLS for broker connection": "Użyj TLS do połączenia z brokerem",
   "Proxy to Client Enabled": "Proxy do klienta włączone",
   "Proxy MQTT traffic through connected client":
     "Przekazuj ruch MQTT przez podłączonego klienta",
-  "Map Reporting Enabled": "Raportowanie na mapę",
+  "Map Reporting Enabled": "Raportowanie map",
   "Report position to the Meshtastic map": "Zgłaszaj pozycję na mapę publiczną",
 
   /* ── port szeregowy ── */
@@ -251,7 +225,7 @@ const PL_STRINGS = {
   "Serial communication protocol": "Protokół komunikacji szeregowej",
   "Timeout (ms)": "Limit czasu (ms)",
   "Serial timeout in milliseconds": "Limit czasu portu szeregowego w milisekundach",
-  Echo: "Echo",
+  "Echo": "Włącz echo",
   "Echo received serial data back": "Odsyłaj odebrane dane szeregowe",
   "Override Console Serial Port": "Nadpisz port szeregowy konsoli",
   "Use the main serial port for this module":
@@ -259,28 +233,28 @@ const PL_STRINGS = {
 
   /* ── powiadomienia zewnętrzne ── */
   "Enable external notification module": "Włącz moduł powiadomień zewnętrznych",
-  "Output GPIO": "Wyjście GPIO",
+  "Output GPIO": "Wyjście LED (GPIO)",
   "GPIO pin for notification output": "Pin GPIO wyjścia powiadomień",
   "Output Duration (ms)": "Czas trwania (ms)",
   "Notification pulse duration": "Długość impulsu powiadomienia",
-  "Active High": "Aktywny stanem wysokim",
+  "Active High": "Wyjście LED aktywne wysokim stanem",
   "Output is active-high (vs active-low)":
     "Wyjście aktywne stanem wysokim (zamiast niskim)",
   "Output Vibra GPIO": "Wyjście silnika wibracyjnego (GPIO)",
   "GPIO for vibration motor": "Pin GPIO silnika wibracyjnego",
   "Output Buzzer GPIO": "Wyjście buzzera (GPIO)",
   "GPIO for piezo buzzer": "Pin GPIO buzzera piezo",
-  "Alert on Message": "Alert przy wiadomości",
+  "Alert on Message": "Powiadomienia o otrzymaniu wiadomości",
   "Notify on incoming messages": "Powiadamiaj o wiadomościach przychodzących",
-  "Alert on Message Vibra": "Wibracja przy wiadomości",
+  "Alert on Message Vibra": "Wibracja wiadomości alarmowej",
   "Use vibration for message alerts": "Użyj wibracji do alertów o wiadomościach",
-  "Alert on Message Buzzer": "Brzęczyk przy wiadomości",
+  "Alert on Message Buzzer": "Brzęczyk wiadomości alarmowej",
   "Use buzzer for message alerts": "Użyj buzzera do alertów o wiadomościach",
-  "Alert on Bell": "Alert przy dzwonku",
+  "Alert on Bell": "Powiadomienia przy odbiorze alertu/dzwonka",
   "Notify on bell character": "Powiadamiaj o znaku dzwonka",
-  "Alert on Bell Vibra": "Wibracja przy dzwonku",
-  "Alert on Bell Buzzer": "Brzęczyk przy dzwonku",
-  "Use PWM Buzzer": "Buzzer PWM",
+  "Alert on Bell Vibra": "Wibracja dzwonka alarmowego",
+  "Alert on Bell Buzzer": "Brzęczyk dzwonka alarmowego",
+  "Use PWM Buzzer": "Użyj buzzera PWM",
   "Drive buzzer with PWM for tones": "Steruj buzzerem sygnałem PWM",
   "Nag Timeout (secs)": "Czas przypomnienia (s)",
   "Repeat notification interval (0 = once)":
@@ -292,7 +266,7 @@ const PL_STRINGS = {
   "Act as the S&F server for the mesh": "Pracuj jako serwer S&F dla sieci",
   "Number of messages to store (0 = auto)":
     "Liczba przechowywanych wiadomości (0 = automatycznie)",
-  "History Return Max": "Maksimum zwracanej historii",
+  "History Return Max": "Maks. zwracana historia",
   "Max messages to return on request":
     "Maksymalna liczba wiadomości zwracanych na żądanie",
   "History Return Window (secs)": "Okno zwracanej historii (s)",
@@ -301,40 +275,40 @@ const PL_STRINGS = {
 
   /* ── test zasięgu ── */
   "Enable Range Test module": "Włącz moduł testu zasięgu",
-  "Sender Interval (secs)": "Interwał nadawania (s)",
+  "Sender Interval (secs)": "Interwał wiadomości nadawcy (s)",
   "Seconds between test messages (0 = receive only)":
     "Odstęp między wiadomościami testowymi (0 = tylko odbiór)",
-  "Save to File": "Zapisz do pliku",
+  "Save to File": "Zapisz .CSV w pamięci (tylko ESP32)",
   "Save received test data to file": "Zapisuj odebrane dane testowe do pliku",
 
   /* ── telemetria ── */
-  "Update Interval (secs)": "Interwał aktualizacji (s)",
+  "Update Interval (secs)": "Interwał aktualizacji metryk urządzenia (s)",
   "How often the radio broadcasts device metrics. 0 uses the firmware default (3600s on fw 2.7.x).":
     "Jak często radio rozgłasza metryki urządzenia. 0 oznacza wartość domyślną firmware (3600 s w 2.7.x).",
-  "Environment Measurement Enabled": "Pomiary środowiskowe włączone",
+  "Environment Measurement Enabled": "Moduł metryk środowiskowych włączony",
   "Enable environment sensor readings": "Włącz odczyty czujników środowiskowych",
-  "Environment Update Interval (secs)": "Interwał metryk środowiskowych (s)",
-  "Environment Screen Enabled": "Metryki środowiskowe na ekranie",
+  "Environment Update Interval (secs)": "Interwał aktualizacji metryk środowiskowych (s)",
+  "Environment Screen Enabled": "Metryki środowiskowe na ekranie włączone",
   "Show on screen (1 = yes)": "Pokazuj na ekranie (1 = tak)",
-  "Air Quality Enabled": "Jakość powietrza włączona",
+  "Air Quality Enabled": "Włącz moduł metryk jakości powietrza",
   "Enable air quality sensor readings": "Włącz odczyty czujnika jakości powietrza",
-  "Air Quality Interval (secs)": "Interwał jakości powietrza (s)",
-  "Power Measurement Enabled": "Pomiary zasilania włączone",
+  "Air Quality Interval (secs)": "Czas aktualizacji metryk jakości powietrza (s)",
+  "Power Measurement Enabled": "Włącz moduł metryk zasilania",
   "Enable power sensor readings (INA sensors)":
     "Włącz odczyty czujników zasilania (INA)",
-  "Power Update Interval (secs)": "Interwał metryk zasilania (s)",
-  "Power Screen Enabled": "Metryki zasilania na ekranie",
+  "Power Update Interval (secs)": "Czas aktualizacji metryk zasilania (s)",
+  "Power Screen Enabled": "Wyświetlaj metryki zasilania na ekranie",
 
   /* ── gotowe wiadomości ── */
   "Enable Canned Message module": "Włącz moduł gotowych wiadomości",
-  "Rotary Encoder Enabled": "Enkoder obrotowy włączony",
+  "Rotary Encoder Enabled": "Enkoder obrotowy #1 włączony",
   "Input Pin A": "Pin wejściowy A",
   "GPIO for rotary encoder / button A": "Pin GPIO enkodera obrotowego / przycisku A",
   "Input Pin B": "Pin wejściowy B",
   "GPIO for rotary encoder B": "Pin GPIO enkodera obrotowego B",
   "Input Pin Press": "Pin naciśnięcia",
   "GPIO for press/select": "Pin GPIO naciśnięcia / wyboru",
-  "Up/Down Enabled": "Wejście góra/dół włączone",
+  "Up/Down Enabled": "Wejście Góra/Dół/Wybór włączone",
   "Allow Input Source": "Zezwól na źródło wejściowe",
   "Allow message input from hardware": "Zezwól na wprowadzanie wiadomości ze sprzętu",
   "Input Event Source": "Źródło zdarzeń wejściowych",
@@ -348,10 +322,10 @@ const PL_STRINGS = {
   "Codec2 bitrate setting": "Ustawienie przepływności Codec2",
   "PTT GPIO": "Pin PTT",
   "GPIO for push-to-talk button": "Pin GPIO przycisku push-to-talk",
-  "I2S WS GPIO": "I2S WS GPIO",
-  "I2S SD GPIO": "I2S SD GPIO",
-  "I2S DIN GPIO": "I2S DIN GPIO",
-  "I2S SCK GPIO": "I2S SCK GPIO",
+  "I2S WS GPIO": "I2S wybór słowa (GPIO)",
+  "I2S SD GPIO": "I2S dane wyjściowe (GPIO)",
+  "I2S DIN GPIO": "I2S dane wejściowe (GPIO)",
+  "I2S SCK GPIO": "Zegar I2S (GPIO)",
 
   /* ── sąsiedzi ── */
   "Enable Neighbor Info module": "Włącz moduł informacji o sąsiadach",
@@ -369,26 +343,26 @@ const PL_STRINGS = {
 
   /* ── czujnik detekcji ── */
   "Enable Detection Sensor module": "Włącz moduł czujnika detekcji",
-  "Monitor Pin": "Monitorowany pin",
+  "Monitor Pin": "Pin GPIO do monitorowania",
   "GPIO pin to monitor for detection": "Pin GPIO monitorowany pod kątem detekcji",
   "Detection Triggered High": "Wyzwalanie stanem wysokim",
   "Message when pin goes HIGH": "Wiadomość przy stanie wysokim",
   "Detection Triggered Low": "Wyzwalanie stanem niskim",
   "Message when pin goes LOW": "Wiadomość przy stanie niskim",
-  "Use Pullup": "Rezystor podciągający",
+  "Use Pullup": "Użyj trybu INPUT_PULLUP",
   "Enable internal pullup resistor": "Włącz wewnętrzny rezystor podciągający",
-  "Minimum Broadcast Secs": "Minimalny odstęp rozgłaszania (s)",
+  "Minimum Broadcast Secs": "Minimalny czas transmisji (s)",
   "Min interval between alert broadcasts": "Minimalny odstęp między alertami",
-  "State Broadcast Secs": "Rozgłaszanie stanu (s)",
+  "State Broadcast Secs": "Nadawanie stanu (s)",
   "Periodic state broadcast interval": "Interwał okresowego rozgłaszania stanu",
 
   /* ── licznik PAX ── */
   "Enable Paxcounter module": "Włącz moduł licznika PAX",
   "How often to broadcast pax count (0 = default)":
     "Jak często rozgłaszać licznik PAX (0 = domyślnie)",
-  "WiFi Threshold": "Próg WiFi",
+  "WiFi Threshold": "Próg WiFi RSSI (domyślnie: -80)",
   "Enable WiFi device counting": "Licz urządzenia WiFi",
-  "BLE Threshold": "Próg BLE",
+  "BLE Threshold": "Próg RSSI BLE (domyślnie -80)",
   "Enable BLE device counting": "Licz urządzenia BLE",
 
   /* ── kanał docelowy ── */
@@ -400,7 +374,7 @@ const PL_STRINGS = {
   Channels: "Kanały",
   Device: "Urządzenie",
   User: "Użytkownik",
-  Position: "Pozycja",
+  "Position": "Pozycjonowanie",
   Power: "Zasilanie",
   Network: "Sieć",
   Display: "Wyświetlacz",
@@ -410,16 +384,16 @@ const PL_STRINGS = {
   Storage: "Pamięć",
   MQTT: "MQTT",
   Serial: "Port szeregowy",
-  "Ext. Notification": "Powiadomienia zewnętrzne",
+  "Ext. Notification": "Zewnętrzne Powiadomienie",
   "Store & Forward": "Store & Forward",
   "Range Test": "Test zasięgu",
   Telemetry: "Telemetria",
-  "Canned Messages": "Gotowe wiadomości",
+  "Canned Messages": "Wiadomości predefiniowane",
   Audio: "Dźwięk",
   "Neighbor Info": "Informacje o sąsiadach",
-  "Ambient Lighting": "Podświetlenie",
+  "Ambient Lighting": "Oświetlenie otoczenia",
   "Detection Sensor": "Czujnik detekcji",
-  Paxcounter: "Licznik PAX",
+  "Paxcounter": "Paxcounter",
   TAK: "TAK",
 
   /* role urządzenia — nazwy z aplikacji MT_SW_APP */
@@ -457,7 +431,7 @@ const PL_STRINGS = {
   "Random PIN": "Losowy PIN",
   "No PIN": "Bez PIN-u",
   Primary: "Podstawowy",
-  Secondary: "Dodatkowy",
+  "Secondary": "Wtórny",
   "Text Message": "Wiadomość tekstowa",
   "Rotary Encoder": "Enkoder obrotowy",
   "Up/Down/Select": "Góra/Dół/Wybór",
@@ -490,12 +464,12 @@ const PL_STRINGS = {
   "On-device UI: theme, brightness, lock and language (firmware 2.8+).":
     "Interfejs na ekranie urządzenia: motyw, jasność, blokada i język (firmware 2.8+).",
 
-  "Packet Signature Policy": "Polityka podpisu pakietów",
+  "Packet Signature Policy": "Autentyczność pakietów",
   "How strictly this node verifies signed packets (firmware 2.8+)":
     "Jak rygorystycznie ten węzeł weryfikuje podpisane pakiety (firmware 2.8+)",
-  "Compatible — Accept Unsigned": "Kompatybilny — akceptuj niepodpisane",
-  "Balanced — Prefer Authenticated": "Zrównoważony — preferuj uwierzytelnione",
-  "Strict — Require Authentication": "Ścisły — wymagaj uwierzytelnienia",
+  "Compatible — Accept Unsigned": "Kompatybilny — Akceptuj niepodpisane",
+  "Balanced — Prefer Authenticated": "Zrównoważony — Preferuj uwierzytelnione",
+  "Strict — Require Authentication": "Ścisły — Wymagaj uwierzytelnienia",
 
   "Traffic Management": "Zarządzanie ruchem",
   "MT_SW firmware extension for shaping mesh traffic — not part of stock Meshtastic.":
@@ -506,12 +480,12 @@ const PL_STRINGS = {
   "Rate Limit Max Packets": "Maks. pakietów w oknie",
   "Unknown Packet Threshold": "Próg nieznanych pakietów",
 
-  "Mesh Beacon": "Sygnał mesh (beacon)",
+  "Mesh Beacon": "Meshbeacon",
   "MT_SW firmware extension: periodically announces this mesh to nearby networks.":
     "Rozszerzenie firmware MT_SW: okresowo ogłasza tę sieć mesh pobliskim sieciom.",
   "Channel and target offers are configured on the device and are not editable here yet.":
     "Oferowany kanał i cele nadawania konfiguruje się na urządzeniu — nie są jeszcze edytowalne z panelu.",
-  "Beacon Message": "Wiadomość beacona",
+  "Beacon Message": "Wiadomość meshbeacon",
   "Broadcast Interval (secs)": "Interwał nadawania (s)",
   "Offered Region": "Oferowany region",
   "Offered Preset": "Oferowany preset",
@@ -529,7 +503,7 @@ const PL_STRINGS = {
   "MT_SW firmware extension: a custom status text broadcast to the mesh.":
     "Rozszerzenie firmware MT_SW: własny tekst statusu rozgłaszany do sieci mesh.",
   "Status Text": "Treść statusu",
-  "Shown to other nodes on the node list": "Widoczny innym węzłom na liście węzłów",
+  "Shown to other nodes on the node list": "Wiadomość statusu, która jest rozgłaszana do sieci mesh. Inne węzły zobaczą ten status na liście węzłów.",
 
   /* baud rate portu szeregowego — liczby zostają, dopisujemy jednostkę */
   "110": "110 bps", "300": "300 bps", "600": "600 bps", "1200": "1200 bps",
@@ -571,11 +545,11 @@ const PL_STRINGS = {
   "Restart the radio device": "Uruchom ponownie urządzenie radiowe",
   Shutdown: "Wyłącz",
   "Power off the radio device": "Wyłącz zasilanie urządzenia radiowego",
-  "Reset NodeDB": "Resetuj bazę węzłów",
+  "Reset NodeDB": "Zresetuj NodeDB",
   "Clear the mesh node database": "Wyczyść bazę węzłów sieci mesh",
-  "Factory Reset Config": "Reset konfiguracji",
+  "Factory Reset Config": "Ustawienia fabryczne — konfiguracja",
   "Reset all configuration to defaults": "Przywróć całą konfigurację do ustawień domyślnych",
-  "Full Factory Reset": "Pełny reset fabryczny",
+  "Full Factory Reset": "Ustawienia fabryczne — pełny reset",
   "Reset config and clear all data": "Przywróć konfigurację i usuń wszystkie dane",
   "Reboot to OTA": "Restart do trybu OTA",
   "Reboot into OTA update mode": "Uruchom ponownie w trybie aktualizacji OTA",
@@ -609,16 +583,16 @@ const PL_STRINGS = {
   "Set the name and identity of your radio node on the mesh.": "Ustaw nazwę i tożsamość swojego węzła w sieci mesh.",
   "Device Configuration": "Konfiguracja urządzenia",
   "Configure the device role, rebroadcast mode, and hardware options.": "Ustaw rolę urządzenia, tryb retransmisji i opcje sprzętowe.",
-  "Buzzer GPIO": "GPIO buzzera",
+  "Buzzer GPIO": "Buzzer GPIO",
   "Position Configuration": "Konfiguracja pozycji",
   "Configure GPS, fixed position, and position broadcast settings.": "Ustaw GPS, pozycję stałą i rozgłaszanie pozycji.",
-  "Power Configuration": "Konfiguracja zasilania",
+  "Power Configuration": "Konfiguracja zarządzania energią",
   "Configure power saving, sleep behavior, and battery management.": "Ustaw oszczędzanie energii, uśpienie i zarządzanie baterią.",
   "Network Configuration": "Konfiguracja sieci",
   "Configure WiFi, Ethernet, NTP server, and syslog settings.": "Ustaw WiFi, Ethernet, serwer NTP i syslog.",
   "IP Configuration": "Konfiguracja IP",
   Services: "Usługi",
-  "Display Configuration": "Konfiguracja wyświetlacza",
+  "Display Configuration": "Ustawienia wyświetlacza",
   "Configure screen timeout, units, OLED type, and display options.": "Ustaw wygaszanie ekranu, jednostki, typ OLED i opcje wyświetlania.",
   "Bluetooth Configuration": "Konfiguracja Bluetooth",
   "Configure Bluetooth connectivity, pairing mode, and PIN.": "Ustaw łączność Bluetooth, tryb parowania i PIN.",
@@ -628,9 +602,9 @@ const PL_STRINGS = {
   "Public Key": "Klucz publiczny",
   "MQTT Configuration": "Konfiguracja MQTT",
   "Configure MQTT broker connection, encryption, and map reporting.": "Ustaw połączenie z brokerem MQTT, szyfrowanie i raportowanie na mapie.",
-  "Serial Module": "Moduł Serial",
+  "Serial Module": "Konfiguracja seryjna",
   "Configure the serial interface module for external device communication.": "Ustaw interfejs szeregowy do komunikacji z urządzeniami zewnętrznymi.",
-  "External Notification": "Powiadomienia zewnętrzne",
+  "External Notification": "Konfiguracja Zewnętrznego Powiadomienia",
   "Configure buzzer, vibration motor, and LED notifications.": "Ustaw buzzer, silnik wibracji i powiadomienia diodą LED.",
   "Store messages and forward them to nodes that come online later.": "Zapisuj wiadomości i przekazuj je węzłom, które pojawią się w sieci później.",
   "Send periodic test messages to measure range and link quality.": "Wysyłaj okresowe wiadomości testowe, aby zmierzyć zasięg i jakość łącza.",
@@ -650,7 +624,7 @@ const PL_STRINGS = {
   /* ── Sniffer ── */
   "The sniffer works only on the radio connected to Home Assistant. Its state lives in the radio's RAM, so it is always off after a reboot.": "Sniffer działa tylko na radiu podłączonym do Home Assistant. Jego stan jest w pamięci RAM radia, więc po restarcie zawsze jest wyłączony.",
   "Firmware support": "Wsparcie w firmware",
-  "Sniffer state": "Stan sniffera",
+  "Sniffer state": "Tryb sniffera",
   Supported: "Wspierany",
   "Not supported": "Niewspierany",
   "Checking…": "Sprawdzanie…",
@@ -660,8 +634,8 @@ const PL_STRINGS = {
   "Enable sniffer": "Włącz sniffer",
   "Disable sniffer": "Wyłącz sniffer",
   "Check again": "Sprawdź ponownie",
-  "Enable sniffer?": "Włączyć sniffer?",
-  "Enabling the sniffer can delay or drop some chat and telemetry messages, because sniffed packets share the queue to Home Assistant with them.": "Włączenie sniffera może opóźniać lub gubić część wiadomości czatu i telemetrii, bo przechwycone pakiety współdzielą z nimi kolejkę do Home Assistant.",
+  "Enable sniffer?": "Włączyć tryb Sniffer?",
+  "Enabling the sniffer can delay or drop some chat and telemetry messages, because sniffed packets share the queue to Home Assistant with them.": "Sniffer przekazuje do Home Assistanta każdy pakiet odebrany przez radio, nie tylko te adresowane do tego urządzenia. Przy dużym ruchu w sieci może to spowodować opóźnienie lub utratę części wiadomości czatu bądź telemetrii, ponieważ współdzielą tę samą kolejkę transmisji.",
   "Firmware is too old: FW+ version 3 or newer is required.": "Firmware jest za stary: wymagana jest wersja FW+ 3 lub nowsza.",
   "The radio did not answer. Firmware without FW+ does not support the sniffer.": "Radio nie odpowiedziało. Firmware bez FW+ nie obsługuje sniffera.",
   "The radio did not answer in time.": "Radio nie odpowiedziało w czasie.",
@@ -669,7 +643,7 @@ const PL_STRINGS = {
   "Could not reach the radio.": "Nie udało się połączyć z radiem.",
   "Sniffer is not supported by this firmware.": "Ten firmware nie obsługuje sniffera.",
   "The radio kept the previous sniffer state.": "Radio zostawiło poprzedni stan sniffera.",
-  "Sniffer log": "Log sniffera",
+  "Sniffer log": "Log Sniffera",
   Collecting: "Zbieranie",
   "Not collecting": "Nie zbiera",
   packets: "pakietów",
@@ -679,11 +653,11 @@ const PL_STRINGS = {
   Resume: "Wznów",
   "Export JSON": "Eksport JSON",
   "Export CSV": "Eksport CSV",
-  "Clear log": "Wyczyść log",
+  "Clear log": "Wyczyść logi",
   Time: "Czas",
   From: "Od",
   To: "Do",
-  Info: "Informacje",
+  "Info": "Informacja",
   Signal: "Sygnał",
   Hops: "Skoki",
   "Show more": "Pokaż więcej",
@@ -700,6 +674,34 @@ const PL_STRINGS = {
   Signed: "Podpisany",
   Encrypted: "Zaszyfrowany",
   Broadcast: "Rozgłoszeniowy",
+
+  /* ── nowe napisy (ustawienia MQTT, mapa raportów, użytkownik) ── */
+  "Audio / Codec2": "Konfiguracja dźwięku",
+  "If enabled, your node will use HAM mode with longer names and no encryption": "Włączenie tej opcji wyłącza szyfrowanie i jest niezgodne z domyślną siecią MT_SW.",
+  "Unmessageable": "Nie przyjmuje wiadomości",
+  "Unmonitored or Infrastructure": "Niemonitorowany lub infrastruktura",
+  "Use double-tap on the device as a button press": "Traktuj podwójne dotknięcie na obsługiwanych akcelerometrach jako naciśnięcie przycisku użytkownika.",
+  "How often to broadcast position (seconds, 0 = default)": "Maksymalny odstęp czasu, jaki może upłynąć bez nadawania lokalizacji przez węzeł (0 = domyślnie).",
+  "Min distance to move before broadcasting (0 = disabled)": "Minimalna zmiana odległości w metrach, którą należy uwzględnić w przypadku inteligentnego pozycjonowania.",
+  "Min interval between smart broadcasts": "Kiedy najszybciej pozycja zostanie zaktualizowana, jeśli minimalna odległość została osiągnięta.",
+  "Enable power saving mode (light sleep between operations)": "Uśpij wszystko na tak długo, jak to możliwe, w przypadku funkcji trackera i czujnika obejmie to również radio lora. Nie używaj tego ustawienia, jeśli chcesz korzystać z urządzenia z aplikacjami na telefon lub używasz urządzenia bez przycisków.",
+  "How long the screen stays on (0 = always on)": "Jak długo ekran pozostaje włączony po naciśnięciu przycisku użytkownika lub odebraniu wiadomości (0 = zawsze włączony).",
+  "Seconds between auto-cycling pages (0 = disabled)": "Automatycznie przewija się na następną stronę na ekranie jak karuzela, co określony interwał czasowy (0 = wyłączone).",
+  "Use bold for heading text (0 = no, 1 = yes)": "Pogrub tekst nagłówka na ekranie.",
+  "Always orient compass with north at top": "Kierunek kompasu poza okręgiem na ekranie zawsze będzie wskazywał północ.",
+  "Enable verbose debug logging on the device": "Pokaż na żywo logi debugowania przez połączenie szeregowe, podejrzyj i eksportuj logi węzła (bez informacji lokalizacyjnych) przez Bluetooth.",
+  "Map Reporting": "Raportowanie map",
+  "Your node will periodically send an unencrypted map report packet to the configured MQTT server. It includes the node id, long and short name, approximate location, hardware model, role, firmware version, LoRa region, modem preset and primary channel name.": "Twój węzeł będzie okresowo wysyłał niezaszyfrowany pakiet raportu mapy do skonfigurowanego serwera MQTT, zawierający identyfikator, długą i krótką nazwę, przybliżoną lokalizację, model sprzętu, rolę, wersję oprogramowania układowego, region LoRa, ustawienia modemu i nazwę głównego kanału.",
+  "Map Reporting Interval (secs)": "Interwał raportowania map (s)",
+  "How often the node reports to the map (0 = firmware default, 3600 s)": "Jak często węzeł raportuje na mapę (0 = domyślnie w firmware, 3600 s)",
+  "Map Report Precision": "Dokładność raportowanej pozycji",
+  "How precisely the location is reported to the map. Fewer bits means a larger uncertainty area.": "Jak dokładnie pozycja trafia na mapę. Mniej bitów oznacza większy obszar niepewności.",
+  "Location Reporting Consent": "Zgoda na raportowanie lokalizacji",
+  "I consent to sending this node's location unencrypted over MQTT (used for the live map, device tracking and related telemetry).": "Zgoda na udostępnianie niezaszyfrowanych danych węzła za pośrednictwem protokołu MQTT",
+  "±5.8 km": "±5,8 km",
+  "±2.9 km": "±2,9 km",
+  "±1.5 km": "±1,5 km",
+  "Precise location": "Precyzyjna lokalizacja",
 };
 
 /** Tłumaczenie napisu z przeniesionej zakładki; brak hasła = angielski. */

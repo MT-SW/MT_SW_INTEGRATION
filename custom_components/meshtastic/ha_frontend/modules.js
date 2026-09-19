@@ -177,8 +177,33 @@ class ModuleConfigPanel extends LitElement {
    <mesh-settings-mqtt>
    ══════════════════════════════════════════════════════════ */
 
+/* Dokładność pozycji w raporcie mapy: liczba bitów współrzędnych, które
+   węzeł zostawia (im mniej, tym większy kwadrat niepewności). Wartości jak
+   w wyborze dokładności kanału w aplikacji. 0 = domyślna firmware (14 bitów). */
+function mapReportPrecisions() {
+  return [
+    { value: "0", label: PL("Default") },
+    { value: "10", label: PL("±23 km") },
+    { value: "11", label: PL("±12 km") },
+    { value: "12", label: PL("±5.8 km") },
+    { value: "13", label: PL("±2.9 km") },
+    { value: "14", label: PL("±1.5 km") },
+    { value: "15", label: PL("±730 m") },
+    { value: "16", label: PL("±360 m") },
+    { value: "17", label: PL("±180 m") },
+    { value: "18", label: PL("±90 m") },
+    { value: "19", label: PL("±45 m") },
+    { value: "32", label: PL("Precise location") },
+  ];
+}
+
 class MeshSettingsMqtt extends ModuleConfigPanel {
   get _section() { return "mqtt"; }
+
+  /* Ustawienia raportu mapy siedzą w zagnieżdżonym obiekcie map_report_settings. */
+  _updateMapReport(field, value) {
+    this._updateField("map_report_settings", { ...(this._draft.map_report_settings || {}), [field]: value });
+  }
 
   render() {
     const d = this._draft;
@@ -233,6 +258,37 @@ class MeshSettingsMqtt extends ModuleConfigPanel {
                 .checked=${d.map_reporting_enabled === true}
                 @change=${(e) => this._updateField("map_reporting_enabled", e.detail.checked)}></mesh-toggle>
             </div>
+
+            ${d.map_reporting_enabled ? html`
+              <div class="settings-section">
+                ${this._sectionTitle(PL("Map Reporting"))}
+                <div class="info-banner">
+                  ${PL("Your node will periodically send an unencrypted map report packet to the configured MQTT server. It includes the node id, long and short name, approximate location, hardware model, role, firmware version, LoRa region, modem preset and primary channel name.")}
+                </div>
+                <div class="form-grid">
+                  <mesh-number-input
+                    .label=${PL("Map Reporting Interval (secs)")}
+                    .description=${PL("How often the node reports to the map (0 = firmware default, 3600 s)")}
+                    .value=${d.map_report_settings?.publish_interval_secs ?? 0}
+                    .min=${0}
+                    @change=${(e) => this._updateMapReport("publish_interval_secs", e.detail.value)}
+                  ></mesh-number-input>
+                  <mesh-select
+                    .label=${PL("Map Report Precision")}
+                    .description=${PL("How precisely the location is reported to the map. Fewer bits means a larger uncertainty area.")}
+                    .value=${String(d.map_report_settings?.position_precision ?? 0)}
+                    .options=${mapReportPrecisions()}
+                    @change=${(e) => this._updateMapReport("position_precision", Number(e.detail.value))}
+                  ></mesh-select>
+                </div>
+                <mesh-toggle
+                  .label=${PL("Location Reporting Consent")}
+                  .description=${PL("I consent to sending this node's location unencrypted over MQTT (used for the live map, device tracking and related telemetry).")}
+                  .checked=${d.map_report_settings?.should_report_location === true}
+                  @change=${(e) => this._updateMapReport("should_report_location", e.detail.checked)}
+                ></mesh-toggle>
+              </div>
+            ` : ""}
           ` : ""}
         </div>
         <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}

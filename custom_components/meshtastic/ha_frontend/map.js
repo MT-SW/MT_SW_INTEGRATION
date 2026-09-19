@@ -10,8 +10,11 @@
  * sam element). Inaczej trzeba by wstrzykiwać arkusz Leafleta do każdego
  * cienia z osobna i walczyć z pozycjonowaniem kontrolek.
  *
- * Źródło kafli jest wybierane przez użytkownika i zapamiętywane w
- * localStorage. Dostawcy zmieniają zasady w trakcie życia integracji
+ * Źródło kafli i klucze API dostawców wybiera użytkownik. Zapisujemy je
+ * po stronie serwera (meshtastic/map_settings), żeby klucz wpisany raz był
+ * widoczny w każdej przeglądarce i w aplikacji mobilnej HA; localStorage
+ * zostaje tylko szybkim buforem, żeby mapa nie mrugała przy starcie.
+ * Dostawcy zmieniają zasady w trakcie życia integracji
  * (CARTO zaczęło wymagać klucza w sierpniu 2026, OpenStreetMap blokuje
  * klientów spoza swojej polityki), więc zaszycie jednego na stałe oznacza
  * zepsutą mapę przy każdej takiej zmianie.
@@ -29,6 +32,19 @@ const ESRI_ATTR = "Kafle &copy; Esri";
    Polski i od lat jest jednym z dostawców wymienianych jako darmowe
    w leaflet-providers. */
 const TILE_PRESETS = {
+  /* Standardowa mapa OpenStreetMap (Mapnik) — ta sama, którą pokazuje
+     aplikacja na telefon. HA ustawia w nagłówku strony
+     <meta name="referrer" content="same-origin">, więc przeglądarka nie wysyła
+     Referera do zewnętrznych serwerów, a serwery kafli OSM odrzucają żądania
+     bez niego (zob. operations.osmfoundation.org/policies/tiles). Dlatego kafle
+     dostają własny referrerPolicy — Leaflet 1.9 ustawia go na każdym <img>. */
+  osm: {
+    labelKey: "map.tiles.osm",
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: OSM_ATTR,
+    maxZoom: 19,
+    referrerPolicy: "origin",
+  },
   esri_street: {
     labelKey: "map.tiles.esri_street",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
@@ -62,11 +78,11 @@ const TILE_PRESETS = {
     attribution: `${OSM_ATTR} &copy; CARTO`,
     maxZoom: 20,
     needsKey: true,
+    keyHintKey: "map.tiles.key_hint_carto",
   },
-  /* Klasyczny wygląd OSM (Mapnik), ale nie z tile.openstreetmap.org — ich
-     polityka wprost zabrania takiego użycia bez wcześniejszej zgody (zob.
-     operations.osmfoundation.org/policies/tiles). Stadia renderuje z tych
-     samych danych OSM i ma darmowy poziom. */
+  /* Dane OSM w stylu OSM Bright, renderowane przez Stadia Maps (darmowy
+     poziom, wymaga klucza). To NIE jest standardowa mapa z aplikacji — ta jest
+     w presecie "osm" powyżej. */
   osm_bright: {
     labelKey: "map.tiles.osm_bright",
     url: "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png",
@@ -74,6 +90,7 @@ const TILE_PRESETS = {
     maxZoom: 20,
     needsKey: true,
     keyParam: "api_key",
+    keyHintKey: "map.tiles.key_hint_stadia",
   },
   custom: {
     labelKey: "map.tiles.custom",
@@ -81,10 +98,12 @@ const TILE_PRESETS = {
     attribution: "",
     maxZoom: 19,
     isCustom: true,
+    referrerPolicy: "origin",
   },
 };
 
-const DEFAULT_PRESET = "esri_street";
+const DEFAULT_PRESET = "osm";
+const SETTINGS_VERSION = 2;
 
 const BASE_URL = import.meta.url.replace(/\/[^/]+$/, "");
 
@@ -140,24 +159,56 @@ async function ensureLeafletCss(root) {
   root.appendChild(style);
 }
 
+/* Ustawienia kafli: { preset, customUrl, keys: { <preset>: "klucz" } }.
+   Każdy dostawca ma własny klucz — wspólne pole psuło przełączanie między
+   nimi. Starszy format miał jedno pole `key`; przypisujemy je temu
+   dostawcy, który był wtedy wybrany. */
+function normalizeTileSettings(raw) {
+  const out = { preset: DEFAULT_PRESET, customUrl: "", keys: {} };
+  if (!raw || typeof raw !== "object") {
+    return out;
+  }
+  if (TILE_PRESETS[raw.preset]) {
+    out.preset = raw.preset;
+  }
+  out.customUrl = String(raw.customUrl ?? raw.custom_url ?? "");
+  const keys = raw.keys && typeof raw.keys === "object" ? raw.keys : {};
+  for (const [id, value] of Object.entries(keys)) {
+    if (TILE_PRESETS[id] && TILE_PRESETS[id].needsKey && typeof value === "string" && value.trim()) {
+      out.keys[id] = value.trim();
+    }
+  }
+  if (typeof raw.key === "string" && raw.key.trim()) {
+    const chosen = TILE_PRESETS[out.preset];
+    if (chosen && chosen.needsKey && !out.keys[out.preset]) {
+      out.keys[out.preset] = raw.key.trim();
+    }
+  }
+  return out;
+}
+
 function loadTileSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && TILE_PRESETS[parsed.preset]) {
-        return { preset: parsed.preset, customUrl: parsed.customUrl || "", key: parsed.key || "" };
+      const settings = normalizeTileSettings(parsed);
+      // Wcześniej domyślnym dostawcą było Esri. Jeśli nikt nie zapisał wyboru
+      // już w nowym formacie, traktujemy to jako "nie wybrano" i dajemy OSM.
+      if (parsed && !parsed.version && parsed.preset === "esri_street") {
+        settings.preset = DEFAULT_PRESET;
       }
+      return settings;
     }
   } catch (err) {
     console.debug("MT_SW: nie udało się odczytać ustawień kafli", err);
   }
-  return { preset: DEFAULT_PRESET, customUrl: "", key: "" };
+  return normalizeTileSettings(null);
 }
 
 function saveTileSettings(settings) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...settings, version: SETTINGS_VERSION }));
   } catch (err) {
     console.debug("MT_SW: nie udało się zapisać ustawień kafli", err);
   }
@@ -323,6 +374,8 @@ class MeshMapTab extends LitElement {
     this._tileSignature = null;
     this._fitted = false;
     this._error = null;
+    this._remoteRequested = false;
+    this._pushTimer = null;
   }
 
   createRenderRoot() {
@@ -352,15 +405,17 @@ class MeshMapTab extends LitElement {
     if (preset.darkUrl && this._isDark()) {
       url = preset.darkUrl;
     }
-    if (preset.needsKey && this._tiles.key && url) {
+    const key = this._tiles.keys[this._tiles.preset];
+    if (preset.needsKey && key && url) {
       const keyParam = preset.keyParam || "key";
-      url += `${url.includes("?") ? "&" : "?"}${keyParam}=${encodeURIComponent(this._tiles.key)}`;
+      url += `${url.includes("?") ? "&" : "?"}${keyParam}=${encodeURIComponent(key)}`;
     }
 
     return {
       url,
       attribution: preset.isCustom ? OSM_ATTR : preset.attribution,
       maxZoom: preset.maxZoom || 19,
+      referrerPolicy: preset.referrerPolicy || false,
       preset,
     };
   }
@@ -427,6 +482,7 @@ class MeshMapTab extends LitElement {
     this._tileLayer = L.tileLayer(spec.url, {
       maxZoom: spec.maxZoom,
       attribution: spec.attribution,
+      referrerPolicy: spec.referrerPolicy,
     }).addTo(this._map);
     this._tileSignature = spec.url;
   }
@@ -555,13 +611,80 @@ class MeshMapTab extends LitElement {
   _updateTiles(patch) {
     this._tiles = { ...this._tiles, ...patch };
     saveTileSettings(this._tiles);
+    this._pushRemoteTiles();
     if (this._map && window.L) {
       this._applyTileLayer(window.L);
     }
     this.requestUpdate();
   }
 
-  async updated() {
+  /* Klucz jest przypisany do aktualnie wybranego dostawcy. Pusty klucz
+     usuwamy, zamiast trzymać pusty napis. */
+  _updateKey(value) {
+    const keys = { ...this._tiles.keys };
+    const trimmed = String(value || "").trim();
+    if (trimmed) {
+      keys[this._tiles.preset] = trimmed;
+    } else {
+      delete keys[this._tiles.preset];
+    }
+    this._updateTiles({ keys });
+  }
+
+  /* Zapis na serwerze z krótkim opóźnieniem — wpisywanie klucza generuje
+     serię zmian, a jeden zapis po ostatniej wystarcza. */
+  _pushRemoteTiles() {
+    if (!this.hass) {
+      return;
+    }
+    clearTimeout(this._pushTimer);
+    this._pushTimer = setTimeout(async () => {
+      try {
+        await this.hass.callWS({
+          type: "meshtastic/map_settings_set",
+          settings: {
+            preset: this._tiles.preset,
+            custom_url: this._tiles.customUrl,
+            keys: this._tiles.keys,
+          },
+        });
+      } catch (err) {
+        console.debug("MT_SW: nie udało się zapisać ustawień mapy na serwerze", err);
+      }
+    }, 500);
+  }
+
+  /* Serwer jest źródłem prawdy. Jeśli jeszcze nic tam nie ma, a w tej
+     przeglądarce są ustawienia zapisane wcześniej, przenosimy je na serwer —
+     dzięki temu klucz wpisany przed aktualizacją nie przepada. */
+  async _loadRemoteTiles() {
+    try {
+      const result = await this.hass.callWS({ type: "meshtastic/map_settings" });
+      const remote = result && result.settings;
+      if (remote && Object.keys(remote).length) {
+        this._tiles = normalizeTileSettings(remote);
+        saveTileSettings(this._tiles);
+        if (this._map && window.L) {
+          this._applyTileLayer(window.L);
+        }
+        this.requestUpdate();
+      } else if (
+        Object.keys(this._tiles.keys).length ||
+        this._tiles.preset !== DEFAULT_PRESET ||
+        this._tiles.customUrl
+      ) {
+        this._pushRemoteTiles();
+      }
+    } catch (err) {
+      console.debug("MT_SW: nie udało się odczytać ustawień mapy z serwera", err);
+    }
+  }
+
+  async updated(changed) {
+    if (changed && changed.has("hass") && this.hass && !this._remoteRequested) {
+      this._remoteRequested = true;
+      this._loadRemoteTiles();
+    }
     await this._ensureMap();
     if (this._map) {
       // Kontener dostaje wymiary dopiero po wstawieniu do drzewa.
@@ -607,15 +730,18 @@ class MeshMapTab extends LitElement {
               <span>${t(this.hass, "map.tiles.key")}</span>
               <input
                 type="text"
-                .value=${this._tiles.key}
-                placeholder=${t(this.hass, "map.tiles.key_hint")}
-                @change=${(e) => this._updateTiles({ key: e.target.value })}
+                .value=${this._tiles.keys[this._tiles.preset] || ""}
+                placeholder=${t(this.hass, preset.keyHintKey || "map.tiles.key_hint")}
+                @change=${(e) => this._updateKey(e.target.value)}
               />
             </label>`
           : ""}
       </div>
-      ${preset.needsKey && !this._tiles.key
+      ${preset.needsKey && !this._tiles.keys[this._tiles.preset]
         ? html`<div class="map-hint">${t(this.hass, "map.tiles.key_missing")}</div>`
+        : ""}
+      ${preset.needsKey && this._tiles.keys[this._tiles.preset]
+        ? html`<div class="map-hint">${t(this.hass, "map.tiles.key_saved")}</div>`
         : ""}
     `;
   }

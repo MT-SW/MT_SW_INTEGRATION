@@ -545,9 +545,18 @@ class MeshtasticApiClient:
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 
-    async def async_set_owner(self, long_name: str, short_name: str, *, is_licensed: bool = False) -> None:
+    async def async_set_owner(
+        self,
+        long_name: str,
+        short_name: str,
+        *,
+        is_licensed: bool = False,
+        is_unmessagable: bool | None = None,
+    ) -> None:
         try:
-            await self._interface.set_owner(long_name, short_name, is_licensed=is_licensed)
+            await self._interface.set_owner(
+                long_name, short_name, is_licensed=is_licensed, is_unmessagable=is_unmessagable
+            )
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 
