@@ -55,11 +55,46 @@ MAX_NODE_HISTORY_POINTS = 300
 # rosną także wtedy, gdy nikt nie ma otwartego panelu.
 TIMESERIES_SAMPLE_SECONDS = 60
 
+# Pola zapisywane w historii statystyk węzła (pakiety i zasoby). MessageToDict
+# pomija wartości zerowe, więc brakujące pole w pakiecie oznacza 0 — zapisujemy
+# je jawnie, żeby każdy wiersz historii miał komplet pól.
+LOCAL_STATS_HISTORY_FIELDS = (
+    "numPacketsRx",
+    "numPacketsRxBad",
+    "numRxDupe",
+    "numPacketsTx",
+    "numTxRelay",
+    "numTxRelayCanceled",
+    "numTxDropped",
+    "heapTotalBytes",
+    "heapFreeBytes",
+)
+LOCAL_STATS_EXTENDED_HISTORY_FIELDS = (
+    "memoryTotal",
+    "memoryFreeCheap",
+    "cpuUsagePercent",
+    "flashUsedBytes",
+    "flashTotalBytes",
+    "memoryPsramTotal",
+    "memoryPsramFree",
+)
+_STATS_HISTORY_FIELDS = {
+    EventMeshtasticApiTelemetryType.LOCAL_STATS: LOCAL_STATS_HISTORY_FIELDS,
+    EventMeshtasticApiTelemetryType.LOCAL_STATS_EXTENDED: LOCAL_STATS_EXTENDED_HISTORY_FIELDS,
+}
+
 _STORES: dict[str, PanelStore] = {}
 
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 class PanelStore:
@@ -299,6 +334,11 @@ class PanelStore:
         data = event.data.get(ATTR_EVENT_MESHTASTIC_API_DATA)
         telemetry_type = event.data.get(ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE)
         if node_id is None or not data:
+            return
+        stats_fields = _STATS_HISTORY_FIELDS.get(telemetry_type)
+        if stats_fields is not None:
+            point = {field: _as_int(data.get(field)) for field in stats_fields}
+            self._record_node_point(node_id, telemetry_type.value, point)
             return
         if telemetry_type not in (
             EventMeshtasticApiTelemetryType.DEVICE_METRICS,

@@ -801,7 +801,15 @@ async def ws_set_channel(
         vol.Required("entry_id"): str,
         vol.Required("node_id"): int,
         vol.Required("kind"): vol.In(
-            ["neighbor_count", "position", "device_metrics", "environment_metrics", "power_metrics"]
+            [
+                "neighbor_count",
+                "position",
+                "device_metrics",
+                "environment_metrics",
+                "power_metrics",
+                "local_stats",
+                "local_stats_extended",
+            ]
         ),
     }
 )

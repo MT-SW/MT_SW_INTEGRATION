@@ -17,6 +17,7 @@ import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatUptime, formatRelative } from "./i18n.js";
 import "./chart.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
+import "./node-stats.js";;
 
 const COLUMNS = [
   { key: "name", labelKey: "nodes.col.name", numeric: false },
@@ -54,6 +55,7 @@ class MeshNodesTab extends LitElement {
       _neighborHistory: { type: Array },
       _positionHistory: { type: Array },
       _telemetryHistory: { type: Object },
+      _statsRequest: { type: Object },
     };
   }
 
@@ -73,6 +75,7 @@ class MeshNodesTab extends LitElement {
     this._neighborHistory = [];
     this._positionHistory = [];
     this._telemetryHistory = null;
+    this._statsRequest = null;
   }
 
   _displayName(node) {
@@ -245,6 +248,7 @@ class MeshNodesTab extends LitElement {
         this._neighborHistory = [];
         this._positionHistory = [];
         this._telemetryHistory = null;
+        this._statsRequest = null;
       }}>
         <td class="star-cell">${this._renderStar(node)}</td>
         <td>
@@ -351,6 +355,12 @@ class MeshNodesTab extends LitElement {
         <button class="action" ?disabled=${busy} @click=${() => this._loadTelemetryHistory(node)}>
           ${t(this.hass, "nodes.action.telemetry_history")}
         </button>
+        <button class="action" ?disabled=${busy} @click=${() => (this._statsRequest = { mode: "packets" })}>
+          ${t(this.hass, "nodes.action.packet_history")}
+        </button>
+        <button class="action" ?disabled=${busy} @click=${() => (this._statsRequest = { mode: "resources" })}>
+          ${t(this.hass, "nodes.action.resource_history")}
+        </button>
         <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
           ${t(this.hass, "nodes.action.remove")}
         </button>
@@ -372,6 +382,7 @@ class MeshNodesTab extends LitElement {
     this._neighborHistory = [];
     this._positionHistory = [];
     this._telemetryHistory = null;
+    this._statsRequest = null;
     this._notice = null;
     this._error = null;
   }
@@ -646,6 +657,14 @@ class MeshNodesTab extends LitElement {
             ${this._renderNeighborHistory()}
             ${this._renderPositionHistory()}
             ${this._renderTelemetryHistory()}
+            ${this._statsRequest
+              ? html`<mesh-node-stats
+                  .hass=${this.hass}
+                  .entryId=${this.entryId}
+                  .nodeId=${node.node_id}
+                  .request=${this._statsRequest}
+                ></mesh-node-stats>`
+              : ""}
 
             ${node.neighbors && node.neighbors.length
               ? html`
