@@ -124,6 +124,13 @@ class MeshRadioTab extends LitElement {
     `;
   }
 
+  /* Rola kanału przychodzi z radia jako nazwa enuma (PRIMARY, SECONDARY). */
+  _roleLabel(role) {
+    const key = `channel.role.${role}`;
+    const label = t(this.hass, key);
+    return label === key ? role : label;
+  }
+
   _renderChannels(gateway) {
     const channels = this.channels[gateway.entry_id];
     const error = this.channelsError[gateway.entry_id];
@@ -157,7 +164,7 @@ class MeshRadioTab extends LitElement {
               <tr>
                 <td class="num">${channel.index}</td>
                 <td>${channel.name || html`<span class="muted">${t(this.hass, "radio.channels.unnamed")}</span>`}</td>
-                <td>${channel.role}</td>
+                <td>${this._roleLabel(channel.role)}</td>
                 <td>
                   ${channel.has_psk
                     ? t(this.hass, "radio.channels.encrypted")

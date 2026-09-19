@@ -425,14 +425,44 @@ class PanelStore:
         self._record_node_point(node_id, telemetry_type.value, dict(data))
 
     def _handle_packet(self, event: Event) -> None:
-        """Zbieraj pakiety do logu sniffera, dopóki sniffer jest włączony."""
-        if not self.sniffer.enabled or not self._belongs_to_entry(event):
+        """Każdy pakiet: zapamiętaj, którędy dotarł; a gdy sniffer włączony — dołóż do jego logu."""
+        if not self._belongs_to_entry(event):
             return
         packet = event.data.get(ATTR_EVENT_MESHTASTIC_API_DATA)
         if not isinstance(packet, dict):
             return
         gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
-        self.sniffer.add_packet(packet, _now_ms(), gateway_node.get("num"))
+        local_node = gateway_node.get("num")
+        self._remember_via(packet, local_node)
+        if self.sniffer.enabled:
+            self.sniffer.add_packet(packet, _now_ms(), local_node)
+
+    def _remember_via(self, packet: dict[str, Any], local_node: int | None) -> None:
+        """Zapamiętaj przekaźnik i liczbę skoków ostatniego pakietu od danego węzła.
+
+        Firmware podaje przekaźnik jako sam ostatni bajt numeru węzła
+        (relay_node), więc nazwę dobiera dopiero panel. Pakiety z MQTT i własne
+        pomijamy — nie przeszły przez radio, więc nie mówią nic o drodze w eterze.
+        """
+        sender = packet.get("from")
+        relay = packet.get("relayNode")
+        if not isinstance(sender, int) or sender == local_node or not relay or packet.get("viaMqtt"):
+            return
+        hop_start = packet.get("hopStart")
+        hop_limit = packet.get("hopLimit")
+        hops = (
+            hop_start - hop_limit
+            if isinstance(hop_start, int) and isinstance(hop_limit, int) and 0 < hop_start and hop_limit <= hop_start
+            else None
+        )
+        now = _now_ms()
+        state = self._node_state.setdefault(str(sender), {})
+        previous = state.get("via") or {}
+        # Ta sama droga w ciągu ostatniej minuty nie jest warta zapisu na dysk.
+        if previous.get("relay") == relay and previous.get("hops") == hops and now - previous.get("ts", 0) < 60_000:  # noqa: PLR2004
+            return
+        state["via"] = {"relay": relay, "hops": hops, "ts": now}
+        self._schedule_save()
 
     def _handle_position(self, event: Event) -> None:
         node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)

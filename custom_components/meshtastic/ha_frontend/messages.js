@@ -8,7 +8,7 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
-import { t, formatRelative } from "./i18n.js";
+import { t, formatRelative, formatHops } from "./i18n.js";
 import "./message-info.js";
 
 const MAX_TEXT_LENGTH = 228;
@@ -232,7 +232,7 @@ class MeshMessagesTab extends LitElement {
       meta.push(`RSSI ${message.rx_rssi} dBm`);
     }
     if (typeof message.hops_away === "number") {
-      meta.push(t(this.hass, "messages.hops", { n: message.hops_away }));
+      meta.push(message.hops_away === 0 ? t(this.hass, "hops.direct") : formatHops(this.hass, message.hops_away));
     }
 
     return html`

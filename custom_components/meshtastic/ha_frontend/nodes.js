@@ -14,13 +14,15 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
-import { t, formatUptime, formatRelative } from "./i18n.js";
+import { t, formatUptime, formatRelative, formatHops } from "./i18n.js";
+import { viaInfo, relayLabel } from "./hops.js";
 import "./chart.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
 import "./node-stats.js";;
 import "./node-ondemand.js";
 
 const COLUMNS = [
+  { key: "short_name", labelKey: "nodes.col.short_name", numeric: false },
   { key: "name", labelKey: "nodes.col.name", numeric: false },
   { key: "snr", labelKey: "nodes.col.snr", numeric: true },
   { key: "hops_away", labelKey: "nodes.col.hops", numeric: true },
@@ -99,6 +101,13 @@ class MeshNodesTab extends LitElement {
     if (key === "name") {
       return this._displayName(node).toLowerCase();
     }
+    if (key === "short_name") {
+      return (node.short_name || "").toLowerCase();
+    }
+    if (key === "hops_away") {
+      const { hops } = viaInfo(node);
+      return hops === null ? -Infinity : hops;
+    }
     const value = node[key];
     return value === null || value === undefined ? -Infinity : value;
   }
@@ -111,7 +120,7 @@ class MeshNodesTab extends LitElement {
     list = list.filter((node) => {
       if (node.is_ignored && !on.showIgnored) return false;
       if (on.favorites && !node.is_favorite) return false;
-      if (on.direct && node.hops_away !== 0) return false;
+      if (on.direct && viaInfo(node).hops !== 0) return false;
       if (on.positioned && typeof node.latitude !== "number") return false;
       if (on.tracked && !node.is_tracked) return false;
       if (on.hideMqtt && node.via_mqtt) return false;
@@ -258,6 +267,7 @@ class MeshNodesTab extends LitElement {
         this._neighborsShown = false;
       }}>
         <td class="star-cell">${this._renderStar(node)}</td>
+        <td class="short" data-label=${t(this.hass, "nodes.col.short_name")}>${node.short_name || "—"}</td>
         <td>
           <span class="name">${this._displayName(node)}</span>
           ${node.is_gateway ? html`<span class="tag">${t(this.hass, "nodes.gateway")}</span>` : ""}
@@ -272,7 +282,7 @@ class MeshNodesTab extends LitElement {
           ${this._formatValue(node.snr, " dB", 1)}
         </td>
         <td class="num" data-label=${t(this.hass, "nodes.col.hops")}>
-          ${this._formatValue(node.hops_away)}
+          ${this._renderHops(node)}
         </td>
         <td class="num" data-label=${t(this.hass, "nodes.col.battery")}>
           ${this._formatValue(node.battery_level, " %")}
@@ -282,6 +292,33 @@ class MeshNodesTab extends LitElement {
         </td>
       </tr>
     `;
+  }
+
+  /* "2 skoki via (ABCD)": liczba skoków z odmianą i — dla połączenia
+     wieloskokowego — krótka nazwa przekaźnika, który ostatni przekazał pakiet. */
+  _hopsText(node) {
+    const { hops, relay } = viaInfo(node);
+    if (hops === null) {
+      return t(this.hass, "common.unknown");
+    }
+    if (hops === 0) {
+      return t(this.hass, "hops.direct");
+    }
+    const via = relay ? ` ${t(this.hass, "nodes.via")} (${relayLabel(this.nodes, node, relay)})` : "";
+    return `${formatHops(this.hass, hops)}${via}`;
+  }
+
+  _renderHops(node) {
+    const { hops, relay } = viaInfo(node);
+    if (hops === null) {
+      return t(this.hass, "common.unknown");
+    }
+    if (hops === 0) {
+      return t(this.hass, "hops.direct");
+    }
+    return html`${formatHops(this.hass, hops)}${relay
+      ? html`<span class="via">${t(this.hass, "nodes.via")} (${relayLabel(this.nodes, node, relay)})</span>`
+      : ""}`;
   }
 
   _detailRow(labelKey, value) {
@@ -641,7 +678,7 @@ class MeshNodesTab extends LitElement {
             ${this._detailRow("radio.hw_model", node.hw_model)}
             ${this._detailRow("radio.role", node.role)}
             ${this._detailRow("nodes.col.snr", this._formatValue(node.snr, " dB", 1))}
-            ${this._detailRow("nodes.col.hops", node.hops_away)}
+            ${this._detailRow("nodes.col.hops", this._hopsText(node))}
             ${this._detailRow("nodes.col.last_heard", this._absoluteTime(node.last_heard))}
             ${this._detailRow("radio.battery", this._formatValue(node.battery_level, " %"))}
             ${this._detailRow("radio.voltage", this._formatValue(node.voltage, " V", 2))}
@@ -918,6 +955,18 @@ class MeshNodesTab extends LitElement {
 
         .name {
           font-weight: 500;
+        }
+
+        td.short {
+          font-weight: 600;
+          white-space: nowrap;
+        }
+
+        .via {
+          margin-inline-start: 6px;
+          font-size: 12px;
+          font-weight: 400;
+          color: var(--secondary-text-color);
         }
 
         .hex {

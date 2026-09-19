@@ -100,7 +100,6 @@ const STRINGS = {
     "messages.delete_conversation": "Usuń rozmowę",
     "messages.delete_conversation_confirm": "Usunąć całą historię rozmowy {name} z panelu? Nie wpływa to na wiadomości zapisane na urządzeniu.",
     "messages.delete_failed": "Nie udało się usunąć.",
-    "messages.hops": "{n} przeskoków",
     "messages.ack.pending": "Oczekuje na potwierdzenie",
     "messages.ack.sent": "Wysłano do sieci",
     "messages.ack.ok": "Potwierdzona przez odbiorcę",
@@ -122,9 +121,9 @@ const STRINGS = {
     "messages.info.relays_none": "Żaden przekaźnik nie potwierdził jeszcze usłyszenia wiadomości.",
     "messages.info.relay_unknown": "Nieznany przekaźnik",
     "messages.info.ack_from": "Potwierdzenie od adresata",
-    "messages.info.hops.one": "{n} przeskok",
-    "messages.info.hops.few": "{n} przeskoki",
-    "messages.info.hops.many": "{n} przeskoków",
+    "messages.info.hops.one": "{n} skok",
+    "messages.info.hops.few": "{n} skoki",
+    "messages.info.hops.many": "{n} skoków",
     "radio.stats_saved_at": "Statystyki z {time} — odświeżą się po następnym pakiecie od węzła.",
 
     "radio.chart.airtime": "Obciążenie eteru",
@@ -141,9 +140,15 @@ const STRINGS = {
     "nodes.count": "{n} węzłów",
     "nodes.gateway": "Bramka",
     "nodes.col.name": "Nazwa",
+    "nodes.col.short_name": "Skrót",
+    "nodes.via": "via",
+    "hops.direct": "bezpośrednio",
+    "channel.role.PRIMARY": "Podstawowy",
+    "channel.role.SECONDARY": "Wtórny",
+    "channel.role.DISABLED": "Wyłączony",
     "nodes.col.id": "ID",
     "nodes.col.snr": "SNR",
-    "nodes.col.hops": "Przeskoki",
+    "nodes.col.hops": "Skoki",
     "nodes.col.battery": "Bateria",
     "nodes.col.last_heard": "Ostatnio słyszany",
     "nodes.temperature": "Temperatura",
@@ -182,7 +187,7 @@ const STRINGS = {
     "nodes.traceroute.title": "Trasa",
     "nodes.traceroute.towards": "Trasa do węzła",
     "nodes.traceroute.back": "Trasa powrotna",
-    "nodes.traceroute.direct": "Połączenie bezpośrednie, bez przeskoków",
+    "nodes.traceroute.direct": "Połączenie bezpośrednie, bez skoków",
     "nodes.traceroute.history": "Zapisane trasy",
     "nodes.history.empty": "Brak zapisanej historii.",
     "nodes.history.neighbor_count": "Sąsiedzi",
@@ -459,7 +464,6 @@ const STRINGS = {
     "messages.delete_conversation": "Delete conversation",
     "messages.delete_conversation_confirm": "Delete the whole history of {name} from the panel? This does not affect messages stored on the device.",
     "messages.delete_failed": "Deletion failed.",
-    "messages.hops": "{n} hops",
     "messages.ack.pending": "Awaiting acknowledgement",
     "messages.ack.sent": "Sent to the network",
     "messages.ack.ok": "Acknowledged by recipient",
@@ -500,6 +504,12 @@ const STRINGS = {
     "nodes.count": "{n} nodes",
     "nodes.gateway": "Gateway",
     "nodes.col.name": "Name",
+    "nodes.col.short_name": "Short",
+    "nodes.via": "via",
+    "hops.direct": "direct",
+    "channel.role.PRIMARY": "Primary",
+    "channel.role.SECONDARY": "Secondary",
+    "channel.role.DISABLED": "Disabled",
     "nodes.col.id": "ID",
     "nodes.col.snr": "SNR",
     "nodes.col.hops": "Hops",
@@ -785,6 +795,18 @@ export function formatUptime(hass, seconds) {
   if (minutes && parts.length < 2) parts.push(t(hass, "duration.minutes", { n: minutes }));
   if (!parts.length) parts.push(t(hass, "duration.seconds", { n: secs }));
   return parts.slice(0, 2).join(" ");
+}
+
+/**
+ * Liczba skoków z poprawną odmianą: 1 skok, 2 skoki, 5 skoków (po angielsku
+ * hop / hops). Formy siedzą w messages.info.hops.*, żeby wiadomości i lista
+ * węzłów mówiły tak samo.
+ */
+export function formatHops(hass, count) {
+  const polish = resolveLanguage(hass) === "pl";
+  const few = polish && count % 10 >= 2 && count % 10 <= 4 && !(count % 100 >= 12 && count % 100 <= 14);
+  const form = count === 1 ? "one" : few ? "few" : "many";
+  return t(hass, `messages.info.hops.${form}`, { n: count });
 }
 
 /**

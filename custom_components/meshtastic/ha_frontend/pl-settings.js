@@ -58,7 +58,7 @@ const PL_STRINGS = {
   "Frequency Offset (Hz)": "Przesunięcie częstotliwości (Hz)",
   "Fine-tune frequency offset": "Dostrojenie przesunięcia częstotliwości",
   "Hop Limit": "Liczba skoków",
-  "Max number of hops (1-7)": "Maksymalna liczba przeskoków (1-7)",
+  "Max number of hops (1-7)": "Maksymalna liczba skoków (1-7)",
   "TX Enabled": "Nadawanie włączone",
   "Allow radio to transmit": "Zezwól radiu na nadawanie",
   "TX Power (dBm)": "Moc nadawania (dBm)",
@@ -702,6 +702,7 @@ const PL_STRINGS = {
   "±2.9 km": "±2,9 km",
   "±1.5 km": "±1,5 km",
   "Precise location": "Precyzyjna lokalizacja",
+  "Private Key": "Klucz prywatny",
 };
 
 /** Tłumaczenie napisu z przeniesionej zakładki; brak hasła = angielski. */

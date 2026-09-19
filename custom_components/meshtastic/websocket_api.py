@@ -303,6 +303,10 @@ async def ws_nodes(
                 "snr": _as_float(node.get("snr")),
                 "signed": bool(signed),
                 "hops_away": _as_int(node.get("hopsAway")),
+                # droga ostatniego pakietu od tego węzła (ostatni bajt przekaźnika i skoki)
+                "via_relay": _as_int((saved_state.get("via") or {}).get("relay")),
+                "via_hops": _as_int((saved_state.get("via") or {}).get("hops")),
+                "via_ts": _as_int((saved_state.get("via") or {}).get("ts")),
                 "via_mqtt": bool(node.get("viaMqtt")),
                 "latitude": position.get("latitude"),
                 "longitude": position.get("longitude"),

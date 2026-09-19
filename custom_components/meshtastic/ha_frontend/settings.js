@@ -798,14 +798,14 @@ class MeshSettingsChannels extends LitElement {
     const draft = this._drafts[index] || { role: "DISABLED", name: "", psk: "", uplink_enabled: false, downlink_enabled: false };
     const isExpanded = this._expandedIndex === index;
     const isDirty = this._dirtyIndexes.has(index);
-    const roleName = CHANNEL_ROLES.find((r) => r.value === draft.role)?.label || "Disabled";
+    const roleName = CHANNEL_ROLES.find((r) => r.value === draft.role)?.label || PL("Disabled");
 
     return html`
       <div class="channel-card">
         <div class="channel-card-header"
           @click=${() => { this._expandedIndex = isExpanded ? null : index; this.requestUpdate(); }}>
           <span class="channel-card-title">
-            Channel ${index}${draft.name ? ` — ${draft.name}` : ""}
+            ${PL("Channel")} ${index}${draft.name ? ` — ${draft.name}` : ""}
             ${isDirty ? html` <span style="color: var(--primary-color);">*</span>` : ""}
           </span>
           <span class="badge ${draft.role === "PRIMARY" ? "primary" : draft.role === "SECONDARY" ? "secondary" : ""}">${roleName}</span>
@@ -2168,7 +2168,7 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
             </div>
             <div class="key-section">
               <div class="key-label">
-                Private Key
+                ${PL("Private Key")}
                 ${privKey
                   ? html`<button class="key-reveal" @click=${() => { this._showPrivateKey = !this._showPrivateKey; this.requestUpdate(); }}>
                       ${this._showPrivateKey ? PL("Hide") : PL("Show")}
