@@ -526,7 +526,7 @@ const PL_STRINGS = {
   "Radio Config": "Konfiguracja radia",
   "Device Config": "Konfiguracja urządzenia",
   "Module Config": "Konfiguracja modułów",
-  "Local Data": "Dane lokalne",
+  Other: "Inne",
   "Failed to load config from radio. Is the radio connected?": "Nie udało się wczytać konfiguracji z radia. Czy radio jest połączone?",
   "Loading radio configuration...": "Wczytywanie konfiguracji radia…",
   "Select a settings panel": "Wybierz panel ustawień",

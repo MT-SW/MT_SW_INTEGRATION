@@ -197,6 +197,7 @@ const NAV_ITEMS = [
       { id: "lora", label: PL("LoRa"), icon: "mdi:antenna" },
       { id: "channels", label: PL("Channels"), icon: "mdi:forum" },
       { id: "user", label: PL("User"), icon: "mdi:account" },
+      { id: "status_message", label: PL("Status Message"), icon: "mdi:message-badge" },
     ],
   },
   {
@@ -227,26 +228,15 @@ const NAV_ITEMS = [
       { id: "ambient_lighting", label: PL("Ambient Lighting"), icon: "mdi:led-on" },
       { id: "detection_sensor", label: PL("Detection Sensor"), icon: "mdi:motion-sensor" },
       { id: "paxcounter", label: PL("Paxcounter"), icon: "mdi:counter" },
-    ],
-  },
-  {
-    group: "MT_SW",
-    items: [
       { id: "traffic_management", label: PL("Traffic Management"), icon: "mdi:traffic-light" },
       { id: "mesh_beacon", label: PL("Mesh Beacon"), icon: "mdi:access-point" },
+    ],
+  },
+  {
+    group: "Other",
+    items: [
       { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
-      { id: "status_message", label: PL("Status Message"), icon: "mdi:message-badge" },
-    ],
-  },
-  {
-    group: "Device",
-    items: [
       { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
-    ],
-  },
-  {
-    group: "Local Data",
-    items: [
       { id: "storage", label: PL("Storage"), icon: "mdi:database" },
     ],
   },
