@@ -52,6 +52,7 @@ from .protobuf import (
     telemetry_pb2,
 )
 from .protobuf.mesh_pb2 import MeshPacket
+from .telemetry_ext import message_to_dict, telemetry_to_dict
 
 
 class MeshInterfaceError(MeshtasticError):
@@ -227,7 +228,7 @@ class MeshInterface:
 
         async def wrapper(node: MeshNode, source: Packet) -> None:
             if as_dict:
-                await callback(node, google.protobuf.json_format.MessageToDict(source.app_payload))
+                await callback(node, message_to_dict(source.app_payload))
             elif as_packet:
                 await callback(node, source)
             else:
@@ -694,7 +695,7 @@ class MeshInterface:
 
         if packet.port_num == portnums_pb2.PortNum.TELEMETRY_APP:
             telemetry = packet.app_payload
-            telemetry_info = google.protobuf.json_format.MessageToDict(telemetry)
+            telemetry_info = telemetry_to_dict(telemetry)
             if node_id in self._node_database:
                 await self._node_database_update(node_id, **telemetry_info)
         elif packet.port_num == portnums_pb2.PortNum.POSITION_APP:

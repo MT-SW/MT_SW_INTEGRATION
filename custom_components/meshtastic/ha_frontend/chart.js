@@ -42,6 +42,11 @@ class MeshLineChart extends LitElement {
          bezwzględnych — liczniki pakietów rosną monotonicznie i bez tego
          wykres byłby nudną prostą do góry. */
       derivative: { type: Boolean },
+      /* Jeśli true, oś Y jest dopasowana do danych (min..max z zapasem, także
+         dla wartości ujemnych) zamiast zaczynać się od zera — potrzebne dla
+         wielkości takich jak ciśnienie czy napięcie, które wahają się w wąskim
+         przedziale daleko od zera. */
+      fit: { type: Boolean },
       language: { type: String },
       emptyLabel: { type: String },
     };
@@ -54,6 +59,7 @@ class MeshLineChart extends LitElement {
     this.unit = "";
     this.height = 160;
     this.derivative = false;
+    this.fit = false;
     this.language = "pl";
     this.emptyLabel = "";
   }
@@ -92,47 +98,94 @@ class MeshLineChart extends LitElement {
       return "";
     }
 
-    const innerW = WIDTH - PADDING.left - PADDING.right;
     const innerH = this.height - PADDING.top - PADDING.bottom;
 
     const tsMin = points[0].ts;
     const tsMax = points[points.length - 1].ts;
     const tsSpan = Math.max(1, tsMax - tsMin);
 
+    let vMin = 0;
     let vMax = 0;
-    for (const p of points) {
-      for (const s of this.series) {
-        if (typeof p[s.key] === "number" && p[s.key] > vMax) {
-          vMax = p[s.key];
+    if (this.fit) {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const p of points) {
+        for (const s of this.series) {
+          const v = p[s.key];
+          if (typeof v === "number" && Number.isFinite(v)) {
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+          }
         }
       }
+      if (!Number.isFinite(lo)) {
+        return "";
+      }
+      // Zapas nad i pod danymi; płaska linia dostaje symetryczny przedział.
+      const pad = hi === lo ? Math.abs(hi) * 0.05 || 1 : (hi - lo) * 0.12;
+      vMin = lo - pad;
+      vMax = hi + pad;
+      // Wielkości nieujemne (wilgotność, napięcie...) nie schodzą poniżej zera.
+      if (lo >= 0 && vMin < 0) {
+        vMin = 0;
+      }
+    } else {
+      for (const p of points) {
+        for (const s of this.series) {
+          if (typeof p[s.key] === "number" && p[s.key] > vMax) {
+            vMax = p[s.key];
+          }
+        }
+      }
+      // Zawsze zostaw trochę powietrza nad najwyższą wartością.
+      vMax = vMax > 0 ? vMax * 1.15 : 1;
     }
-    // Zawsze zostaw trochę powietrza nad najwyższą wartością.
-    vMax = vMax > 0 ? vMax * 1.15 : 1;
+    const vSpan = vMax - vMin;
 
-    const x = (ts) => PADDING.left + ((ts - tsMin) / tsSpan) * innerW;
-    const y = (v) => PADDING.top + innerH - (v / vMax) * innerH;
-
-    const formatValue = (v) => (vMax >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
+    let formatValue = (v) => (vMax >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
+    if (this.fit) {
+      // Liczba miejsc po przecinku zależy od rozpiętości osi, nie od wartości.
+      let decimals = 3;
+      if (vSpan >= 20) {
+        decimals = 0;
+      } else if (vSpan >= 2) {
+        decimals = 1;
+      } else if (vSpan >= 0.2) {
+        decimals = 2;
+      }
+      formatValue = (v) => v.toFixed(decimals);
+    }
     const formatTime = (ts) =>
       new Date(ts).toLocaleTimeString(this.language, { hour: "2-digit", minute: "2-digit" });
+
+    const ticks = [vMin, vMin + vSpan / 2, vMax];
+    const tickLabels = ticks.map((v) => `${formatValue(v)}${this.unit}`);
+    // W trybie fit etykiety mają jednostkę i miejsca po przecinku (np. "1013.2 hPa"),
+    // więc lewy margines rośnie z ich długością.
+    const padLeft = this.fit
+      ? Math.max(PADDING.left, 10 + 6 * Math.max(...tickLabels.map((label) => label.length)))
+      : PADDING.left;
+    const innerW = WIDTH - padLeft - PADDING.right;
+
+    const x = (ts) => padLeft + ((ts - tsMin) / tsSpan) * innerW;
+    const y = (v) => PADDING.top + innerH - ((v - vMin) / vSpan) * innerH;
 
     const parts = [];
     parts.push(
       `<svg viewBox="0 0 ${WIDTH} ${this.height}" preserveAspectRatio="none" role="img">`
     );
 
-    for (const v of [0, vMax / 2, vMax]) {
+    ticks.forEach((v, i) => {
       const gy = y(v).toFixed(1);
       parts.push(
-        `<line class="grid" x1="${PADDING.left}" x2="${WIDTH - PADDING.right}" y1="${gy}" y2="${gy}"/>`,
-        `<text class="axis" x="${PADDING.left - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">` +
-          `${esc(formatValue(v))}${esc(this.unit)}</text>`
+        `<line class="grid" x1="${padLeft}" x2="${WIDTH - PADDING.right}" y1="${gy}" y2="${gy}"/>`,
+        `<text class="axis" x="${padLeft - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">` +
+          `${esc(tickLabels[i])}</text>`
       );
-    }
+    });
 
     parts.push(
-      `<text class="axis" x="${PADDING.left}" y="${this.height - 6}" text-anchor="start">` +
+      `<text class="axis" x="${padLeft}" y="${this.height - 6}" text-anchor="start">` +
         `${esc(formatTime(tsMin))}</text>`,
       `<text class="axis" x="${WIDTH - PADDING.right}" y="${this.height - 6}" text-anchor="end">` +
         `${esc(formatTime(tsMax))}</text>`

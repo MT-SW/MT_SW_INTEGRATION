@@ -16,6 +16,7 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatUptime, formatRelative } from "./i18n.js";
 import "./chart.js";
+import { buildTelemetryCharts } from "./telemetry-charts.js";
 
 const COLUMNS = [
   { key: "name", labelKey: "nodes.col.name", numeric: false },
@@ -564,39 +565,10 @@ class MeshNodesTab extends LitElement {
     if (!hist) {
       return html``;
     }
-    const charts = [
-      {
-        points: hist.environment,
-        series: [
-          { key: "temperature", label: t(this.hass, "nodes.history.temperature"), color: "#F5C839" },
-          { key: "relativeHumidity", label: t(this.hass, "nodes.history.humidity"), color: "#4FC3F7" },
-        ],
-      },
-      {
-        points: hist.device,
-        series: [
-          { key: "voltage", label: t(this.hass, "nodes.history.voltage"), color: "#81C784" },
-          { key: "batteryLevel", label: t(this.hass, "nodes.history.battery"), color: "#9575CD" },
-        ],
-      },
-      {
-        points: hist.power,
-        series: [
-          { key: "ch1Voltage", label: "CH1 V", color: "#4FC3F7" },
-          { key: "ch2Voltage", label: "CH2 V", color: "#81C784" },
-          { key: "ch3Voltage", label: "CH3 V", color: "#F5C839" },
-        ],
-        unit: " V",
-      },
-      {
-        points: hist.device,
-        series: [
-          { key: "channelUtilization", label: t(this.hass, "nodes.history.chutil"), color: "#F5C839" },
-          { key: "airUtilTx", label: t(this.hass, "nodes.history.airutil"), color: "#4FC3F7" },
-        ],
-        unit: " %",
-      },
-    ].filter((c) => c.points && c.points.length >= 2);
+    // Osobny wykres z własną skalą dla każdego parametru; napięcie i prąd
+    // z pakietu środowiskowego, urządzenia i mocy trafiają na wspólny wykres
+    // tej samej wielkości (jako osobne linie).
+    const charts = buildTelemetryCharts(hist, (key) => t(this.hass, key));
 
     if (!charts.length) {
       return html`
@@ -613,7 +585,9 @@ class MeshNodesTab extends LitElement {
             <mesh-line-chart
               .points=${chart.points}
               .language=${this.hass.language}
-              .unit=${chart.unit || ""}
+              .unit=${chart.unit}
+              .height=${140}
+              .fit=${true}
               .emptyLabel=${t(this.hass, "nodes.history.empty")}
               .series=${chart.series}
             ></mesh-line-chart>
