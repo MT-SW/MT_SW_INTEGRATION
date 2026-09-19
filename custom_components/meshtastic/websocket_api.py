@@ -20,6 +20,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.storage import Store
 
 from . import ondemand
+from .aiomeshtastic.interface import TelemetryType
 from .const import DOMAIN
 from .ondemand import OnDemandError
 from .store import get_store
@@ -307,6 +308,8 @@ async def ws_nodes(
                 "via_relay": _as_int((saved_state.get("via") or {}).get("relay")),
                 "via_hops": _as_int((saved_state.get("via") or {}).get("hops")),
                 "via_ts": _as_int((saved_state.get("via") or {}).get("ts")),
+                "via_snr": _as_float((saved_state.get("via") or {}).get("snr")),
+                "via_rssi": _as_int((saved_state.get("via") or {}).get("rssi")),
                 "via_mqtt": bool(node.get("viaMqtt")),
                 "latitude": position.get("latitude"),
                 "longitude": position.get("longitude"),
@@ -649,6 +652,23 @@ async def ws_request_position(hass, connection, msg) -> None:
     await _run_node_action(hass, connection, msg, lambda c, m: c.request_position(m["node_id"]))
 
 
+@websocket_api.websocket_command(
+    {
+        **_node_action_schema("request_telemetry"),
+        vol.Optional("telemetry_type", default=str(TelemetryType.DEVICE_METRICS)): vol.In(
+            [str(kind) for kind in TelemetryType]
+        ),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_request_telemetry(hass, connection, msg) -> None:
+    """Poproś węzeł o telemetrię — domyślnie o metryki urządzenia (bateria, napięcie, eter)."""
+    await _run_node_action(
+        hass, connection, msg, lambda c, m: c.request_telemetry(m["node_id"], TelemetryType(m["telemetry_type"]))
+    )
+
+
 @websocket_api.websocket_command(_node_action_schema("request_neighbors"))
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -851,6 +871,7 @@ async def ws_set_channel(
                 "power_metrics",
                 "local_stats",
                 "local_stats_extended",
+                "signal",
             ]
         ),
     }
@@ -1195,6 +1216,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_remove_node,
         ws_request_position,
         ws_request_neighbors,
+        ws_request_telemetry,
         ws_traceroute,
         ws_traceroute_history,
         ws_node_history,

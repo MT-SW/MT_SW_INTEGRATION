@@ -53,6 +53,9 @@ MAX_MESSAGES = 2000
 MAX_TIMESERIES_POINTS = 1500
 MAX_TRACEROUTES_PER_NODE = 10
 MAX_NODE_HISTORY_POINTS = 300
+# Jakość sygnału zbieramy z pakietów, których jest dużo — punkt na węzeł nie
+# częściej niż co 5 minut, żeby 300 punktów starczyło na około dobę.
+SIGNAL_SAMPLE_MS = 5 * 60 * 1000
 # Próbkujemy z koordynatora, nie ze zdarzeń telemetrii — dzięki temu wykresy
 # rosną także wtedy, gdy nikt nie ma otwartego panelu.
 TIMESERIES_SAMPLE_SECONDS = 60
@@ -70,6 +73,7 @@ LOCAL_STATS_HISTORY_FIELDS = (
     "numTxDropped",
     "heapTotalBytes",
     "heapFreeBytes",
+    "noiseFloor",
 )
 LOCAL_STATS_EXTENDED_HISTORY_FIELDS = (
     "memoryTotal",
@@ -164,6 +168,8 @@ class PanelStore:
         self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
+        # ostatni zapis punktu jakości sygnału na węzeł (tylko w pamięci)
+        self._signal_sampled: dict[int, int] = {}
         self._listeners: list[Callable[[str, dict[str, Any]], None]] = []
         self._unsubscribes: list[Callable[[], None]] = []
 
@@ -414,6 +420,9 @@ class PanelStore:
         stats_fields = _STATS_HISTORY_FIELDS.get(telemetry_type)
         if stats_fields is not None:
             point = {field: _as_int(data.get(field)) for field in stats_fields}
+            # 0 to u firmware "brak odczytu" — poziomu szumu 0 dBm nie ma, więc go pomijamy
+            if "noiseFloor" in point and not point["noiseFloor"]:
+                point["noiseFloor"] = None
             self._record_node_point(node_id, telemetry_type.value, point)
             return
         if telemetry_type not in (
@@ -455,14 +464,29 @@ class PanelStore:
             if isinstance(hop_start, int) and isinstance(hop_limit, int) and 0 < hop_start and hop_limit <= hop_start
             else None
         )
+        snr = packet.get("rxSnr")
+        rssi = packet.get("rxRssi")
+        # 0 oznacza u firmware "brak odczytu" (proto3 nie odróżnia zera od braku)
+        snr_value = float(snr) if isinstance(snr, int | float) and snr != 0 else None
+        rssi_value = int(rssi) if isinstance(rssi, int | float) and rssi != 0 else None
         now = _now_ms()
         state = self._node_state.setdefault(str(sender), {})
         previous = state.get("via") or {}
-        # Ta sama droga w ciągu ostatniej minuty nie jest warta zapisu na dysk.
-        if previous.get("relay") == relay and previous.get("hops") == hops and now - previous.get("ts", 0) < 60_000:  # noqa: PLR2004
-            return
-        state["via"] = {"relay": relay, "hops": hops, "ts": now}
-        self._schedule_save()
+        route_changed = previous.get("relay") != relay or previous.get("hops") != hops
+        state["via"] = {"relay": relay, "hops": hops, "ts": now, "snr": snr_value, "rssi": rssi_value}
+        # Historia jakości sygnału tylko dla łącza bezpośredniego: przy skokach SNR i RSSI
+        # opisują ostatni odcinek do przekaźnika, a nie łącze z samym węzłem.
+        if (
+            hops == 0
+            and (snr_value is not None or rssi_value is not None)
+            and now - self._signal_sampled.get(sender, 0) >= SIGNAL_SAMPLE_MS
+        ):
+            self._signal_sampled[sender] = now
+            self._record_node_point(sender, "signal", {"snr": snr_value, "rssi": rssi_value})
+        # Sygnał zmienia się z każdym pakietem, więc na dysk idzie tylko zmiana drogi
+        # albo zapis nie częściej niż raz na minutę.
+        if route_changed or now - previous.get("ts", 0) >= 60_000:  # noqa: PLR2004
+            self._schedule_save()
 
     def _handle_position(self, event: Event) -> None:
         node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)

@@ -15,16 +15,38 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatUptime, formatRelative, formatHops } from "./i18n.js";
-import { viaInfo, relayLabel } from "./hops.js";
+import { viaInfo, relayLabel, signalInfo, formatSignal } from "./hops.js";
 import "./chart.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
 import "./node-stats.js";;
 import "./node-ondemand.js";
 
+/* Kategorie danych w szczegółach węzła, nazwane jak w aplikacji na Androida.
+   ask: polecenie WS wysyłane przyciskiem "Poproś"; telemetry: rodzaj telemetrii
+   dla request_telemetry. Kategoria bez ask/telemetry ma tylko historię —
+   jakość sygnału, pakiety i zasoby węzeł zgłasza sam. */
+const CATEGORIES = [
+  { id: "neighbors", ask: "request_neighbors" },
+  { id: "signal" },
+  { id: "device", telemetry: "device_metrics" },
+  { id: "environment", telemetry: "environment_metrics" },
+  { id: "power", telemetry: "power_metrics" },
+  { id: "packets" },
+  { id: "resources" },
+  { id: "position", ask: "request_position" },
+  { id: "traceroute", ask: "traceroute" },
+];
+
+const TELEMETRY_KINDS = {
+  device: "device_metrics",
+  environment: "environment_metrics",
+  power: "power_metrics",
+};
+
 const COLUMNS = [
   { key: "short_name", labelKey: "nodes.col.short_name", numeric: false },
   { key: "name", labelKey: "nodes.col.name", numeric: false },
-  { key: "snr", labelKey: "nodes.col.snr", numeric: true },
+  { key: "signal", labelKey: "nodes.col.signal", numeric: true },
   { key: "hops_away", labelKey: "nodes.col.hops", numeric: true },
   { key: "battery_level", labelKey: "nodes.col.battery", numeric: true },
   { key: "last_heard", labelKey: "nodes.col.last_heard", numeric: true },
@@ -60,6 +82,7 @@ class MeshNodesTab extends LitElement {
       _telemetryHistory: { type: Object },
       _statsRequest: { type: Object },
       _ondemandOpen: { type: Boolean },
+      _activeCategory: { type: String },
       _neighborsShown: { type: Boolean },
     };
   }
@@ -82,6 +105,7 @@ class MeshNodesTab extends LitElement {
     this._telemetryHistory = null;
     this._statsRequest = null;
     this._ondemandOpen = false;
+    this._activeCategory = null;
     this._neighborsShown = false;
   }
 
@@ -107,6 +131,10 @@ class MeshNodesTab extends LitElement {
     if (key === "hops_away") {
       const { hops } = viaInfo(node);
       return hops === null ? -Infinity : hops;
+    }
+    if (key === "signal") {
+      const info = signalInfo(node);
+      return info && info.snr !== null ? info.snr : -Infinity;
     }
     const value = node[key];
     return value === null || value === undefined ? -Infinity : value;
@@ -264,6 +292,7 @@ class MeshNodesTab extends LitElement {
         this._telemetryHistory = null;
         this._statsRequest = null;
         this._ondemandOpen = false;
+        this._activeCategory = null;
         this._neighborsShown = false;
       }}>
         <td class="star-cell">${this._renderStar(node)}</td>
@@ -278,8 +307,8 @@ class MeshNodesTab extends LitElement {
           ${typeof node.latitude === "number" ? html`<ha-icon class="row-icon" icon="mdi:earth" title=${t(this.hass, "nodes.positioned_hint")}></ha-icon>` : ""}
           <span class="hex">${node.node_hex}</span>
         </td>
-        <td class="num" data-label=${t(this.hass, "nodes.col.snr")}>
-          ${this._formatValue(node.snr, " dB", 1)}
+        <td class="num" data-label=${t(this.hass, "nodes.col.signal")}>
+          ${this._renderSignal(node)}
         </td>
         <td class="num" data-label=${t(this.hass, "nodes.col.hops")}>
           ${this._renderHops(node)}
@@ -306,6 +335,18 @@ class MeshNodesTab extends LitElement {
     }
     const via = relay ? ` ${t(this.hass, "nodes.via")} (${relayLabel(this.nodes, node, relay)})` : "";
     return `${formatHops(this.hass, hops)}${via}`;
+  }
+
+  /* SNR nad RSSI w jednej kolumnie — węższa tabela; tylko dla połączenia
+     bezpośredniego (przy skokach oba odczyty dotyczą przekaźnika). */
+  _renderSignal(node) {
+    const info = signalInfo(node);
+    if (!info || (info.snr === null && info.rssi === null)) {
+      return t(this.hass, "common.unknown");
+    }
+    return html`${info.snr !== null ? html`<div>${info.snr.toFixed(1)} dB</div>` : ""}${info.rssi !== null
+      ? html`<div class="rssi">${info.rssi} dBm</div>`
+      : ""}`;
   }
 
   _renderHops(node) {
@@ -343,78 +384,161 @@ class MeshNodesTab extends LitElement {
 
   _renderActions(node) {
     const busy = Boolean(this._busy);
-    const action = (kind, labelKey, payload, danger) => html`
-      <button
-        class="action ${danger ? "danger" : ""}"
-        ?disabled=${busy}
-        @click=${() => this._call(kind, payload)}
-      >
-        ${t(this.hass, labelKey)}
-      </button>
-    `;
+    const tr = (key) => t(this.hass, key);
 
     return html`
       <div class="actions">
         <button class="action primary" ?disabled=${busy} @click=${() => this._openDm(node)}>
-          ${t(this.hass, "nodes.action.message")}
+          ${tr("nodes.action.message")}
         </button>
         <button
           class="action"
           ?disabled=${busy}
           @click=${() => this._call("set_favorite", { node_id: node.node_id, favorite: !node.is_favorite })}
         >
-          ${t(this.hass, node.is_favorite ? "nodes.action.unfavorite" : "nodes.action.favorite")}
+          ${tr(node.is_favorite ? "nodes.action.unfavorite" : "nodes.action.favorite")}
         </button>
         <button
           class="action"
           ?disabled=${busy}
           @click=${() => this._call("set_ignored", { node_id: node.node_id, ignored: !node.is_ignored })}
         >
-          ${t(this.hass, node.is_ignored ? "nodes.action.unignore" : "nodes.action.ignore")}
-        </button>
-        ${action("request_position", "nodes.action.position", { node_id: node.node_id })}
-        ${action("request_neighbors", "nodes.action.neighbors", { node_id: node.node_id })}
-        <button
-          class="action"
-          ?disabled=${busy}
-          @click=${async () => {
-            this._traceroute = null;
-            const route = await this._call("traceroute", { node_id: node.node_id });
-            if (route && typeof route === "object") {
-              this._traceroute = route;
-            }
-          }}
-        >
-          ${t(this.hass, "nodes.action.traceroute")}
-        </button>
-        <button class="action" ?disabled=${busy} @click=${() => this._loadTraceHistory(node)}>
-          ${t(this.hass, "nodes.action.trace_history")}
-        </button>
-        <button class="action" ?disabled=${busy} @click=${() => this._loadNeighborHistory(node)}>
-          ${t(this.hass, "nodes.action.neighbor_history")}
-        </button>
-        <button class="action" ?disabled=${busy} @click=${() => this._loadPositionHistory(node)}>
-          ${t(this.hass, "nodes.action.position_history")}
-        </button>
-        <button class="action" ?disabled=${busy} @click=${() => this._loadTelemetryHistory(node)}>
-          ${t(this.hass, "nodes.action.telemetry_history")}
-        </button>
-        <button class="action" ?disabled=${busy} @click=${() => (this._statsRequest = { mode: "packets" })}>
-          ${t(this.hass, "nodes.action.packet_history")}
-        </button>
-        <button class="action" ?disabled=${busy} @click=${() => (this._statsRequest = { mode: "resources" })}>
-          ${t(this.hass, "nodes.action.resource_history")}
-        </button>
-        <button class="action" ?disabled=${busy} @click=${() => (this._ondemandOpen = !this._ondemandOpen)}>
-          ${t(this.hass, "nodes.action.ondemand")}
+          ${tr(node.is_ignored ? "nodes.action.unignore" : "nodes.action.ignore")}
         </button>
         <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
-          ${t(this.hass, "nodes.action.remove")}
+          ${tr("nodes.action.remove")}
         </button>
       </div>
-      ${this._busy ? html`<div class="status">${t(this.hass, "nodes.action.working")}</div>` : ""}
+
+      <div class="categories">
+        ${CATEGORIES.map(
+          (category) => html`
+            <div class="category ${this._activeCategory === category.id ? "active" : ""}">
+              <span class="category-name">${tr(`nodes.cat.${category.id}`)}</span>
+              <span class="category-buttons">
+                <button class="action" ?disabled=${busy} @click=${() => this._showHistory(node, category.id)}>
+                  ${tr("nodes.cat.history")}
+                </button>
+                ${category.ask || category.telemetry
+                  ? html`<button
+                      class="action"
+                      title=${tr(`nodes.cat.ask.${category.id}`)}
+                      ?disabled=${busy}
+                      @click=${() => this._askNode(node, category)}
+                    >
+                      ${tr("nodes.cat.ask")}
+                    </button>`
+                  : html`<span class="action-placeholder"></span>`}
+              </span>
+            </div>
+          `
+        )}
+        <div class="category ${this._ondemandOpen ? "active" : ""}">
+          <span class="category-name">${tr("nodes.cat.ondemand")}</span>
+          <span class="category-buttons">
+            <button class="action" ?disabled=${busy} @click=${() => (this._ondemandOpen = !this._ondemandOpen)}>
+              ${tr(this._ondemandOpen ? "nodes.cat.close" : "nodes.cat.open")}
+            </button>
+            <span class="action-placeholder"></span>
+          </span>
+        </div>
+      </div>
+      ${this._busy ? html`<div class="status">${tr("nodes.action.working")}</div>` : ""}
       ${this._notice ? html`<div class="status ok">${this._notice}</div>` : ""}
       ${this._error ? html`<div class="status error">${this._error}</div>` : ""}
+    `;
+  }
+
+  /* Widok jednej kategorii naraz — po wybraniu następnej poprzednia znika,
+     żeby okno nie rosło z każdym kliknięciem. */
+  _resetViews() {
+    this._traceroute = null;
+    this._traceHistory = [];
+    this._neighborHistory = [];
+    this._positionHistory = [];
+    this._telemetryHistory = null;
+    this._statsRequest = null;
+    this._neighborsShown = false;
+    this._activeCategory = null;
+  }
+
+  async _showHistory(node, id) {
+    this._resetViews();
+    this._activeCategory = id;
+    switch (id) {
+      case "neighbors":
+        await this._loadNeighborHistory(node);
+        break;
+      case "signal": {
+        const [signal, stats] = await Promise.all([
+          this._loadNodeHistory(node, "signal"),
+          this._loadNodeHistory(node, "local_stats"),
+        ]);
+        this._telemetryHistory = { titleKey: "nodes.cat.signal", noteKey: "nodes.signal.note", hist: { signal, stats } };
+        break;
+      }
+      case "device":
+      case "environment":
+      case "power": {
+        const points = await this._loadNodeHistory(node, TELEMETRY_KINDS[id]);
+        this._telemetryHistory = { titleKey: `nodes.cat.${id}`, hist: { [id]: points } };
+        break;
+      }
+      case "packets":
+        this._statsRequest = { mode: "packets" };
+        break;
+      case "resources":
+        this._statsRequest = { mode: "resources" };
+        break;
+      case "position":
+        await this._loadPositionHistory(node);
+        break;
+      case "traceroute":
+        await this._loadTraceHistory(node);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /* "Poproś": wysyła zapytanie do węzła, a po udanej odpowiedzi od razu
+     pokazuje historię tej kategorii, żeby nowy odczyt było widać bez drugiego
+     kliknięcia. Trasa pokazuje sam wynik. */
+  async _askNode(node, category) {
+    const payload = { node_id: node.node_id };
+    if (category.id === "traceroute") {
+      this._resetViews();
+      this._activeCategory = "traceroute";
+      const route = await this._call("traceroute", payload);
+      if (route && typeof route === "object") {
+        this._traceroute = route;
+      }
+      return;
+    }
+    const done = category.telemetry
+      ? await this._call("request_telemetry", { ...payload, telemetry_type: category.telemetry })
+      : await this._call(category.ask, payload);
+    if (!done) {
+      return;
+    }
+    // Odpowiedź trafia do historii osobnym zdarzeniem — dajemy jej chwilę.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await this._showHistory(node, category.id);
+  }
+
+  /* Kategoria wybrana, a w niej pusto — bez tej wzmianki kliknięcie wyglądałoby na martwe. */
+  _renderEmptyNote(node) {
+    const id = this._activeCategory;
+    const empty =
+      (id === "neighbors" && (this._neighborHistory || []).length < 2 && !(node.neighbors && node.neighbors.length)) ||
+      (id === "position" && !(this._positionHistory || []).length) ||
+      (id === "traceroute" && !(this._traceHistory || []).length && !this._traceroute);
+    if (!empty) {
+      return html``;
+    }
+    return html`
+      <div class="detail-section">${t(this.hass, `nodes.cat.${id}`)}</div>
+      <div class="route-note">${t(this.hass, "nodes.history.empty")}</div>
     `;
   }
 
@@ -431,6 +555,7 @@ class MeshNodesTab extends LitElement {
     this._telemetryHistory = null;
     this._statsRequest = null;
     this._ondemandOpen = false;
+    this._activeCategory = null;
     this._neighborsShown = false;
     this._notice = null;
     this._error = null;
@@ -481,18 +606,6 @@ class MeshNodesTab extends LitElement {
       return;
     }
     this._positionHistory = await this._loadNodeHistory(node, "position");
-  }
-
-  async _loadTelemetryHistory(node) {
-    if (!this.entryId) {
-      return;
-    }
-    const [device, environment, power] = await Promise.all([
-      this._loadNodeHistory(node, "device_metrics"),
-      this._loadNodeHistory(node, "environment_metrics"),
-      this._loadNodeHistory(node, "power_metrics"),
-    ]);
-    this._telemetryHistory = { device, environment, power };
   }
 
   _gatewayId() {
@@ -585,7 +698,7 @@ class MeshNodesTab extends LitElement {
       return html``;
     }
     return html`
-      <div class="detail-section">${t(this.hass, "nodes.action.neighbor_history")}</div>
+      <div class="detail-section">${t(this.hass, "nodes.cat.neighbors")}</div>
       <div class="chart-wrap">
         <mesh-line-chart
           .points=${this._neighborHistory}
@@ -602,7 +715,7 @@ class MeshNodesTab extends LitElement {
       return html``;
     }
     return html`
-      <div class="detail-section">${t(this.hass, "nodes.action.position_history")}</div>
+      <div class="detail-section">${t(this.hass, "nodes.cat.position")}</div>
       <div class="position-history">
         ${this._positionHistory
           .slice()
@@ -622,24 +735,23 @@ class MeshNodesTab extends LitElement {
   }
 
   _renderTelemetryHistory() {
-    const hist = this._telemetryHistory;
-    if (!hist) {
+    const view = this._telemetryHistory;
+    if (!view) {
       return html``;
     }
+    const title = html`<div class="detail-section">${t(this.hass, view.titleKey)}</div>`;
+    const note = view.noteKey ? html`<div class="route-note">${t(this.hass, view.noteKey)}</div>` : "";
     // Osobny wykres z własną skalą dla każdego parametru; napięcie i prąd
     // z pakietu środowiskowego, urządzenia i mocy trafiają na wspólny wykres
     // tej samej wielkości (jako osobne linie).
-    const charts = buildTelemetryCharts(hist, (key) => t(this.hass, key));
+    const charts = buildTelemetryCharts(view.hist, (key) => t(this.hass, key));
 
     if (!charts.length) {
-      return html`
-        <div class="detail-section">${t(this.hass, "nodes.action.telemetry_history")}</div>
-        <div class="route-note">${t(this.hass, "nodes.history.empty")}</div>
-      `;
+      return html`${title}${note}<div class="route-note">${t(this.hass, "nodes.history.empty")}</div>`;
     }
 
     return html`
-      <div class="detail-section">${t(this.hass, "nodes.action.telemetry_history")}</div>
+      ${title}${note}
       ${charts.map(
         (chart) => html`
           <div class="chart-wrap">
@@ -677,7 +789,7 @@ class MeshNodesTab extends LitElement {
             ${this._detailRow("nodes.col.id", node.node_hex)}
             ${this._detailRow("radio.hw_model", node.hw_model)}
             ${this._detailRow("radio.role", node.role)}
-            ${this._detailRow("nodes.col.snr", this._formatValue(node.snr, " dB", 1))}
+            ${this._detailRow("nodes.col.signal", formatSignal(signalInfo(node)))}
             ${this._detailRow("nodes.col.hops", this._hopsText(node))}
             ${this._detailRow("nodes.col.last_heard", this._absoluteTime(node.last_heard))}
             ${this._detailRow("radio.battery", this._formatValue(node.battery_level, " %"))}
@@ -707,6 +819,7 @@ class MeshNodesTab extends LitElement {
             ${this._renderNeighborHistory()}
             ${this._renderPositionHistory()}
             ${this._renderTelemetryHistory()}
+            ${this._renderEmptyNote(node)}
             ${this._statsRequest
               ? html`<mesh-node-stats
                   .hass=${this.hass}
@@ -1060,6 +1173,54 @@ class MeshNodesTab extends LitElement {
           gap: 6px;
           padding: 8px 16px 12px;
           border-bottom: 1px solid var(--divider-color);
+        }
+
+        .categories {
+          padding: 0 16px 8px;
+          border-bottom: 1px solid var(--divider-color);
+        }
+
+        .category {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 6px 0;
+          border-top: 1px solid var(--divider-color);
+        }
+
+        .category:first-child {
+          border-top: none;
+        }
+
+        .category-name {
+          font-size: 14px;
+        }
+
+        .category.active .category-name {
+          color: var(--primary-color);
+          font-weight: 600;
+        }
+
+        .category-buttons {
+          display: flex;
+          gap: 6px;
+          flex-shrink: 0;
+        }
+
+        .category-buttons .action,
+        .action-placeholder {
+          min-width: 78px;
+          box-sizing: border-box;
+        }
+
+        .action-placeholder {
+          display: inline-block;
+        }
+
+        .rssi {
+          font-size: 11px;
+          color: var(--secondary-text-color);
         }
 
         .action {

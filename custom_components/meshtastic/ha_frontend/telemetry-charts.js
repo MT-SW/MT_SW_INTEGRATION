@@ -15,7 +15,8 @@
  * Moduł jest czystą funkcją, bez zależności od Lita ani DOM.
  */
 
-/* source: klucz z this._telemetryHistory (device | environment | power) */
+/* source: klucz z historii przekazanej do buildTelemetryCharts
+   (device | environment | power | signal | stats) */
 const CHARTS = [
   {
     id: "temperature",
@@ -72,6 +73,22 @@ const CHARTS = [
       { source: "device", field: "airUtilTx", labelKey: "nodes.history.airutil", color: "#4FC3F7" },
     ],
   },
+  /* Jakość sygnału: SNR i RSSI z pakietów słyszanych bezpośrednio (source
+     "signal"), a poziom szumu z pakietów statystyk lokalnych węzła (source
+     "stats"). RSSI i szum dzielą oś dBm, więc widać zapas sygnału nad szumem. */
+  {
+    id: "snr",
+    unit: " dB",
+    series: [{ source: "signal", field: "snr", labelKey: "nodes.history.snr", color: "#4FC3F7" }],
+  },
+  {
+    id: "rssi",
+    unit: " dBm",
+    series: [
+      { source: "signal", field: "rssi", labelKey: "nodes.history.rssi", color: "#F5C839" },
+      { source: "stats", field: "noiseFloor", labelKey: "nodes.history.noise_floor", color: "#FF8A65" },
+    ],
+  },
 ];
 
 const isNumber = (value) => typeof value === "number" && Number.isFinite(value);
@@ -101,7 +118,8 @@ function project(points, mapping) {
 }
 
 /**
- * @param {{device?: Array, environment?: Array, power?: Array}} hist historia z magazynu
+ * @param {{device?: Array, environment?: Array, power?: Array, signal?: Array, stats?: Array}} hist
+ *   historia z magazynu; wykres pojawia się tylko dla przekazanych źródeł
  * @param {(key: string) => string} tr tłumaczenie klucza i18n
  * @returns {Array<{id: string, unit: string, points: Array, series: Array}>}
  */
