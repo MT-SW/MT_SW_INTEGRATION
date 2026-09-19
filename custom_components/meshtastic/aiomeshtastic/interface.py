@@ -640,6 +640,16 @@ class MeshInterface:
             self._connected_node_module_config.ambient_lighting.CopyFrom(module_config.ambient_lighting)
         if module_config.HasField("paxcounter"):
             self._connected_node_module_config.paxcounter.CopyFrom(module_config.paxcounter)
+        # Moduły z firmware MT_SW / 2.8 — bez tych gałęzi lokalna kopia zostawała
+        # pusta i panel pokazywał puste pola mimo poprawnej odpowiedzi radia.
+        if module_config.HasField("statusmessage"):
+            self._connected_node_module_config.statusmessage.CopyFrom(module_config.statusmessage)
+        if module_config.HasField("traffic_management"):
+            self._connected_node_module_config.traffic_management.CopyFrom(module_config.traffic_management)
+        if module_config.HasField("tak"):
+            self._connected_node_module_config.tak.CopyFrom(module_config.tak)
+        if module_config.HasField("mesh_beacon"):
+            self._connected_node_module_config.mesh_beacon.CopyFrom(module_config.mesh_beacon)
 
     @process_while_running
     async def _process_from_radio_packets_loop(self) -> None:
@@ -955,6 +965,10 @@ class MeshInterface:
             admin_message.shutdown_seconds = 5
         elif action == "factory_reset":
             admin_message.factory_reset_config = 1
+        elif action == "factory_reset_device":
+            admin_message.factory_reset_device = 1
+        elif action == "reboot_ota":
+            admin_message.reboot_ota_seconds = 5
         elif action == "nodedb_reset":
             admin_message.nodedb_reset = 1
         else:
@@ -1007,6 +1021,16 @@ class MeshInterface:
             admin_message.set_config.CopyFrom(container)
 
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        # Radio nie odsyła zmienionej konfiguracji, a panel czyta lokalną kopię —
+        # bez tego po zapisie i odświeżeniu widać byłoby jeszcze stare wartości.
+        if node is None:
+            if is_module:
+                self._process_connected_node_module_config(container)
+            else:
+                self._process_connected_node_config(container)
+
+    async def set_node_ignored(self, node_num: int, ignored: bool, node: int | None = None) -> None:
+        """Oznacz węzeł jako ignorowany na urządzeniu (albo zdejmij oznaczenie)."""
         admin_message = admin_pb2.AdminMessage()
         if ignored:
             admin_message.set_ignored_node = node_num

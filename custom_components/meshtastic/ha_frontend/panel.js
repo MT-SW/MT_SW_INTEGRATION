@@ -18,6 +18,15 @@ import "./map.js";
 import "./settings.js";
 
 const POLL_MS = 10000;
+
+/* Nazwy akcji urządzenia z przeniesionego panelu ustawień -> nazwy w naszym
+   backendzie (websocket_api.ws_device_action). */
+const DEVICE_ACTIONS = {
+  reset_nodedb: "nodedb_reset",
+  factory_reset_config: "factory_reset",
+  factory_reset_device: "factory_reset_device",
+  reboot_ota: "reboot_ota",
+};
 const TABS = ["radio", "messages", "nodes", "map", "settings"];
 
 function tabFromPath() {
@@ -300,6 +309,17 @@ class MeshtasticPanel extends LitElement {
     return value;
   }
 
+  /* Polecenia, po których panel ma pokazać przyczynę porażki (a nie tylko
+     "coś poszło nie tak"): zamiast null oddajemy { ok:false, error }. */
+  async _softWs(message) {
+    try {
+      const result = await this.hass.callWS(message);
+      return { ok: true, ...result };
+    } catch (err) {
+      return { ok: false, error: (err && err.message) || String(err) };
+    }
+  }
+
   async _settingsWs(type, data = {}) {
     const entryId = this._primaryEntryId;
     if (!entryId || !this.hass) {
@@ -389,11 +409,42 @@ class MeshtasticPanel extends LitElement {
           await this.hass.callWS({
             type: "meshtastic/device_action",
             entry_id: entryId,
-            action: data.action,
+            // ich nazwy akcji różnią się od naszych
+            action: DEVICE_ACTIONS[data.action] || data.action,
           });
           return { success: true };
-        case "storage_stats":
-          return { success: true, nodes: (this._nodes || []).length };
+        case "storage_stats": {
+          const stats = await this.hass.callWS({ type: "meshtastic/storage_stats", entry_id: entryId });
+          return { success: true, ...stats, nodes: (this._nodes || []).length };
+        }
+        case "clear_messages":
+        case "clear_nodes":
+        case "clear_all": {
+          await this.hass.callWS({
+            type: "meshtastic/storage_clear",
+            entry_id: entryId,
+            kind: name.replace("clear_", ""),
+          });
+          await this._refresh();
+          return { success: true };
+        }
+        case "node_names": {
+          const names = {};
+          for (const node of this._nodes || []) {
+            if (node.short_name) {
+              names[node.node_id] = node.short_name;
+            }
+          }
+          return { ok: true, names };
+        }
+        case "sniffer_state":
+          return this._softWs({ type: "meshtastic/sniffer_state", entry_id: entryId });
+        case "sniffer_set":
+          return this._softWs({ type: "meshtastic/sniffer_set", entry_id: entryId, enabled: Boolean(data.enabled) });
+        case "sniffer_log":
+          return this._softWs({ type: "meshtastic/sniffer_log", entry_id: entryId, since: data.since || 0 });
+        case "sniffer_clear":
+          return this._softWs({ type: "meshtastic/sniffer_clear", entry_id: entryId });
         default:
           console.warn("MT_SW: nieobsługiwane polecenie ustawień", name);
           return null;

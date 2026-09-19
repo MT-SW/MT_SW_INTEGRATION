@@ -6,6 +6,7 @@ import {
 import "./components.js";
 import { PL } from "./pl-settings.js";
 import "./modules.js";
+import "./sniffer-panel.js";
 import {
   settingsStyles,
   formStyles,
@@ -312,7 +313,7 @@ export class MeshSettingsTab extends LitElement {
     if (result) {
       this._config = result;
     } else {
-      this._error = "Failed to load config from radio. Is the radio connected?";
+      this._error = PL("Failed to load config from radio. Is the radio connected?");
     }
     this._loading = false;
     this.requestUpdate();
@@ -331,7 +332,7 @@ export class MeshSettingsTab extends LitElement {
 
   render() {
     if (this._loading) {
-      return html`<div class="loading">Loading radio configuration...</div>`;
+      return html`<div class="loading">${PL("Loading radio configuration...")}</div>`;
     }
 
     return html`
@@ -340,7 +341,7 @@ export class MeshSettingsTab extends LitElement {
         <div class="settings-nav">
           ${NAV_ITEMS.map((group) => html`
             <div class="settings-nav-group">
-              <div class="settings-nav-header">${group.group}</div>
+              <div class="settings-nav-header">${PL(group.group)}</div>
               ${group.items.map((item) => html`
                 <div
                   class="settings-nav-item ${this._activePanel === item.id ? "active" : ""}"
@@ -466,7 +467,7 @@ export class MeshSettingsTab extends LitElement {
           .wsCommand=${(type, data) => this._ws(type, data)}
         ></mesh-settings-storage>`;
       default:
-        return html`<div class="empty-state">Select a settings panel</div>`;
+        return html`<div class="empty-state">${PL("Select a settings panel")}</div>`;
     }
   }
 }
@@ -546,8 +547,8 @@ class MeshSettingsLora extends LitElement {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>LoRa Configuration</h3>
-          <p>Configure radio frequency, modem preset, and transmission settings.</p>
+          <h3>${PL("LoRa Configuration")}</h3>
+          <p>${PL("Configure radio frequency, modem preset, and transmission settings.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
@@ -620,7 +621,7 @@ class MeshSettingsLora extends LitElement {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Options
+              ${PL("Options")}
             </div>
             <mesh-toggle
               .label=${PL("TX Enabled")}
@@ -783,8 +784,8 @@ class MeshSettingsChannels extends LitElement {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Channels</h3>
-          <p>Configure up to 8 channels. Each channel can have its own name and encryption key.</p>
+          <h3>${PL("Channels")}</h3>
+          <p>${PL("Configure up to 8 channels. Each channel can have its own name and encryption key.")}</p>
         </div>
         <div class="settings-panel-body">
           ${Array.from({ length: maxChannels }, (_, i) => this._renderChannel(i))}
@@ -823,27 +824,27 @@ class MeshSettingsChannels extends LitElement {
                 .label=${PL("Name")}
                 .value=${draft.name}
                 .maxlength=${11}
-                placeholder="Channel name"
+                placeholder=${PL("Channel name")}
                 @change=${(e) => this._updateChannelField(index, "name", e.detail.value)}
               ></mesh-text-input>
             </div>
 
             <div style="margin-top: 16px;">
               <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 8px;">
-                Encryption Key (PSK)
+                ${PL("Encryption Key (PSK)")}
               </div>
               <div class="psk-row">
                 <mesh-text-input
                   type=${this._pskVisible.has(index) ? "text" : "password"}
                   .value=${draft.psk}
-                  placeholder="Base64 encoded key"
+                  placeholder=${PL("Base64 encoded key")}
                   @change=${(e) => this._updateChannelField(index, "psk", e.detail.value)}
                 ></mesh-text-input>
                 <button class="gen-btn" @click=${() => {
                   if (this._pskVisible.has(index)) { this._pskVisible.delete(index); } else { this._pskVisible.add(index); }
                   this.requestUpdate();
                 }}>${this._pskVisible.has(index) ? PL("Hide") : PL("Show")}</button>
-                <button class="gen-btn" @click=${() => this._generatePsk(index)}>Generate</button>
+                <button class="gen-btn" @click=${() => this._generatePsk(index)}>${PL("Generate")}</button>
               </div>
             </div>
 
@@ -864,11 +865,11 @@ class MeshSettingsChannels extends LitElement {
 
             ${isDirty ? html`
               <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
-                <button class="gen-btn" @click=${() => { this._resetAllDrafts(); }}>Discard</button>
+                <button class="gen-btn" @click=${() => { this._resetAllDrafts(); }}>${PL("Discard")}</button>
                 <button class="gen-btn" style="background: var(--primary-color); color: var(--text-primary-color); border-color: var(--primary-color);"
                   ?disabled=${this._saving}
                   @click=${() => this._saveChannel(index)}>
-                  ${this._saving ? "Saving..." : "Save Channel"}
+                  ${this._saving ? PL("Saving...") : PL("Save Channel")}
                 </button>
               </div>
             ` : ""}
@@ -959,8 +960,8 @@ class MeshSettingsUser extends LitElement {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>User Configuration</h3>
-          <p>Set the name and identity of your radio node on the mesh.</p>
+          <h3>${PL("User Configuration")}</h3>
+          <p>${PL("Set the name and identity of your radio node on the mesh.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
@@ -1014,6 +1015,9 @@ class MeshSettingsActions extends LitElement {
   static get properties() {
     return {
       wsCommand: { type: Object },
+      _confirmAction: { type: Object, state: true },
+      _feedback: { type: String, state: true },
+      _feedbackError: { type: Boolean, state: true },
     };
   }
 
@@ -1021,6 +1025,7 @@ class MeshSettingsActions extends LitElement {
     super();
     this._confirmAction = null;
     this._feedback = "";
+    this._feedbackError = false;
   }
 
   static get styles() {
@@ -1051,64 +1056,67 @@ class MeshSettingsActions extends LitElement {
     ];
   }
 
-  render() {
-    const actions = [
+  _actions() {
+    return [
       {
         id: "reboot",
-        name: "Reboot",
-        desc: "Restart the radio device",
+        name: PL("Reboot"),
+        desc: PL("Restart the radio device"),
         icon: "mdi:restart",
         danger: false,
       },
       {
         id: "shutdown",
-        name: "Shutdown",
-        desc: "Power off the radio device",
+        name: PL("Shutdown"),
+        desc: PL("Power off the radio device"),
         icon: "mdi:power",
         danger: false,
       },
       {
         id: "reset_nodedb",
-        name: "Reset NodeDB",
-        desc: "Clear the mesh node database",
+        name: PL("Reset NodeDB"),
+        desc: PL("Clear the mesh node database"),
         icon: "mdi:database-remove",
         danger: true,
       },
       {
         id: "factory_reset_config",
-        name: "Factory Reset Config",
-        desc: "Reset all configuration to defaults",
+        name: PL("Factory Reset Config"),
+        desc: PL("Reset all configuration to defaults"),
         icon: "mdi:cog-refresh",
         danger: true,
       },
       {
         id: "factory_reset_device",
-        name: "Full Factory Reset",
-        desc: "Reset config and clear all data",
+        name: PL("Full Factory Reset"),
+        desc: PL("Reset config and clear all data"),
         icon: "mdi:delete-forever",
         danger: true,
       },
       {
         id: "reboot_ota",
-        name: "Reboot to OTA",
-        desc: "Reboot into OTA update mode",
+        name: PL("Reboot to OTA"),
+        desc: PL("Reboot into OTA update mode"),
         icon: "mdi:cellphone-arrow-down",
         danger: false,
       },
     ];
+  }
 
+  render() {
+    const action = this._confirmAction;
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Device Actions</h3>
-          <p>Manage and control your Meshtastic radio device. Destructive actions require confirmation.</p>
+          <h3>${PL("Device Actions")}</h3>
+          <p>${PL("Manage and control your Meshtastic radio device. Destructive actions require confirmation.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="device-actions-grid">
-            ${actions.map((a) => html`
+            ${this._actions().map((a) => html`
               <div
                 class="device-action-card ${a.danger ? "danger" : ""}"
-                @click=${() => this._requestAction(a)}
+                @click=${() => { this._confirmAction = a; }}
               >
                 <ha-icon icon="${a.icon}"></ha-icon>
                 <span class="action-name">${a.name}</span>
@@ -1117,7 +1125,7 @@ class MeshSettingsActions extends LitElement {
             `)}
           </div>
           ${this._feedback ? html`
-            <div class="feedback ${this._feedback.startsWith("Error") ? "error" : "success"}">
+            <div class="feedback ${this._feedbackError ? "error" : "success"}">
               ${this._feedback}
             </div>
           ` : ""}
@@ -1125,20 +1133,17 @@ class MeshSettingsActions extends LitElement {
       </div>
 
       <mesh-confirm-dialog
-        .open=${this._confirmAction != null}
-        .title=${this._confirmAction?.name || ""}
-        .message=${`Are you sure you want to ${(this._confirmAction?.name || "").toLowerCase()}? ${this._confirmAction?.danger ? "This action cannot be undone." : ""}`}
-        .confirmLabel=${this._confirmAction?.name || "Confirm"}
-        .danger=${this._confirmAction?.danger || false}
+        .open=${action != null}
+        .title=${action?.name || ""}
+        .message=${action
+          ? `${PL("Are you sure you want to run this action?")}${action.danger ? ` ${PL("This action cannot be undone.")}` : ""}`
+          : ""}
+        .confirmLabel=${action?.name || PL("Confirm")}
+        .danger=${action?.danger || false}
         @confirm=${this._executeAction}
-        @cancel=${() => { this._confirmAction = null; this.requestUpdate(); }}
+        @cancel=${() => { this._confirmAction = null; }}
       ></mesh-confirm-dialog>
     `;
-  }
-
-  _requestAction(action) {
-    this._confirmAction = action;
-    this.requestUpdate();
   }
 
   async _executeAction() {
@@ -1147,22 +1152,21 @@ class MeshSettingsActions extends LitElement {
 
     this._confirmAction = null;
     this._feedback = "";
-    this.requestUpdate();
+    this._feedbackError = false;
 
     const result = await this.wsCommand("meshtastic_ui/device_action", {
       action: action.id,
     });
 
     if (result?.success) {
-      this._feedback = `${action.name} command sent successfully`;
+      this._feedback = `${action.name}: ${PL("command sent")}`;
     } else {
-      this._feedback = `Error: ${action.name} command failed`;
+      this._feedbackError = true;
+      this._feedback = `${action.name}: ${PL("command failed")}`;
     }
-    this.requestUpdate();
 
     setTimeout(() => {
       this._feedback = "";
-      this.requestUpdate();
     }, 5000);
   }
 }
@@ -1181,6 +1185,7 @@ class MeshSettingsStorage extends LitElement {
       _stats: { type: Object, state: true },
       _confirmAction: { type: Object, state: true },
       _feedback: { type: String, state: true },
+      _feedbackError: { type: Boolean, state: true },
     };
   }
 
@@ -1189,6 +1194,7 @@ class MeshSettingsStorage extends LitElement {
     this._stats = null;
     this._confirmAction = null;
     this._feedback = "";
+    this._feedbackError = false;
   }
 
   connectedCallback() {
@@ -1252,74 +1258,70 @@ class MeshSettingsStorage extends LitElement {
     const res = await this.wsCommand("meshtastic_ui/storage_stats");
     if (res) {
       this._stats = res;
-      this.requestUpdate();
     }
   }
 
-  render() {
-    const s = this._stats || {};
-    const actions = [
+  _actions() {
+    return [
       {
         id: "clear_messages",
-        name: "Clear Message History",
-        desc: "Delete all stored chat history (channels and DMs)",
+        name: PL("Clear Message History"),
+        desc: PL("Delete all stored chat history (channels and DMs)"),
         icon: "mdi:message-off",
         danger: true,
         wsType: "meshtastic_ui/clear_messages",
       },
       {
         id: "clear_nodes",
-        name: "Clear Node History",
-        desc: "Delete all tracked nodes and traceroute results",
+        name: PL("Clear Node History"),
+        desc: PL("Delete traceroute results, neighbor info, node history and remembered statistics"),
         icon: "mdi:database-remove",
         danger: true,
         wsType: "meshtastic_ui/clear_nodes",
       },
       {
         id: "clear_all",
-        name: "Clear All Stored Data",
-        desc: "Wipe messages, nodes, traceroutes, waypoints, favorites, and ignored",
+        name: PL("Clear All Stored Data"),
+        desc: PL("Wipe messages, traceroutes, node history and saved statistics"),
         icon: "mdi:delete-sweep",
         danger: true,
         wsType: "meshtastic_ui/clear_all",
       },
     ];
+  }
+
+  render() {
+    const s = this._stats || {};
+    const tiles = [
+      ["messages", "Messages"],
+      ["conversations", "Conversations"],
+      ["nodes", "Nodes"],
+      ["traceroutes", "Traceroutes"],
+      ["history_points", "Node history samples"],
+    ];
+    const action = this._confirmAction;
 
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Storage</h3>
-          <p>Manage data this integration has stored locally in Home Assistant. Useful when switching to a new radio or starting fresh.</p>
+          <h3>${PL("Storage")}</h3>
+          <p>${PL("Manage data this integration has stored locally in Home Assistant. Useful when switching to a new radio or starting fresh.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-num">${s.messages ?? "—"}</div>
-              <div class="stat-label">Messages</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-num">${s.conversations ?? "—"}</div>
-              <div class="stat-label">Conversations</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-num">${s.nodes ?? "—"}</div>
-              <div class="stat-label">Nodes</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-num">${s.traceroutes ?? "—"}</div>
-              <div class="stat-label">Traceroutes</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-num">${s.waypoints ?? "—"}</div>
-              <div class="stat-label">Waypoints</div>
-            </div>
+            ${tiles.map(([key, label]) => html`
+              <div class="stat-card">
+                <div class="stat-num">${s[key] ?? "—"}</div>
+                <div class="stat-label">${PL(label)}</div>
+              </div>
+            `)}
           </div>
 
           <div class="device-actions-grid">
-            ${actions.map((a) => html`
+            ${this._actions().map((a) => html`
               <div
                 class="device-action-card ${a.danger ? "danger" : ""}"
-                @click=${() => this._requestAction(a)}
+                @click=${() => { this._confirmAction = a; }}
               >
                 <ha-icon icon="${a.icon}"></ha-icon>
                 <span class="action-name">${a.name}</span>
@@ -1328,7 +1330,7 @@ class MeshSettingsStorage extends LitElement {
             `)}
           </div>
           ${this._feedback ? html`
-            <div class="feedback ${this._feedback.startsWith("Error") ? "error" : "success"}">
+            <div class="feedback ${this._feedbackError ? "error" : "success"}">
               ${this._feedback}
             </div>
           ` : ""}
@@ -1336,10 +1338,10 @@ class MeshSettingsStorage extends LitElement {
       </div>
 
       <mesh-confirm-dialog
-        .open=${this._confirmAction != null}
-        .title=${this._confirmAction?.name || ""}
-        .message=${`Are you sure you want to ${(this._confirmAction?.name || "").toLowerCase()}? This action cannot be undone.`}
-        .confirmLabel=${this._confirmAction?.name || "Confirm"}
+        .open=${action != null}
+        .title=${action?.name || ""}
+        .message=${action ? `${PL("Are you sure you want to run this action?")} ${PL("This action cannot be undone.")}` : ""}
+        .confirmLabel=${action?.name || PL("Confirm")}
         .danger=${true}
         @confirm=${this._executeAction}
         @cancel=${() => { this._confirmAction = null; }}
@@ -1347,26 +1349,24 @@ class MeshSettingsStorage extends LitElement {
     `;
   }
 
-  _requestAction(action) {
-    this._confirmAction = action;
-  }
-
   async _executeAction() {
     const action = this._confirmAction;
     if (!action) return;
     this._confirmAction = null;
     this._feedback = "";
+    this._feedbackError = false;
 
     const result = await this.wsCommand(action.wsType);
     if (result != null) {
-      this._feedback = `${action.name} done`;
+      this._feedback = `${action.name}: ${PL("done")}`;
       await this._loadStats();
       // Tell the panel to refresh its in-memory caches.
       this.dispatchEvent(new CustomEvent("storage-cleared", {
         detail: { kind: action.id }, bubbles: true, composed: true,
       }));
     } else {
-      this._feedback = `Error: ${action.name} failed`;
+      this._feedbackError = true;
+      this._feedback = `${action.name}: ${PL("failed")}`;
     }
     setTimeout(() => { this._feedback = ""; }, 5000);
   }
@@ -1458,8 +1458,8 @@ class MeshSettingsDevice extends ConfigSectionPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Device Configuration</h3>
-          <p>Configure the device role, rebroadcast mode, and hardware options.</p>
+          <h3>${PL("Device Configuration")}</h3>
+          <p>${PL("Configure the device role, rebroadcast mode, and hardware options.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
@@ -1508,7 +1508,7 @@ class MeshSettingsDevice extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Options
+              ${PL("Options")}
             </div>
             <mesh-toggle
               .label=${PL("Double Tap as Button Press")}
@@ -1550,8 +1550,8 @@ class MeshSettingsPosition extends ConfigSectionPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Position Configuration</h3>
-          <p>Configure GPS, fixed position, and position broadcast settings.</p>
+          <h3>${PL("Position Configuration")}</h3>
+          <p>${PL("Configure GPS, fixed position, and position broadcast settings.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
@@ -1616,7 +1616,7 @@ class MeshSettingsPosition extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Fixed Position
+              ${PL("Fixed Position")}
             </div>
             <mesh-toggle
               .label=${PL("Fixed Position")}
@@ -1649,7 +1649,7 @@ class MeshSettingsPosition extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Options
+              ${PL("Options")}
             </div>
             <mesh-toggle
               .label=${PL("Smart Position Broadcast")}
@@ -1691,8 +1691,8 @@ class MeshSettingsPower extends ConfigSectionPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Power Configuration</h3>
-          <p>Configure power saving, sleep behavior, and battery management.</p>
+          <h3>${PL("Power Configuration")}</h3>
+          <p>${PL("Configure power saving, sleep behavior, and battery management.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
@@ -1740,7 +1740,7 @@ class MeshSettingsPower extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Options
+              ${PL("Options")}
             </div>
             <mesh-toggle
               .label=${PL("Power Saving")}
@@ -1776,13 +1776,13 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Network Configuration</h3>
-          <p>Configure WiFi, Ethernet, NTP server, and syslog settings.</p>
+          <h3>${PL("Network Configuration")}</h3>
+          <p>${PL("Configure WiFi, Ethernet, NTP server, and syslog settings.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              WiFi
+              ${PL("WiFi")}
             </div>
             <mesh-toggle
               .label=${PL("WiFi Enabled")}
@@ -1795,14 +1795,14 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
                 <mesh-text-input
                   .label=${PL("WiFi SSID")}
                   .value=${d.wifi_ssid || ""}
-                  placeholder="Network name"
+                  placeholder=${PL("Network name")}
                   @change=${(e) => this._updateField("wifi_ssid", e.detail.value)}
                 ></mesh-text-input>
                 <mesh-text-input
                   .label=${PL("WiFi Password")}
                   type="password"
                   .value=${d.wifi_psk || ""}
-                  placeholder="Password"
+                  placeholder=${PL("Password")}
                   @change=${(e) => this._updateField("wifi_psk", e.detail.value)}
                 ></mesh-text-input>
               </div>
@@ -1811,7 +1811,7 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Ethernet
+              ${PL("Ethernet")}
             </div>
             <mesh-toggle
               .label=${PL("Ethernet Enabled")}
@@ -1823,7 +1823,7 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              IP Configuration
+              ${PL("IP Configuration")}
             </div>
             <div class="form-grid">
               <mesh-text-input
@@ -1856,7 +1856,7 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Services
+              ${PL("Services")}
             </div>
             <div class="form-grid">
               <mesh-text-input
@@ -1914,8 +1914,8 @@ class MeshSettingsDisplay extends ConfigSectionPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Display Configuration</h3>
-          <p>Configure screen timeout, units, OLED type, and display options.</p>
+          <h3>${PL("Display Configuration")}</h3>
+          <p>${PL("Configure screen timeout, units, OLED type, and display options.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
@@ -1970,7 +1970,7 @@ class MeshSettingsDisplay extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Options
+              ${PL("Options")}
             </div>
             <mesh-toggle
               .label=${PL("Flip Screen")}
@@ -2018,8 +2018,8 @@ class MeshSettingsBluetooth extends ConfigSectionPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Bluetooth Configuration</h3>
-          <p>Configure Bluetooth connectivity, pairing mode, and PIN.</p>
+          <h3>${PL("Bluetooth Configuration")}</h3>
+          <p>${PL("Configure Bluetooth connectivity, pairing mode, and PIN.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="settings-section">
@@ -2146,17 +2146,17 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Security Configuration</h3>
-          <p>View PKI keys, configure admin channel, and debug logging settings.</p>
+          <h3>${PL("Security Configuration")}</h3>
+          <p>${PL("View PKI keys, configure admin channel, and debug logging settings.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              PKI Keys (Read Only)
+              ${PL("PKI Keys (Read Only)")}
             </div>
             <div class="key-section">
-              <div class="key-label">Public Key</div>
-              <div class="key-display">${pubKey || "Not available"}</div>
+              <div class="key-label">${PL("Public Key")}</div>
+              <div class="key-display">${pubKey || PL("Not available")}</div>
             </div>
             <div class="key-section">
               <div class="key-label">
@@ -2168,7 +2168,7 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
                   : ""}
               </div>
               <div class="key-display">
-                ${privKey ? (this._showPrivateKey ? privKey : "•".repeat(44)) : "Not available"}
+                ${privKey ? (this._showPrivateKey ? privKey : "•".repeat(44)) : PL("Not available")}
               </div>
             </div>
             <div class="key-section">
@@ -2190,7 +2190,7 @@ class MeshSettingsSecurity extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              Options
+              ${PL("Options")}
             </div>
             <mesh-toggle
               .label=${PL("Debug Log Enabled")}

@@ -18,7 +18,9 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
 
+from . import ondemand
 from .const import DOMAIN
+from .ondemand import OnDemandError
 from .store import get_store
 
 if TYPE_CHECKING:
@@ -856,7 +858,9 @@ async def ws_node_history(hass, connection, msg) -> None:
     {
         vol.Required("type"): f"{WS_PREFIX}/device_action",
         vol.Required("entry_id"): str,
-        vol.Required("action"): vol.In(["reboot", "shutdown", "factory_reset", "nodedb_reset"]),
+        vol.Required("action"): vol.In(
+            ["reboot", "shutdown", "factory_reset", "nodedb_reset", "factory_reset_device", "reboot_ota"]
+        ),
     }
 )
 @websocket_api.require_admin
@@ -880,6 +884,233 @@ async def ws_device_action(
     connection.send_result(msg["id"], {"done": True})
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/ondemand",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Required("query"): vol.In(list(ondemand.QUERIES)),
+        vol.Optional("timeout", default=20): vol.All(vol.Coerce(float), vol.Range(min=3, max=60)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_ondemand(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Zapytanie OnDemand (port 354) do węzła — diagnostyka jak w aplikacji."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    try:
+        result = await ondemand.request_on_demand(
+            entry.runtime_data.client.interface,
+            msg["node_id"],
+            ondemand.QUERIES[msg["query"]],
+            timeout=msg["timeout"],
+        )
+    except OnDemandError as err:
+        connection.send_error(msg["id"], "ondemand_failed", err.code)
+        return
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        _LOGGER.warning("Zapytanie OnDemand %s nie powiodło się: %s", msg["query"], err)
+        connection.send_error(msg["id"], "ondemand_failed", str(err))
+        return
+    connection.send_result(msg["id"], {**result, "query": msg["query"], "node_id": msg["node_id"]})
+
+
+def _sniffer_target(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> tuple[ConfigEntry, Any, int] | None:
+    """Bramka, magazyn i numer własnego węzła — sniffer działa wyłącznie lokalnie."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    store = get_store(msg["entry_id"])
+    node_id = ((entry.runtime_data.gateway_node or {}).get("num")) if entry is not None else None
+    if entry is None or store is None or node_id is None:
+        connection.send_error(msg["id"], "not_found", "Bramka nie jest jeszcze gotowa")
+        return None
+    return entry, store, node_id
+
+
+def _sniffer_status(store: Any, *, supported: bool, reason: str | None = None) -> dict[str, Any]:
+    log = store.sniffer
+    return {
+        "supported": supported,
+        "reason": reason,
+        "fw_plus_version": log.fw_plus_version,
+        "min_fw_plus_version": ondemand.SNIFFER_MIN_FW_PLUS_VERSION,
+        "enabled": log.enabled,
+        "count": log.count,
+        "capacity": log.capacity,
+        "last_seq": log.last_seq,
+    }
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/sniffer_state", vol.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_sniffer_state(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Czy firmware wspiera sniffer i czy jest włączony.
+
+    Stan jest tylko w RAM radia (po restarcie zawsze wyłączony), więc odpytujemy
+    go po każdym połączeniu, zamiast cokolwiek pamiętać.
+    """
+    target = _sniffer_target(hass, connection, msg)
+    if target is None:
+        return
+    entry, store, node_id = target
+    log = store.sniffer
+    interface = entry.runtime_data.client.interface
+
+    try:
+        if log.fw_plus_version is None:
+            log.fw_plus_version = await ondemand.query_fw_plus_version(interface, node_id)
+    except OnDemandError as err:
+        connection.send_result(msg["id"], _sniffer_status(store, supported=False, reason=err.code))
+        return
+    if log.fw_plus_version < ondemand.SNIFFER_MIN_FW_PLUS_VERSION:
+        connection.send_result(msg["id"], _sniffer_status(store, supported=False, reason="old_firmware"))
+        return
+
+    try:
+        log.enabled = await ondemand.query_sniffer_state(interface, node_id)
+    except OnDemandError as err:
+        connection.send_result(msg["id"], _sniffer_status(store, supported=True, reason=err.code))
+        return
+    connection.send_result(msg["id"], _sniffer_status(store, supported=True))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/sniffer_set",
+        vol.Required("entry_id"): str,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_sniffer_set(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Włącz albo wyłącz sniffer na własnej bramce."""
+    target = _sniffer_target(hass, connection, msg)
+    if target is None:
+        return
+    entry, store, node_id = target
+    log = store.sniffer
+    if log.fw_plus_version is None or log.fw_plus_version < ondemand.SNIFFER_MIN_FW_PLUS_VERSION:
+        connection.send_error(msg["id"], "sniffer_unsupported", "unsupported")
+        return
+    try:
+        log.enabled = await ondemand.set_sniffer(entry.runtime_data.client.interface, node_id, msg["enabled"])
+    except OnDemandError as err:
+        connection.send_error(msg["id"], "sniffer_failed", err.code)
+        return
+    connection.send_result(msg["id"], _sniffer_status(store, supported=True))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/sniffer_log",
+        vol.Required("entry_id"): str,
+        vol.Optional("since", default=0): int,
+        vol.Optional("limit", default=5000): vol.All(int, vol.Range(min=1, max=5000)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_sniffer_log(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Wpisy logu sniffera nowsze niż `since` (numer kolejny ostatnio odebranego)."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(
+        msg["id"],
+        {
+            "entries": store.sniffer.entries_since(msg["since"], msg["limit"]),
+            "last_seq": store.sniffer.last_seq,
+            "enabled": store.sniffer.enabled,
+            "count": store.sniffer.count,
+            "capacity": store.sniffer.capacity,
+        },
+    )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/sniffer_clear", vol.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_sniffer_clear(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Wyczyść log sniffera."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    store.sniffer.clear()
+    connection.send_result(msg["id"], {"cleared": True})
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/storage_stats", vol.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_storage_stats(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Ile danych panel trzyma na dysku (Ustawienia → Pamięć)."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], store.stats())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/storage_clear",
+        vol.Required("entry_id"): str,
+        vol.Required("kind"): vol.In(["messages", "nodes", "all"]),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_storage_clear(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Usuń dane zapisane przez panel; nie dotyka radia ani encji Home Assistanta."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    if msg["kind"] == "messages":
+        store.clear_messages()
+    elif msg["kind"] == "nodes":
+        store.clear_node_data()
+    else:
+        store.clear_all()
+    connection.send_result(msg["id"], {"cleared": msg["kind"]})
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -900,6 +1131,13 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_traceroute,
         ws_traceroute_history,
         ws_node_history,
+        ws_ondemand,
+        ws_sniffer_state,
+        ws_sniffer_set,
+        ws_sniffer_log,
+        ws_sniffer_clear,
+        ws_storage_stats,
+        ws_storage_clear,
         ws_set_config,
         ws_delete_message,
         ws_delete_conversation,

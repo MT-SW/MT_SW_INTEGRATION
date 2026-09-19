@@ -29,6 +29,7 @@ from .api import (
     ATTR_EVENT_MESHTASTIC_API_NODE_INFO,
     ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE,
     EVENT_MESHTASTIC_API_NEIGHBOR_INFO,
+    EVENT_MESHTASTIC_API_PACKET,
     EVENT_MESHTASTIC_API_POSITION,
     EVENT_MESHTASTIC_API_TELEMETRY,
     EVENT_MESHTASTIC_API_TEXT_MESSAGE,
@@ -36,6 +37,7 @@ from .api import (
     EventMeshtasticApiTelemetryType,
 )
 from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER
+from .sniffer import SnifferLog
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -160,6 +162,8 @@ class PanelStore:
         # Historia w czasie per węzeł: neighbor_count, position,
         # device_metrics, environment_metrics, power_metrics.
         self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
+        # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
+        self.sniffer = SnifferLog()
         self._listeners: list[Callable[[str, dict[str, Any]], None]] = []
         self._unsubscribes: list[Callable[[], None]] = []
 
@@ -190,6 +194,7 @@ class PanelStore:
             bus.async_listen(EVENT_MESHTASTIC_API_NEIGHBOR_INFO, self._handle_neighbor_info),
             bus.async_listen(EVENT_MESHTASTIC_API_TELEMETRY, self._handle_telemetry),
             bus.async_listen(EVENT_MESHTASTIC_API_POSITION, self._handle_position),
+            bus.async_listen(EVENT_MESHTASTIC_API_PACKET, self._handle_packet),
             async_track_time_interval(
                 self._hass, self._sample_gateway, timedelta(seconds=TIMESERIES_SAMPLE_SECONDS)
             ),
@@ -282,6 +287,30 @@ class PanelStore:
         self._messages = []
         self._schedule_save()
         self._notify("cleared", {})
+
+    # ── magazyn: statystyki i czyszczenie (zakładka Ustawienia → Pamięć) ─
+
+    def stats(self) -> dict[str, int]:
+        conversations = {key for key in (self._conversation_of(m) for m in self._messages) if key is not None}
+        return {
+            "messages": len(self._messages),
+            "conversations": len(conversations),
+            "traceroutes": sum(len(routes) for routes in self._traceroutes.values()),
+            "history_points": sum(len(series) for kinds in self._node_history.values() for series in kinds.values()),
+        }
+
+    def clear_node_data(self) -> None:
+        """Usuń zapisane trasy, historię węzłów, sąsiadów i zapamiętane statystyki."""
+        self._traceroutes = {}
+        self._node_history = {}
+        self._node_state = {}
+        self._schedule_save()
+
+    def clear_all(self) -> None:
+        self.clear_messages()
+        self.clear_node_data()
+        self._timeseries = []
+        self._schedule_save()
 
     # ── zapis wiadomości ────────────────────────────────────────────────
 
@@ -394,6 +423,16 @@ class PanelStore:
         ):
             return
         self._record_node_point(node_id, telemetry_type.value, dict(data))
+
+    def _handle_packet(self, event: Event) -> None:
+        """Zbieraj pakiety do logu sniffera, dopóki sniffer jest włączony."""
+        if not self.sniffer.enabled or not self._belongs_to_entry(event):
+            return
+        packet = event.data.get(ATTR_EVENT_MESHTASTIC_API_DATA)
+        if not isinstance(packet, dict):
+            return
+        gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
+        self.sniffer.add_packet(packet, _now_ms(), gateway_node.get("num"))
 
     def _handle_position(self, event: Event) -> None:
         node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)

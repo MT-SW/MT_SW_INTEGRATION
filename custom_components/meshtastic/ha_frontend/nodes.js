@@ -18,6 +18,7 @@ import { t, formatUptime, formatRelative } from "./i18n.js";
 import "./chart.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
 import "./node-stats.js";;
+import "./node-ondemand.js";
 
 const COLUMNS = [
   { key: "name", labelKey: "nodes.col.name", numeric: false },
@@ -56,6 +57,7 @@ class MeshNodesTab extends LitElement {
       _positionHistory: { type: Array },
       _telemetryHistory: { type: Object },
       _statsRequest: { type: Object },
+      _ondemandOpen: { type: Boolean },
       _neighborsShown: { type: Boolean },
     };
   }
@@ -77,6 +79,7 @@ class MeshNodesTab extends LitElement {
     this._positionHistory = [];
     this._telemetryHistory = null;
     this._statsRequest = null;
+    this._ondemandOpen = false;
     this._neighborsShown = false;
   }
 
@@ -251,6 +254,7 @@ class MeshNodesTab extends LitElement {
         this._positionHistory = [];
         this._telemetryHistory = null;
         this._statsRequest = null;
+        this._ondemandOpen = false;
         this._neighborsShown = false;
       }}>
         <td class="star-cell">${this._renderStar(node)}</td>
@@ -364,6 +368,9 @@ class MeshNodesTab extends LitElement {
         <button class="action" ?disabled=${busy} @click=${() => (this._statsRequest = { mode: "resources" })}>
           ${t(this.hass, "nodes.action.resource_history")}
         </button>
+        <button class="action" ?disabled=${busy} @click=${() => (this._ondemandOpen = !this._ondemandOpen)}>
+          ${t(this.hass, "nodes.action.ondemand")}
+        </button>
         <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
           ${t(this.hass, "nodes.action.remove")}
         </button>
@@ -386,6 +393,7 @@ class MeshNodesTab extends LitElement {
     this._positionHistory = [];
     this._telemetryHistory = null;
     this._statsRequest = null;
+    this._ondemandOpen = false;
     this._neighborsShown = false;
     this._notice = null;
     this._error = null;
@@ -669,6 +677,14 @@ class MeshNodesTab extends LitElement {
                   .nodeId=${node.node_id}
                   .request=${this._statsRequest}
                 ></mesh-node-stats>`
+              : ""}
+            ${this._ondemandOpen
+              ? html`<mesh-node-ondemand
+                  .hass=${this.hass}
+                  .entryId=${this.entryId}
+                  .nodeId=${node.node_id}
+                  .nodes=${this.nodes}
+                ></mesh-node-ondemand>`
               : ""}
 
             ${this._neighborsShown && node.neighbors && node.neighbors.length

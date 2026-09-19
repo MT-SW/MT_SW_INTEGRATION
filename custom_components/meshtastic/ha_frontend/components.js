@@ -3,6 +3,7 @@ import {
   html,
   css,
 } from "./vendor/lit/lit-element.js";
+import { PL } from "./pl-settings.js";
 
 /* ── <mesh-form-field> ── */
 export class MeshFormField extends LitElement {
@@ -413,7 +414,7 @@ export class MeshTextInput extends LitElement {
             type="button"
             class="reveal-btn"
             @click=${() => { this._revealed = !this._revealed; }}
-            title=${this._revealed ? "Hide" : "Show"}
+            title=${this._revealed ? PL("Hide") : PL("Show")}
           >
             <ha-icon icon=${this._revealed ? "mdi:eye-off" : "mdi:eye"}></ha-icon>
           </button>
@@ -449,7 +450,7 @@ export class MeshConfirmDialog extends LitElement {
   constructor() {
     super();
     this.open = false;
-    this.confirmLabel = "Confirm";
+    this.confirmLabel = PL("Confirm");
     this.danger = false;
   }
 
@@ -525,7 +526,7 @@ export class MeshConfirmDialog extends LitElement {
           <h3>${this.title}</h3>
           <p>${this.message}</p>
           <div class="actions">
-            <button class="cancel-btn" @click=${this._onCancel}>Cancel</button>
+            <button class="cancel-btn" @click=${this._onCancel}>${PL("Cancel")}</button>
             <button
               class="confirm-btn ${this.danger ? "danger" : ""}"
               @click=${this._onConfirm}
@@ -621,10 +622,10 @@ export class MeshSaveBar extends LitElement {
     if (!this.dirty) return html``;
     return html`
       <div class="bar">
-        <span class="label">You have unsaved changes</span>
-        <button class="discard" @click=${this._onDiscard} ?disabled=${this.saving}>Discard</button>
+        <span class="label">${PL("You have unsaved changes")}</span>
+        <button class="discard" @click=${this._onDiscard} ?disabled=${this.saving}>${PL("Discard")}</button>
         <button class="save" @click=${this._onSave} ?disabled=${this.saving}>
-          ${this.saving ? "Saving..." : "Save"}
+          ${this.saving ? PL("Saving...") : PL("Save")}
         </button>
       </div>
     `;

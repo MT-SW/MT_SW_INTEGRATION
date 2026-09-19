@@ -218,6 +218,11 @@ class MeshtasticApiClient:
     def get_own_node(self) -> Mapping[str, Any]:
         return self._interface.connected_node() or {}
 
+    @property
+    def interface(self) -> AioMeshInterface:
+        """Połączenie z radiem — dla ondemand.py, które rozmawia wprost z warstwą pakietów."""
+        return self._interface
+
     def get_all_nodes_sync(self) -> Mapping[int, Mapping[str, Any]]:
         """Migawka pełnej lokalnej bazy węzłów bramy, bez await.
 

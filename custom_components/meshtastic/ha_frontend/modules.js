@@ -185,8 +185,8 @@ class MeshSettingsMqtt extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>MQTT Configuration</h3>
-          <p>Configure MQTT broker connection, encryption, and map reporting.</p>
+          <h3>${PL("MQTT Configuration")}</h3>
+          <p>${PL("Configure MQTT broker connection, encryption, and map reporting.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle
@@ -257,8 +257,8 @@ class MeshSettingsSerial extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Serial Module</h3>
-          <p>Configure the serial interface module for external device communication.</p>
+          <h3>${PL("Serial Module")}</h3>
+          <p>${PL("Configure the serial interface module for external device communication.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable serial module")}
@@ -315,8 +315,8 @@ class MeshSettingsExtNotification extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>External Notification</h3>
-          <p>Configure buzzer, vibration motor, and LED notifications.</p>
+          <h3>${PL("External Notification")}</h3>
+          <p>${PL("Configure buzzer, vibration motor, and LED notifications.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable external notification module")}
@@ -396,8 +396,8 @@ class MeshSettingsStoreForward extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Store & Forward</h3>
-          <p>Store messages and forward them to nodes that come online later.</p>
+          <h3>${PL("Store & Forward")}</h3>
+          <p>${PL("Store messages and forward them to nodes that come online later.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable Store & Forward module")}
@@ -450,8 +450,8 @@ class MeshSettingsRangeTest extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Range Test</h3>
-          <p>Send periodic test messages to measure range and link quality.</p>
+          <h3>${PL("Range Test")}</h3>
+          <p>${PL("Send periodic test messages to measure range and link quality.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable Range Test module")}
@@ -494,16 +494,15 @@ class MeshSettingsTelemetry extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Telemetry</h3>
-          <p>Configure device metrics, environment, air quality, and power telemetry intervals.</p>
+          <h3>${PL("Telemetry")}</h3>
+          <p>${PL("Configure device metrics, environment, air quality, and power telemetry intervals.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="settings-section">
             ${this._sectionTitle(PL("Device Metrics"))}
             <div class="info-banner">
-              <strong>Charts not updating?</strong> Firmware 2.7.x defaults this to <code>3600</code> (1 hour),
-              which is why battery / channel utilization / airtime graphs may look frozen.
-              For a live dashboard, set this to <code>300</code> (5 min) or <code>600</code> (10 min).
+              <strong>${PL("Charts not updating?")}</strong>
+              ${PL("Firmware 2.7.x defaults this to 3600 (1 hour), which is why battery / channel utilization / airtime graphs may look frozen. For a live dashboard, set this to 300 (5 min) or 600 (10 min).")}
               <div class="quick-presets">
                 <button class="quick-preset" type="button"
                   @click=${() => this._updateField("device_update_interval", 300)}>5 min</button>
@@ -622,8 +621,8 @@ class MeshSettingsCannedMessage extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Canned Messages</h3>
-          <p>Pre-defined messages that can be sent quickly using hardware input.</p>
+          <h3>${PL("Canned Messages")}</h3>
+          <p>${PL("Pre-defined messages that can be sent quickly using hardware input.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable Canned Message module")}
@@ -702,8 +701,8 @@ class MeshSettingsAudio extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Audio / Codec2</h3>
-          <p>Configure audio codec settings for voice communication over mesh.</p>
+          <h3>${PL("Audio / Codec2")}</h3>
+          <p>${PL("Configure audio codec settings for voice communication over mesh.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Codec2 Enabled")} .description=${PL("Enable Codec2 audio module")}
@@ -758,8 +757,8 @@ class MeshSettingsNeighborInfo extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Neighbor Info</h3>
-          <p>Broadcast information about direct neighbors for mesh topology mapping.</p>
+          <h3>${PL("Neighbor Info")}</h3>
+          <p>${PL("Broadcast information about direct neighbors for mesh topology mapping.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable Neighbor Info module")}
@@ -799,8 +798,8 @@ class MeshSettingsAmbientLighting extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Ambient Lighting</h3>
-          <p>Configure onboard LED color and brightness.</p>
+          <h3>${PL("Ambient Lighting")}</h3>
+          <p>${PL("Configure onboard LED color and brightness.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("LED State")} .description=${PL("Turn the LED on or off")}
@@ -848,8 +847,8 @@ class MeshSettingsDetectionSensor extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Detection Sensor</h3>
-          <p>Configure a GPIO-based detection sensor that sends alerts on the mesh.</p>
+          <h3>${PL("Detection Sensor")}</h3>
+          <p>${PL("Configure a GPIO-based detection sensor that sends alerts on the mesh.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable Detection Sensor module")}
@@ -910,8 +909,8 @@ class MeshSettingsPaxcounter extends ModuleConfigPanel {
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
-          <h3>Paxcounter</h3>
-          <p>Count nearby WiFi and BLE devices and broadcast counts on the mesh.</p>
+          <h3>${PL("Paxcounter")}</h3>
+          <p>${PL("Count nearby WiFi and BLE devices and broadcast counts on the mesh.")}</p>
         </div>
         <div class="settings-panel-body">
           <mesh-toggle .label=${PL("Enabled")} .description=${PL("Enable Paxcounter module")}
@@ -1084,39 +1083,8 @@ if (!customElements.get("mesh-settings-mesh-beacon")) {
   customElements.define("mesh-settings-mesh-beacon", MeshSettingsMeshBeacon);
 }
 
-class MeshSettingsSniffer extends ModuleConfigPanel {
-  get _section() { return "nodemodadmin"; }
-
-  render() {
-    const d = this._draft;
-    return html`
-      <div class="settings-panel">
-        <div class="settings-panel-header">
-          <h3>${PL("Sniffer")}</h3>
-          <p>${PL("MT_SW firmware extension: forward packets overheard but not addressed to this node.")}</p>
-        </div>
-        <div class="settings-panel-body">
-          <div class="info-banner">
-            ${PL("Requires MT_SW-branded firmware and app. Other combinations may hang the node.")}
-          </div>
-          <div class="settings-section">
-            <mesh-toggle
-              .label=${PL("Sniffer Mode")}
-              .description=${PL("Forward locally overheard packets not addressed to this node to the app")}
-              .checked=${d.sniffer_enabled === true}
-              @change=${(e) => this._updateField("sniffer_enabled", e.detail.checked)}
-            ></mesh-toggle>
-          </div>
-        </div>
-        <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}
-          @save=${this._save} @discard=${this._resetDraft}></mesh-save-bar>
-      </div>
-    `;
-  }
-}
-if (!customElements.get("mesh-settings-sniffer")) {
-  customElements.define("mesh-settings-sniffer", MeshSettingsSniffer);
-}
+/* Panel Sniffera mieszka w sniffer-panel.js — steruje snifferem przez OnDemand,
+   a nie przez konfigurację modułu (upstreamowe protobufy nie mają nodemodadmin). */
 
 class MeshSettingsStatusMessage extends ModuleConfigPanel {
   get _section() { return "statusmessage"; }
