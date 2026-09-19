@@ -9,6 +9,7 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatRelative } from "./i18n.js";
+import "./message-info.js";
 
 const MAX_TEXT_LENGTH = 228;
 
@@ -26,6 +27,7 @@ class MeshMessagesTab extends LitElement {
       _sending: { type: Boolean },
       _error: { type: String },
       _deleting: { type: Boolean },
+      _info: { type: Object },
     };
   }
 
@@ -39,6 +41,7 @@ class MeshMessagesTab extends LitElement {
     this._sending = false;
     this._error = null;
     this._deleting = false;
+    this._info = null;
   }
 
   _nodeName(nodeId) {
@@ -234,7 +237,11 @@ class MeshMessagesTab extends LitElement {
 
     return html`
       <div class="bubble-row ${message.direction}">
-        <div class="bubble">
+        <div
+          class="bubble"
+          style="cursor: pointer"
+          @click=${() => (this._info = { id: message.id, ts: message.ts })}
+        >
           ${message.direction === "in"
             ? html`<div class="sender">${message.from_name || this._nodeName(message.from)}</div>`
             : ""}
@@ -242,7 +249,10 @@ class MeshMessagesTab extends LitElement {
             class="bubble-delete"
             title=${t(this.hass, "messages.delete")}
             ?disabled=${this._deleting}
-            @click=${() => this._deleteMessage(message)}
+            @click=${(e) => {
+              e.stopPropagation();
+              this._deleteMessage(message);
+            }}
           >
             <ha-icon icon="mdi:trash-can-outline"></ha-icon>
           </button>
@@ -364,6 +374,14 @@ class MeshMessagesTab extends LitElement {
           ${this._error ? html`<div class="error">${this._error}</div>` : ""}
         </section>
       </div>
+      ${this._info
+        ? html`<mesh-message-info
+            .hass=${this.hass}
+            .nodes=${this.nodes}
+            .message=${(this.messages || []).find((m) => m.ts === this._info.ts && m.id === this._info.id)}
+            @close=${() => (this._info = null)}
+          ></mesh-message-info>`
+        : ""}
     `;
   }
 

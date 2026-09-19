@@ -61,6 +61,24 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
+def _remembered(node_data: Mapping[str, Any], saved: Mapping[str, Any], key: str) -> tuple[Mapping[str, Any], Any]:
+    """Zwróć (dane, czas zapisu): żywe dane koordynatora albo ostatnie zapisane na dysku.
+
+    Czas zapisu jest None, gdy dane są żywe. Po restarcie integracji radio
+    przysyła statystyki dopiero przy następnym pakiecie telemetrii, więc do tego
+    czasu pokazujemy to, co zapamiętaliśmy.
+    """
+    live = node_data.get(key)
+    if live:
+        return live, None
+    remembered = saved.get(key) or {}
+    data = remembered.get("data") or {}
+    if key == "deviceMetrics":
+        # czas pracy sprzed restartu byłby teraz nieprawdą
+        data = {name: value for name, value in data.items() if name != "uptimeSeconds"}
+    return data, (remembered.get("ts") if data else None)
+
+
 def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
     """Zbierz status bramki z koordynatora i klienta API.
 
@@ -78,14 +96,16 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         node_data = coordinator.data.get(node_id, {}) or {}
 
     user = gateway_node.get("user", {}) or {}
-    device_metrics = node_data.get("deviceMetrics", {}) or {}
+    store = get_store(entry.entry_id)
+    saved = store.node_state(node_id).get("telemetry", {}) if store is not None and node_id is not None else {}
+    device_metrics, device_saved_at = _remembered(node_data, saved, "deviceMetrics")
     # LocalStats niesie liczniki pakietów i węzłów, LocalStatsExtended (firmware
     # MT_SW) wyłącznie pamięć i CPU — to rozłączne zbiory pól, więc scalamy je,
     # zamiast wybierać jeden. Na firmware waniliowym drugi człon jest pusty.
-    local_stats = {
-        **(node_data.get("localStats") or {}),
-        **(node_data.get("localStatsExtended") or {}),
-    }
+    basic_stats, basic_saved_at = _remembered(node_data, saved, "localStats")
+    extended_stats, extended_saved_at = _remembered(node_data, saved, "localStatsExtended")
+    local_stats = {**basic_stats, **extended_stats}
+    saved_times = [ts for ts in (device_saved_at, basic_saved_at, extended_saved_at) if ts]
 
     try:
         metadata = client.metadata or {}
@@ -131,6 +151,7 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         "psram_free": _as_int(local_stats.get("memoryPsramFree")),
         "psram_total": _as_int(local_stats.get("memoryPsramTotal")),
         "tracked_nodes": len(coordinator.data or {}),
+        "stats_saved_at": min(saved_times) if saved_times else None,
     }
 
 
@@ -210,6 +231,10 @@ async def ws_nodes(
 
     gateway_node = entry.runtime_data.gateway_node or {}
     gateway_id = gateway_node.get("num")
+    try:
+        gateway_signs = bool((entry.runtime_data.client.metadata or {}).get("hasXeddsa"))
+    except Exception:  # noqa: BLE001 - metadata jest best-effort, nie może zerwać listy węzłów
+        gateway_signs = False
 
     # Panel celowo czyta pełną bazę węzłów z urządzenia, a nie coordinator.data.
     # Koordynator jest przefiltrowany opcją "nodes" wpisu konfiguracyjnego,
@@ -237,9 +262,14 @@ async def ws_nodes(
         # zapisać na dysk przed restartem.
         saved_state = store.node_state(node_id) if store is not None else {}
         neighbor_info = node.get("neighborInfo") or saved_state.get("neighbor_info") or {}
-        signed = node.get("signed")
-        if signed is None:
-            signed = saved_state.get("signed", False)
+        # Węzeł podpisuje pakiety, jeśli samo urządzenie oznaczyło tak jego wpis
+        # w bazie (hasXeddsaSigned — zostaje między czyszczeniami bazy) albo
+        # widzieliśmy od niego podpisaną wiadomość. Własnej bramki radio nigdy
+        # nie ocenia po odebranych pakietach (nie słyszy siebie), więc ona
+        # podpisuje wtedy, gdy firmware ma XEdDSA (DeviceMetadata.has_xeddsa).
+        signed = node.get("hasXeddsaSigned") or saved_state.get("signed", False)
+        if node_id == gateway_id and gateway_signs:
+            signed = True
 
         neighbors = [
             {

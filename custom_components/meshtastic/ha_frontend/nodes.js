@@ -56,6 +56,7 @@ class MeshNodesTab extends LitElement {
       _positionHistory: { type: Array },
       _telemetryHistory: { type: Object },
       _statsRequest: { type: Object },
+      _neighborsShown: { type: Boolean },
     };
   }
 
@@ -76,6 +77,7 @@ class MeshNodesTab extends LitElement {
     this._positionHistory = [];
     this._telemetryHistory = null;
     this._statsRequest = null;
+    this._neighborsShown = false;
   }
 
   _displayName(node) {
@@ -249,6 +251,7 @@ class MeshNodesTab extends LitElement {
         this._positionHistory = [];
         this._telemetryHistory = null;
         this._statsRequest = null;
+        this._neighborsShown = false;
       }}>
         <td class="star-cell">${this._renderStar(node)}</td>
         <td>
@@ -383,6 +386,7 @@ class MeshNodesTab extends LitElement {
     this._positionHistory = [];
     this._telemetryHistory = null;
     this._statsRequest = null;
+    this._neighborsShown = false;
     this._notice = null;
     this._error = null;
   }
@@ -424,6 +428,7 @@ class MeshNodesTab extends LitElement {
       return;
     }
     this._neighborHistory = await this._loadNodeHistory(node, "neighbor_count");
+    this._neighborsShown = true;
   }
 
   async _loadPositionHistory(node) {
@@ -666,7 +671,7 @@ class MeshNodesTab extends LitElement {
                 ></mesh-node-stats>`
               : ""}
 
-            ${node.neighbors && node.neighbors.length
+            ${this._neighborsShown && node.neighbors && node.neighbors.length
               ? html`
                   <div class="detail-section">${t(this.hass, "tab.neighbors")}</div>
                   ${node.neighbors.map(

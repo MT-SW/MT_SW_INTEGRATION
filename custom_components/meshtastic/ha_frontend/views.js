@@ -211,6 +211,14 @@ class MeshRadioTab extends LitElement {
           </span>
         </div>
 
+                ${gateway.stats_saved_at
+          ? html`<div class="stale-note">
+              ${t(this.hass, "radio.stats_saved_at", {
+                time: new Date(gateway.stats_saved_at).toLocaleString(this.hass.language),
+              })}
+            </div>`
+          : ""}
+
         <div class="section-title">${t(this.hass, "radio.section.device")}</div>
         <div class="stat-grid">
           ${this._renderStat("radio.hw_model", gateway.hw_model)}
@@ -306,6 +314,12 @@ class MeshRadioTab extends LitElement {
           color: var(--secondary-text-color);
           font-weight: 400;
           font-size: 14px;
+        }
+
+        .stale-note {
+          padding: 0 16px 8px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
         }
 
         .section-title {

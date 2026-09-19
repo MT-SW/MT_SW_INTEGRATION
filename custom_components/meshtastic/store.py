@@ -83,6 +83,18 @@ _STATS_HISTORY_FIELDS = {
     EventMeshtasticApiTelemetryType.LOCAL_STATS_EXTENDED: LOCAL_STATS_EXTENDED_HISTORY_FIELDS,
 }
 
+# Ostatnie wartości telemetrii zapisujemy na dysk, żeby karta Radio po restarcie
+# nie świeciła pustkami, zanim radio nadeśle świeży pakiet ze statystykami.
+_LAST_TELEMETRY_KEYS = {
+    EventMeshtasticApiTelemetryType.DEVICE_METRICS: "deviceMetrics",
+    EventMeshtasticApiTelemetryType.LOCAL_STATS: "localStats",
+    EventMeshtasticApiTelemetryType.LOCAL_STATS_EXTENDED: "localStatsExtended",
+}
+
+# SENT < ACK: późne niejawne potwierdzenie nie zdejmuje potwierdzenia adresata
+_ACK_RANK = {"SENT": 1, "ACK": 2, "NAK": 2}
+MAX_RELAYS_PER_MESSAGE = 20
+
 _STORES: dict[str, PanelStore] = {}
 
 
@@ -95,6 +107,38 @@ def _as_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _apply_ack(message: dict[str, Any], data: Any, now: int) -> None:
+    """Dopisz do wysłanej wiadomości dane z jednego potwierdzenia routingu.
+
+    SENT to niejawny ACK własnej bramy: radio usłyszało, że ktoś powtórzył
+    naszą wiadomość — każdy taki przekaźnik zapisujemy osobno. ACK przychodzi od
+    adresata i niesie drogę, którą wrócił (skoki albo SNR/RSSI). Status nigdy
+    się nie cofa.
+    """
+    ack_type = data.get("ack_type")
+    if ack_type not in _ACK_RANK:
+        return
+
+    info = {key: data[key] for key in ("relay_node", "rx_snr", "rx_rssi", "hops_away") if key in data}
+    info["ts"] = now
+
+    if ack_type == "SENT":
+        relays = message.setdefault("relays", [])
+        relay = info.get("relay_node") or 0
+        existing = next((r for r in relays if relay and r.get("relay_node") == relay), None)
+        if existing is not None:
+            existing.update(info)
+        elif len(relays) < MAX_RELAYS_PER_MESSAGE and (relay or not any(not r.get("relay_node") for r in relays)):
+            relays.append(info)
+    elif ack_type == "ACK":
+        message["ack_info"] = {**info, "from": data.get("from_node")}
+
+    if _ACK_RANK[ack_type] >= _ACK_RANK.get(message.get("ack"), 0):
+        message["ack"] = ack_type
+        if data.get("error"):
+            message["ack_error"] = data["error"]
 
 
 class PanelStore:
@@ -273,7 +317,7 @@ class PanelStore:
             "emoji": data.get("emoji") or 0,
             "ack": None,
         }
-        for key in ("rx_snr", "rx_rssi", "hops_away", "xeddsa_signed"):
+        for key in ("rx_snr", "rx_rssi", "hops_away", "xeddsa_signed", "relay_node"):
             if key in event.data:
                 message[key] = event.data[key]
         return message
@@ -307,9 +351,7 @@ class PanelStore:
 
         for message in reversed(self._messages):
             if message.get("id") == request_id and message.get("direction") == "out":
-                message["ack"] = event.data.get("ack_type")
-                if event.data.get("error"):
-                    message["ack_error"] = event.data["error"]
+                _apply_ack(message, event.data, _now_ms())
                 self._schedule_save()
                 self._notify("ack", message)
                 return
@@ -335,6 +377,11 @@ class PanelStore:
         telemetry_type = event.data.get(ATTR_EVENT_MESHTASTIC_API_TELEMETRY_TYPE)
         if node_id is None or not data:
             return
+        last_key = _LAST_TELEMETRY_KEYS.get(telemetry_type)
+        if last_key is not None:
+            state = self._node_state.setdefault(str(node_id), {})
+            state.setdefault("telemetry", {})[last_key] = {"ts": _now_ms(), "data": dict(data)}
+            self._schedule_save()
         stats_fields = _STATS_HISTORY_FIELDS.get(telemetry_type)
         if stats_fields is not None:
             point = {field: _as_int(data.get(field)) for field in stats_fields}

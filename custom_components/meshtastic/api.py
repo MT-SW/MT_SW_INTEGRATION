@@ -361,30 +361,38 @@ class MeshtasticApiClient:
         gateway_node_id = self.get_own_node()["num"]
         from_node_id = packet.from_id or 0
         to_node_id = packet.to_id or 0
-        is_broadcast = to_node_id == MeshInterface.BROADCAST_NUM
-        # Dla wiadomości do konkretnego węzła interesuje nas tylko potwierdzenie
-        # faktycznie nadesłane przez węzeł docelowy — niejawny ACK od własnej
-        # bramy tu pomijamy. Przy broadcastcie/kanale nie ma jednak węzła
-        # docelowego, który mógłby to potwierdzić — jedyny sygnał, jaki
-        # kiedykolwiek dostaniemy, to właśnie ten niejawny ACK od bramy,
-        # oznaczający że pakiet trafił na eter. Traktujemy go wtedy jako
-        # "wysłano do sieci", zamiast pomijać.
-        if from_node_id == gateway_node_id and not is_broadcast:
-            return
-
+        mesh_packet = packet.mesh_packet
         error = routing.error_reason
+
+        # Potwierdzenie od własnej bramy to niejawny ACK: radio usłyszało, jak
+        # ktoś powtórzył naszą wiadomość (dotyczy kanałów i wiadomości
+        # prywatnych). Firmware adresuje je do nas samych, a nie na broadcast,
+        # więc nie wolno ich odrzucać po adresie. ACK od innego węzła to
+        # potwierdzenie od adresata.
+        if error != mesh_pb2.Routing.Error.NONE:
+            ack_type = "NAK"
+        elif from_node_id == gateway_node_id:
+            ack_type = "SENT"
+        else:
+            ack_type = "ACK"
+
         event_data = {
-            "message_id": packet.mesh_packet.id if packet.mesh_packet else 0,
+            "message_id": mesh_packet.id if mesh_packet else 0,
             "request_id": packet.data.request_id if packet.data else 0,
             "from_node": from_node_id,
             "to_node": to_node_id,
-            "ack_type": (
-                "SENT"
-                if is_broadcast and from_node_id == gateway_node_id and error == mesh_pb2.Routing.Error.NONE
-                else "ACK" if error == mesh_pb2.Routing.Error.NONE
-                else "NAK"
-            ),
+            "ack_type": ack_type,
         }
+        if mesh_packet:
+            # relay_node to ostatni bajt numeru węzła, który powtórzył pakiet;
+            # SNR i RSSI dotyczą ostatniego odcinka (tego, który usłyszała brama)
+            if mesh_packet.relay_node:
+                event_data["relay_node"] = mesh_packet.relay_node
+            if mesh_packet.HasField("rx_rssi"):
+                event_data["rx_rssi"] = mesh_packet.rx_rssi
+                event_data["rx_snr"] = mesh_packet.rx_snr
+            if mesh_packet.hop_start > 0:
+                event_data["hops_away"] = mesh_packet.hop_start - mesh_packet.hop_limit
         if error != mesh_pb2.Routing.Error.NONE:
             event_data["error"] = mesh_pb2.Routing.Error.Name(error)
 
@@ -417,6 +425,7 @@ class MeshtasticApiClient:
             event_data["rx_snr"] = packet.mesh_packet.rx_snr
             event_data["rx_rssi"] = packet.mesh_packet.rx_rssi
             event_data["xeddsa_signed"] = packet.mesh_packet.xeddsa_signed
+            event_data["relay_node"] = packet.mesh_packet.relay_node
         event_data[ATTR_EVENT_MESHTASTIC_API_NODE_INFO] = {"name": node.long_name}
         self._hass.bus.async_fire(EVENT_MESHTASTIC_API_TEXT_MESSAGE, event_data)
 
