@@ -53,9 +53,11 @@ MAX_MESSAGES = 2000
 MAX_TIMESERIES_POINTS = 1500
 MAX_TRACEROUTES_PER_NODE = 10
 MAX_NODE_HISTORY_POINTS = 300
-# Jakość sygnału zbieramy z pakietów, których jest dużo — punkt na węzeł nie
-# częściej niż co 5 minut, żeby 300 punktów starczyło na około dobę.
-SIGNAL_SAMPLE_MS = 5 * 60 * 1000
+# Jakość sygnału zbieramy z każdego pakietu od węzła, więc serii jest więcej niż
+# w telemetrii; na dysk trafia jednak nie częściej niż co 5 minut, żeby ciągły
+# ruch w eterze nie przepisywał pliku co kilka sekund.
+MAX_SIGNAL_HISTORY_POINTS = 1000
+SIGNAL_SAVE_INTERVAL_MS = 5 * 60 * 1000
 # Próbkujemy z koordynatora, nie ze zdarzeń telemetrii — dzięki temu wykresy
 # rosną także wtedy, gdy nikt nie ma otwartego panelu.
 TIMESERIES_SAMPLE_SECONDS = 60
@@ -168,8 +170,9 @@ class PanelStore:
         self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
-        # ostatni zapis punktu jakości sygnału na węzeł (tylko w pamięci)
-        self._signal_sampled: dict[int, int] = {}
+        # tylko w pamięci: ostatni pakiet zapisany w historii sygnału (na węzeł) i czas zapisu na dysk
+        self._signal_last_id: dict[int, int] = {}
+        self._signal_saved_at = 0
         self._listeners: list[Callable[[str, dict[str, Any]], None]] = []
         self._unsubscribes: list[Callable[[], None]] = []
 
@@ -447,15 +450,14 @@ class PanelStore:
             self.sniffer.add_packet(packet, _now_ms(), local_node)
 
     def _remember_via(self, packet: dict[str, Any], local_node: int | None) -> None:
-        """Zapamiętaj przekaźnik i liczbę skoków ostatniego pakietu od danego węzła.
+        """Z każdego pakietu od węzła: droga (przekaźnik, skoki) i sygnał (SNR, RSSI).
 
         Firmware podaje przekaźnik jako sam ostatni bajt numeru węzła
         (relay_node), więc nazwę dobiera dopiero panel. Pakiety z MQTT i własne
         pomijamy — nie przeszły przez radio, więc nie mówią nic o drodze w eterze.
         """
         sender = packet.get("from")
-        relay = packet.get("relayNode")
-        if not isinstance(sender, int) or sender == local_node or not relay or packet.get("viaMqtt"):
+        if not isinstance(sender, int) or sender == local_node or packet.get("viaMqtt"):
             return
         hop_start = packet.get("hopStart")
         hop_limit = packet.get("hopLimit")
@@ -470,22 +472,43 @@ class PanelStore:
         snr_value = float(snr) if isinstance(snr, int | float) and snr != 0 else None
         rssi_value = int(rssi) if isinstance(rssi, int | float) and rssi != 0 else None
         now = _now_ms()
-        state = self._node_state.setdefault(str(sender), {})
-        previous = state.get("via") or {}
-        route_changed = previous.get("relay") != relay or previous.get("hops") != hops
-        state["via"] = {"relay": relay, "hops": hops, "ts": now, "snr": snr_value, "rssi": rssi_value}
-        # Historia jakości sygnału tylko dla łącza bezpośredniego: przy skokach SNR i RSSI
-        # opisują ostatni odcinek do przekaźnika, a nie łącze z samym węzłem.
-        if (
-            hops == 0
-            and (snr_value is not None or rssi_value is not None)
-            and now - self._signal_sampled.get(sender, 0) >= SIGNAL_SAMPLE_MS
-        ):
-            self._signal_sampled[sender] = now
-            self._record_node_point(sender, "signal", {"snr": snr_value, "rssi": rssi_value})
-        # Sygnał zmienia się z każdym pakietem, więc na dysk idzie tylko zmiana drogi
-        # albo zapis nie częściej niż raz na minutę.
-        if route_changed or now - previous.get("ts", 0) >= 60_000:  # noqa: PLR2004
+
+        relay = packet.get("relayNode")
+        if relay:
+            state = self._node_state.setdefault(str(sender), {})
+            previous = state.get("via") or {}
+            route_changed = previous.get("relay") != relay or previous.get("hops") != hops
+            state["via"] = {"relay": relay, "hops": hops, "ts": now, "snr": snr_value, "rssi": rssi_value}
+            # Sygnał zmienia się z każdym pakietem, więc na dysk idzie tylko zmiana drogi
+            # albo zapis nie częściej niż raz na minutę.
+            if route_changed or now - previous.get("ts", 0) >= 60_000:  # noqa: PLR2004
+                self._schedule_save()
+
+        self._record_signal(sender, packet.get("id"), hops, snr_value, rssi_value, now)
+
+    def _record_signal(  # noqa: PLR0913
+        self, sender: int, packet_id: Any, hops: int | None, snr: float | None, rssi: int | None, now: int
+    ) -> None:
+        """Dopisz punkt do historii jakości sygnału węzła — po jednym na pakiet.
+
+        Odczyty z pakietu bezpośredniego opisują łącze z samym węzłem (pola snr/rssi),
+        a z pakietu po skokach — tylko ostatni odcinek do przekaźnika (snrVia/rssiVia),
+        więc trafiają do osobnych linii wykresu. Bez informacji o skokach nie da się
+        ich rozróżnić, więc takiego pakietu nie zapisujemy.
+        """
+        if hops is None or (snr is None and rssi is None):
+            return
+        # Ten sam pakiet może przyjść dwa razy (kopia ze sniffera) — liczymy go raz.
+        if isinstance(packet_id, int) and self._signal_last_id.get(sender) == packet_id:
+            return
+        if isinstance(packet_id, int):
+            self._signal_last_id[sender] = packet_id
+        suffix = "" if hops == 0 else "Via"
+        self._record_node_point(
+            sender, "signal", {"hops": hops, f"snr{suffix}": snr, f"rssi{suffix}": rssi}, persist=False
+        )
+        if now - self._signal_saved_at >= SIGNAL_SAVE_INTERVAL_MS:
+            self._signal_saved_at = now
             self._schedule_save()
 
     def _handle_position(self, event: Event) -> None:
@@ -503,12 +526,14 @@ class PanelStore:
             },
         )
 
-    def _record_node_point(self, node_id: Any, kind: str, point: dict[str, Any]) -> None:
+    def _record_node_point(self, node_id: Any, kind: str, point: dict[str, Any], *, persist: bool = True) -> None:
         series = self._node_history.setdefault(str(node_id), {}).setdefault(kind, [])
         series.append({"ts": _now_ms(), **point})
-        if len(series) > MAX_NODE_HISTORY_POINTS:
-            del series[: len(series) - MAX_NODE_HISTORY_POINTS]
-        self._schedule_save()
+        limit = MAX_SIGNAL_HISTORY_POINTS if kind == "signal" else MAX_NODE_HISTORY_POINTS
+        if len(series) > limit:
+            del series[: len(series) - limit]
+        if persist:
+            self._schedule_save()
 
     def node_history(self, node_id: int, kind: str, limit: int | None = None) -> list[dict[str, Any]]:
         series = self._node_history.get(str(node_id), {}).get(kind, [])

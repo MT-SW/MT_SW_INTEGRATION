@@ -73,19 +73,26 @@ const CHARTS = [
       { source: "device", field: "airUtilTx", labelKey: "nodes.history.airutil", color: "#4FC3F7" },
     ],
   },
-  /* Jakość sygnału: SNR i RSSI z pakietów słyszanych bezpośrednio (source
-     "signal"), a poziom szumu z pakietów statystyk lokalnych węzła (source
-     "stats"). RSSI i szum dzielą oś dBm, więc widać zapas sygnału nad szumem. */
+  /* Jakość sygnału: SNR i RSSI z każdego pakietu od węzła (source "signal").
+     Pakiety słyszane bezpośrednio dają pola snr/rssi — łącze z samym węzłem;
+     pakiety po skokach dają snrVia/rssiVia — tylko ostatni odcinek do
+     przekaźnika, więc idą osobną, przygaszoną linią. Poziom szumu pochodzi
+     z pakietów statystyk lokalnych węzła (source "stats"); RSSI i szum dzielą
+     oś dBm, więc widać zapas sygnału nad szumem. */
   {
     id: "snr",
     unit: " dB",
-    series: [{ source: "signal", field: "snr", labelKey: "nodes.history.snr", color: "#4FC3F7" }],
+    series: [
+      { source: "signal", field: "snr", labelKey: "nodes.history.snr", color: "#4FC3F7" },
+      { source: "signal", field: "snrVia", labelKey: "nodes.history.snr_via", color: "#90A4AE" },
+    ],
   },
   {
     id: "rssi",
     unit: " dBm",
     series: [
       { source: "signal", field: "rssi", labelKey: "nodes.history.rssi", color: "#F5C839" },
+      { source: "signal", field: "rssiVia", labelKey: "nodes.history.rssi_via", color: "#BCAAA4" },
       { source: "stats", field: "noiseFloor", labelKey: "nodes.history.noise_floor", color: "#FF8A65" },
     ],
   },
