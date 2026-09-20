@@ -11,6 +11,9 @@ import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatRelative, formatHops } from "./i18n.js";
 import { relayLabel } from "./hops.js";
 import { splitLinks, imageUrls, canEmbed } from "./link-preview.js";
+import { preparePhoto } from "./photo.js";
+import "./components.js";
+import "./image-viewer.js";
 import "./message-info.js";
 
 const MAX_TEXT_LENGTH = 228;
@@ -33,6 +36,9 @@ class MeshMessagesTab extends LitElement {
       _autoImages: { type: Boolean },
       _shownImages: { type: Object },
       _failedImages: { type: Object },
+      _pendingPhoto: { type: Object },
+      _uploading: { type: Boolean },
+      _viewerSrc: { type: String },
     };
   }
 
@@ -47,8 +53,12 @@ class MeshMessagesTab extends LitElement {
     this._error = null;
     this._deleting = false;
     this._info = null;
-    // Podgląd obrazków z linków: domyślnie włączony, ustawienie wspólne dla wszystkich przeglądarek (serwer).
+    // Podgląd obrazków z linków: domyślnie włączony (panel stoi na urządzeniu na stałe podłączonym
+    // do sieci); ustawienie wspólne dla wszystkich przeglądarek (serwer).
     this._autoImages = true;
+    this._pendingPhoto = null; // zdjęcie wybrane, a jeszcze niewysłane (czeka na potwierdzenie)
+    this._uploading = false;
+    this._viewerSrc = null; // adres zdjęcia otwartego na pełnym ekranie
     this._shownImages = new Set(); // obrazki załadowane ręcznie, gdy automatyka jest wyłączona
     this._failedImages = new Set();
     this._settingsRequested = false;
@@ -112,9 +122,9 @@ class MeshMessagesTab extends LitElement {
             <ha-icon icon="mdi:image-outline"></ha-icon> ${t(this.hass, "messages.image_load")}
           </button>`;
         }
-        return html`<a class="image-preview" href=${url} target="_blank" rel="noopener noreferrer" @click=${(e) => e.stopPropagation()}>
+        return html`<button class="image-preview" @click=${(e) => { e.stopPropagation(); this._viewerSrc = url; }}>
           <img src=${url} loading="lazy" decoding="async" referrerpolicy="no-referrer" alt=${t(this.hass, "messages.image_alt")} @error=${() => this._imageFailed(url)} />
-        </a>`;
+        </button>`;
       });
   }
 
@@ -203,10 +213,10 @@ class MeshMessagesTab extends LitElement {
     return conversations.find((c) => c.key === this._selected) || conversations[0];
   }
 
-  async _send(conversation) {
-    const text = (this._draft || "").trim();
+  /* Wyślij gotowy tekst do rozmowy; true, gdy poszedł. Błąd trafia do this._error. */
+  async _sendText(conversation, text) {
     if (!text || this._sending || !conversation) {
-      return;
+      return false;
     }
     this._sending = true;
     this._error = null;
@@ -220,12 +230,79 @@ class MeshMessagesTab extends LitElement {
 
     try {
       await this.hass.callWS(payload);
-      this._draft = "";
+      return true;
     } catch (err) {
       console.error("MT_SW: wysyłka nie powiodła się", err);
       this._error = (err && err.message) || t(this.hass, "messages.send_failed");
+      return false;
     } finally {
       this._sending = false;
+    }
+  }
+
+  async _send(conversation) {
+    if (await this._sendText(conversation, (this._draft || "").trim())) {
+      this._draft = "";
+    }
+  }
+
+  /* ── zdjęcia: wybór -> potwierdzenie -> upload -> link jako wiadomość (jak w aplikacji) ── */
+
+  _pickPhoto() {
+    const input = this.renderRoot && this.renderRoot.querySelector("#photo-input");
+    if (input) {
+      input.click();
+    }
+  }
+
+  async _onPhotoChosen(event) {
+    const input = event.target;
+    const file = input.files && input.files[0];
+    input.value = ""; // ten sam plik da się wybrać ponownie
+    if (!file) {
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      this._error = t(this.hass, "messages.photo_not_image");
+      return;
+    }
+    this._error = null;
+    try {
+      this._pendingPhoto = await preparePhoto(file);
+    } catch (err) {
+      this._error = t(this.hass, "messages.photo_too_large");
+    }
+  }
+
+  /* Zdjęcie leci przez Home Assistanta na publiczny hosting (przeglądarka nie ma tam dostępu),
+     a do rozmowy trafia sam link — od razu, jak w aplikacji. Wpisany tekst zostaje nietknięty. */
+  async _uploadPhoto(conversation) {
+    const photo = this._pendingPhoto;
+    this._pendingPhoto = null;
+    if (!photo || !conversation) {
+      return;
+    }
+    this._uploading = true;
+    this._error = null;
+    try {
+      const body = new FormData();
+      body.append("file", photo, "photo"); // neutralna nazwa: nie ujawniamy nazwy pliku z urządzenia
+      const response = await this.hass.fetchWithAuth("/api/meshtastic/upload_image", { method: "POST", body });
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (err) {
+        // odpowiedź bez JSON-a (np. błąd serwera pośredniego) — pokażemy ogólny komunikat
+      }
+      if (!response.ok || !data.url) {
+        throw new Error(data.message || t(this.hass, "messages.photo_failed"));
+      }
+      await this._sendText(conversation, data.url);
+    } catch (err) {
+      console.error("MT_SW: wysyłanie zdjęcia nie powiodło się", err);
+      this._error = (err && err.message) || t(this.hass, "messages.photo_failed");
+    } finally {
+      this._uploading = false;
     }
   }
 
@@ -444,6 +521,15 @@ class MeshMessagesTab extends LitElement {
               </div>`
             : ""}
           <div class="composer">
+            <button
+              class="add-photo"
+              title=${t(this.hass, "messages.photo_add")}
+              ?disabled=${this._sending || this._uploading || !active}
+              @click=${() => this._pickPhoto()}
+            >
+              <ha-icon icon="mdi:plus"></ha-icon>
+            </button>
+            <input id="photo-input" type="file" accept="image/*" hidden @change=${(e) => this._onPhotoChosen(e)} />
             <textarea
               rows="2"
               maxlength=${MAX_TEXT_LENGTH}
@@ -473,9 +559,19 @@ class MeshMessagesTab extends LitElement {
               </ha-button>
             </div>
           </div>
+          ${this._uploading ? html`<div class="uploading">${t(this.hass, "messages.photo_uploading")}</div>` : ""}
           ${this._error ? html`<div class="error">${this._error}</div>` : ""}
         </section>
       </div>
+      <mesh-confirm-dialog
+        .open=${this._pendingPhoto !== null}
+        .title=${t(this.hass, "messages.photo_confirm_title")}
+        .message=${t(this.hass, "messages.photo_confirm_text")}
+        .confirmLabel=${t(this.hass, "messages.photo_confirm_send")}
+        @confirm=${() => this._uploadPhoto(active)}
+        @cancel=${() => { this._pendingPhoto = null; }}
+      ></mesh-confirm-dialog>
+      <mesh-image-viewer .src=${this._viewerSrc || ""} @close=${() => { this._viewerSrc = null; }}></mesh-image-viewer>
       ${this._info
         ? html`<mesh-message-info
             .hass=${this.hass}
@@ -706,7 +802,31 @@ class MeshMessagesTab extends LitElement {
 
         .msg-link { color: inherit; text-decoration: underline; }
 
-        .image-preview { display: block; margin-top: 6px; }
+        button.image-preview {
+          display: block;
+          margin-top: 6px;
+          padding: 0;
+          border: none;
+          background: none;
+          cursor: zoom-in;
+        }
+
+        .add-photo {
+          align-self: flex-end;
+          border: none;
+          background: transparent;
+          color: var(--secondary-text-color);
+          cursor: pointer;
+          padding: 4px;
+        }
+        .add-photo:hover:not([disabled]) { color: var(--primary-color); }
+        .add-photo[disabled] { opacity: 0.4; cursor: default; }
+
+        .uploading {
+          padding: 4px 16px;
+          font-size: 13px;
+          color: var(--secondary-text-color);
+        }
         .image-preview img {
           display: block;
           max-width: 100%;

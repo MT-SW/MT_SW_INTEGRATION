@@ -72,6 +72,7 @@ from .entity import (
     MeshtasticEntity,
 )
 from .helpers import async_prune_stale_node_entities, fetch_meshtastic_hardware_names, node_identity_key
+from .image_upload import async_register_upload_view
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
 from .store import async_setup_store, async_unload_store
@@ -109,6 +110,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await component.async_setup(config)
     await services.async_setup_services(hass)
     async_register_websocket_api(hass)
+    async_register_upload_view(hass)
 
     return True
 

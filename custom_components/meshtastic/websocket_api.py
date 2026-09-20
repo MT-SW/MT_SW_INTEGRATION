@@ -1420,6 +1420,8 @@ async def ws_map_settings_set(
 # raz dla całego Home Assistanta, a nie osobno w każdej przeglądarce i w aplikacji mobilnej.
 
 UI_SETTINGS_VERSION = 1
+# Domyślnie włączone: panel działa na urządzeniu na stałe podłączonym do sieci, nie na telefonie
+# z pakietem danych. Wyłączone, obrazek ładuje się dopiero po kliknięciu (przycisk przy polu pisania).
 UI_SETTINGS_DEFAULTS: dict[str, Any] = {"auto_load_images": True}
 
 
