@@ -8,6 +8,7 @@ import { PL } from "./pl-settings.js";
 import "./modules.js";
 import "./sniffer-panel.js";
 import "./nodedb-panel.js";
+import "./chat-settings.js";
 import {
   REGIONS,
   MODEM_PRESETS,
@@ -191,6 +192,7 @@ const NAV_ITEMS = [
       { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
       { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
       { id: "storage", label: PL("Storage"), icon: "mdi:database" },
+      { id: "chat", label: PL("Chat"), icon: "mdi:chat-outline" },
     ],
   },
 ];
@@ -409,6 +411,10 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-storage
           .wsCommand=${(type, data) => this._ws(type, data)}
         ></mesh-settings-storage>`;
+      case "chat":
+        return html`<mesh-settings-chat
+          .wsCommand=${(type, data) => this._ws(type, data)}
+        ></mesh-settings-chat>`;
       default:
         return html`<div class="empty-state">${PL("Select a settings panel")}</div>`;
     }

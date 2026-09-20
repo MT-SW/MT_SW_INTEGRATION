@@ -53,8 +53,9 @@ class MeshMessagesTab extends LitElement {
     this._error = null;
     this._deleting = false;
     this._info = null;
-    // Podgląd obrazków z linków: domyślnie włączony (panel stoi na urządzeniu na stałe podłączonym
-    // do sieci); ustawienie wspólne dla wszystkich przeglądarek (serwer).
+    // Podgląd obrazków z linków (pełna rozdzielczość): domyślnie włączony, bo panel stoi na urządzeniu
+    // na stałe podłączonym do sieci. Ustawienie jest w Ustawieniach → Inne → Czat i wspólne dla
+    // wszystkich przeglądarek (serwer).
     this._autoImages = true;
     this._pendingPhoto = null; // zdjęcie wybrane, a jeszcze niewysłane (czeka na potwierdzenie)
     this._uploading = false;
@@ -62,6 +63,13 @@ class MeshMessagesTab extends LitElement {
     this._shownImages = new Set(); // obrazki załadowane ręcznie, gdy automatyka jest wyłączona
     this._failedImages = new Set();
     this._settingsRequested = false;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // Ustawienie zmienia się w Ustawieniach → Inne → Czat, więc czytamy je przy każdym otwarciu zakładki.
+    this._settingsRequested = false;
+    this._loadUiSettings();
   }
 
   async _loadUiSettings() {
@@ -74,16 +82,6 @@ class MeshMessagesTab extends LitElement {
       this._autoImages = result.settings.auto_load_images !== false;
     } catch (err) {
       // bez ustawień zostaje wartość domyślna
-    }
-  }
-
-  async _toggleImages() {
-    const next = !this._autoImages;
-    this._autoImages = next;
-    try {
-      await this.hass.callWS({ type: "meshtastic/ui_settings_set", settings: { auto_load_images: next } });
-    } catch (err) {
-      this._autoImages = !next;
     }
   }
 
@@ -542,13 +540,6 @@ class MeshMessagesTab extends LitElement {
               @keydown=${(e) => this._onKeyDown(e, active)}
             ></textarea>
             <div class="composer-side">
-              <button
-                class="img-toggle ${this._autoImages ? "on" : ""}"
-                title=${t(this.hass, this._autoImages ? "messages.images_on" : "messages.images_off")}
-                @click=${() => this._toggleImages()}
-              >
-                <ha-icon icon="mdi:image-outline"></ha-icon>
-              </button>
               <span class="counter ${remaining < 20 ? "low" : ""}">${remaining}</span>
               <ha-button
                 unelevated
@@ -852,16 +843,6 @@ class MeshMessagesTab extends LitElement {
 
         .draft-images { display: flex; gap: 8px; padding: 6px 12px 0; }
         .draft-images img { max-height: 64px; max-width: 96px; border-radius: 6px; }
-
-        .img-toggle {
-          border: none;
-          background: transparent;
-          color: var(--secondary-text-color);
-          cursor: pointer;
-          padding: 2px;
-          opacity: 0.6;
-        }
-        .img-toggle.on { color: var(--primary-color); opacity: 1; }
 
         .meta {
           display: flex;

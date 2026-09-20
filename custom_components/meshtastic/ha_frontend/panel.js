@@ -450,6 +450,10 @@ class MeshtasticPanel extends LitElement {
           return this._softWs({ type: "meshtastic/sniffer_log", entry_id: entryId, since: data.since || 0 });
         case "sniffer_clear":
           return this._softWs({ type: "meshtastic/sniffer_clear", entry_id: entryId });
+        case "ui_settings":
+          return this._softWs({ type: "meshtastic/ui_settings" });
+        case "ui_settings_set":
+          return this._softWs({ type: "meshtastic/ui_settings_set", settings: data.settings || {} });
         case "nodedb_status":
           return this._softWs({ type: "meshtastic/nodedb_status", entry_id: entryId });
         case "nodedb_preview":

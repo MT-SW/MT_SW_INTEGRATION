@@ -773,6 +773,13 @@ const PL_STRINGS = {
   "Remove target": "Usuń cel",
   "Add target": "Dodaj cel",
   "Channel index": "Indeks kanału",
+
+  /* ── ustawienia czatu ── */
+  "Chat": "Czat",
+  "How the chat shows links and images.": "Jak czat pokazuje linki i obrazki.",
+  "Automatically load images from links in chat": "Automatycznie ładuj obrazki z linków w czacie",
+  "Images from links are downloaded in full resolution and shown under the message text. The server behind a link sees this browser's IP address. When off, an image loads after you click \"Load image\".": "Obrazki z linków są pobierane w pełnej rozdzielczości i pokazywane pod tekstem wiadomości. Serwer, na który wskazuje link, widzi adres IP tej przeglądarki. Gdy wyłączone, obrazek ładuje się po kliknięciu „Załaduj obrazek”.",
+  "Could not save the setting.": "Nie udało się zapisać ustawienia.",
 };
 
 /** Tłumaczenie napisu z przeniesionej zakładki; brak hasła = angielski. */
