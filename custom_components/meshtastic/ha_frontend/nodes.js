@@ -49,6 +49,7 @@ const COLUMNS = [
   { key: "signal", labelKey: "nodes.col.signal", numeric: true },
   { key: "hops_away", labelKey: "nodes.col.hops", numeric: true },
   { key: "battery_level", labelKey: "nodes.col.battery", numeric: true },
+  { key: "uptime_seconds", labelKey: "nodes.col.uptime", numeric: true },
   { key: "last_heard", labelKey: "nodes.col.last_heard", numeric: true },
 ];
 
@@ -320,6 +321,11 @@ class MeshNodesTab extends LitElement {
         <td class="num" data-label=${t(this.hass, "nodes.col.battery")}>
           ${this._formatValue(node.battery_level, " %")}
         </td>
+        <td class="num" data-label=${t(this.hass, "nodes.col.uptime")}>
+          ${typeof node.uptime_seconds === "number" && node.uptime_seconds > 0
+            ? formatUptime(this.hass, node.uptime_seconds)
+            : t(this.hass, "common.unknown")}
+        </td>
         <td class="num" data-label=${t(this.hass, "nodes.col.last_heard")} title=${this._absoluteTime(node.last_heard)}>
           ${this._formatLastHeard(node.last_heard)}
         </td>
@@ -363,6 +369,17 @@ class MeshNodesTab extends LitElement {
     }
     return html`${formatHops(this.hass, hops)}${relay
       ? html`<span class="via">${t(this.hass, "nodes.via")} (${relayLabel(this.nodes, node, relay)})</span>`
+      : ""}`;
+  }
+
+  /* Wiadomość statusu, którą węzeł rozgłasza po sieci (moduł Status Message), i kiedy
+     ją ostatnio odebraliśmy. Własna bramka nie ma czasu odbioru — status bierzemy z jej konfiguracji. */
+  _statusText(node) {
+    if (!node.status_message) {
+      return "";
+    }
+    return html`${node.status_message}${node.status_ts
+      ? html`<span class="via">${formatRelative(this.hass, node.status_ts)}</span>`
       : ""}`;
   }
 
@@ -844,6 +861,7 @@ class MeshNodesTab extends LitElement {
           <div class="dialog-body">
             ${this._renderActions(node)}
 
+            ${this._detailRow("nodes.status_message", this._statusText(node))}
             ${this._detailRow("nodes.col.id", node.node_hex)}
             ${this._detailRow("radio.hw_model", node.hw_model)}
             ${this._detailRow("radio.role", node.role)}

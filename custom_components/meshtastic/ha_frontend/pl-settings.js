@@ -55,8 +55,6 @@ const PL_STRINGS = {
     "Wymuszony współczynnik rozproszenia (0 = z presetu)",
   "Coding Rate": "Szybkość kodowania",
   "Override coding rate (0 = use preset)": "Wymuszona szybkość kodowania (0 = z presetu)",
-  "Frequency Offset (Hz)": "Przesunięcie częstotliwości (Hz)",
-  "Fine-tune frequency offset": "Dostrojenie przesunięcia częstotliwości",
   "Hop Limit": "Liczba skoków",
   "Max number of hops (1-7)": "Maksymalna liczba skoków (1-7)",
   "TX Enabled": "Nadawanie włączone",
@@ -68,7 +66,6 @@ const PL_STRINGS = {
   "Override regional duty cycle limits (use with caution)":
     "Pomija regionalne limity czasu nadawania — używaj ostrożnie",
   "Boosted RX Gain": "Wzmocniony zysk RX",
-  "Enable boosted RX gain on SX1262": "Włącz wzmocniony zysk RX na SX1262",
 
   /* ── urządzenie ── */
   "Device Role": "Rola urządzenia",
@@ -731,6 +728,13 @@ const PL_STRINGS = {
   "Last check": "Ostatnie sprawdzenie",
   "Removed: {n}": "Usunięto: {n}",
   "Panel data": "Dane panelu",
+
+  /* ── LoRa: slot i częstotliwość ── */
+  "Frequency Slot": "Slot częstotliwości",
+  "The operating frequency of the node is calculated from the region, modem preset and this field. When the value is 0, the slot is calculated automatically from the primary channel name and changes from the default public slot. If a private primary channel and a public secondary channel are configured, restore the default public slot.": "Częstotliwość robocza węzła jest obliczana na podstawie regionu, ustawień modemu i tego pola. Gdy wartość wynosi 0, slot jest automatycznie obliczany na podstawie nazwy kanału podstawowego i zmienia się z domyślnego slotu publicznego. Jeśli skonfigurowano prywatny kanał podstawowy i publiczny kanał dodatkowy, należy przywrócić domyślny slot publiczny.",
+  "Frequency (MHz)": "Częstotliwość (MHz)",
+  "Overrides the operating frequency (0 = calculated from the region, preset and slot)": "Wymusza częstotliwość roboczą (0 = wyliczana z regionu, presetu i slotu)",
+  "Enable boosted RX gain": "Włącz wzmocniony zysk odbiornika (RX)",
 };
 
 /** Tłumaczenie napisu z przeniesionej zakładki; brak hasła = angielski. */

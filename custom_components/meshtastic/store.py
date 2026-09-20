@@ -16,6 +16,8 @@ najstarsze rekordy.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -37,6 +39,7 @@ from .api import (
     EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT,
     EventMeshtasticApiTelemetryType,
 )
+from .aiomeshtastic.protobuf import mesh_pb2
 from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER
 from .nodedb_cleanup import DAY_SECONDS, CleanupJob, normalize_auto, select_candidates
 from .sniffer import SnifferLog
@@ -56,6 +59,7 @@ MAX_TIMESERIES_POINTS = 1500
 # Wykres skoków w czasie potrzebuje dłuższej historii niż lista ostatnich tras.
 MAX_TRACEROUTES_PER_NODE = 50
 MAX_NODE_HISTORY_POINTS = 300
+NODE_STATUS_PORT = 36  # PortNum.NODE_STATUS_APP: nazwa może być nieznana starszemu protobufowi
 # Jakość sygnału zbieramy z każdego pakietu od węzła, więc serii jest więcej niż
 # w telemetrii; na dysk trafia jednak nie częściej niż co 5 minut, żeby ciągły
 # ruch w eterze nie przepisywał pliku co kilka sekund.
@@ -540,8 +544,38 @@ class PanelStore:
         gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
         local_node = gateway_node.get("num")
         self._remember_via(packet, local_node)
+        self._remember_status(packet, local_node)
         if self.sniffer.enabled:
             self.sniffer.add_packet(packet, _now_ms(), local_node)
+
+    def _remember_status(self, packet: dict[str, Any], local_node: int | None) -> None:
+        """Wiadomość statusu węzła: moduł Status Message rozgłasza ją pakietem NODE_STATUS_APP.
+
+        Zapamiętujemy ostatni tekst od każdego węzła (także z MQTT — treść statusu nie zależy
+        od drogi w eterze). Pusty tekst znaczy, że węzeł wyczyścił status, więc też go zapisujemy.
+        Własnej bramki nie słuchamy: jej status jest w konfiguracji modułu.
+        """
+        decoded = packet.get("decoded")
+        if not isinstance(decoded, dict) or decoded.get("portnum") not in ("NODE_STATUS_APP", NODE_STATUS_PORT):
+            return
+        sender = packet.get("from")
+        if not isinstance(sender, int) or sender == local_node:
+            return
+        try:
+            message = mesh_pb2.StatusMessage()
+            message.ParseFromString(base64.b64decode(decoded.get("payload") or ""))
+        except (binascii.Error, ValueError, TypeError):
+            return
+        except Exception:  # noqa: BLE001 - uszkodzony albo obcy pakiet nie może zatrzymać przetwarzania reszty
+            return
+        text = message.status.strip()
+        now = _now_ms()
+        state = self._node_state.setdefault(str(sender), {})
+        previous = state.get("status") or {}
+        state["status"] = {"text": text, "ts": now}
+        # Ten sam tekst powtarzany co jakiś czas nie jest wart zapisu na dysk częściej niż raz na minutę.
+        if previous.get("text") != text or now - previous.get("ts", 0) >= 60_000:  # noqa: PLR2004
+            self._schedule_save()
 
     def _remember_via(self, packet: dict[str, Any], local_node: int | None) -> None:
         """Z każdego pakietu od węzła: droga (przekaźnik, skoki) i sygnał (SNR, RSSI).

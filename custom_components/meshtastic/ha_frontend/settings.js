@@ -534,6 +534,9 @@ class MeshSettingsLora extends LitElement {
 
   render() {
     const d = this._draft;
+    // Przy presecie szerokość pasma, współczynnik rozproszenia i szybkość kodowania
+    // wynikają z niego, więc pokazujemy je dopiero po odznaczeniu "Użyj presetu".
+    const usePreset = d.use_preset !== false;
 
     return html`
       <div class="settings-panel">
@@ -549,14 +552,14 @@ class MeshSettingsLora extends LitElement {
               .options=${REGIONS}
               @change=${(e) => this._updateField("region", e.detail.value)}
             ></mesh-select>
-
-            <mesh-select
-              .label=${PL("Modem Preset")}
-              .value=${String(d.modem_preset || "LONG_FAST")}
-              .options=${MODEM_PRESETS}
-              @change=${(e) => this._updateField("modem_preset", e.detail.value)}
-            ></mesh-select>
-
+            ${usePreset
+              ? html`<mesh-select
+                  .label=${PL("Modem Preset")}
+                  .value=${String(d.modem_preset || "LONG_FAST")}
+                  .options=${MODEM_PRESETS}
+                  @change=${(e) => this._updateField("modem_preset", e.detail.value)}
+                ></mesh-select>`
+              : ""}
             <mesh-number-input
               .label=${PL("Hop Limit")}
               .description=${PL("Max number of hops (1-7)")}
@@ -565,7 +568,6 @@ class MeshSettingsLora extends LitElement {
               .max=${7}
               @change=${(e) => this._updateField("hop_limit", e.detail.value)}
             ></mesh-number-input>
-
             <mesh-number-input
               .label=${PL("TX Power (dBm)")}
               .description=${PL("Transmit power in dBm (0 = max for region)")}
@@ -574,40 +576,48 @@ class MeshSettingsLora extends LitElement {
               .max=${30}
               @change=${(e) => this._updateField("tx_power", e.detail.value)}
             ></mesh-number-input>
-
             <mesh-number-input
-              .label=${PL("Frequency Offset (Hz)")}
-              .description=${PL("Fine-tune frequency offset")}
-              .value=${d.frequency_offset ?? 0}
-              .step=${100}
-              @change=${(e) => this._updateField("frequency_offset", e.detail.value)}
-            ></mesh-number-input>
-
-            <mesh-number-input
-              .label=${PL("Bandwidth (kHz)")}
-              .description=${PL("Override bandwidth (0 = use preset)")}
-              .value=${d.bandwidth ?? 0}
+              .label=${PL("Frequency Slot")}
+              .description=${PL("The operating frequency of the node is calculated from the region, modem preset and this field. When the value is 0, the slot is calculated automatically from the primary channel name and changes from the default public slot. If a private primary channel and a public secondary channel are configured, restore the default public slot.")}
+              .value=${d.channel_num ?? 0}
               .min=${0}
-              @change=${(e) => this._updateField("bandwidth", e.detail.value)}
+              @change=${(e) => this._updateField("channel_num", e.detail.value)}
             ></mesh-number-input>
-
             <mesh-number-input
-              .label=${PL("Spread Factor")}
-              .description=${PL("Override spread factor (0 = use preset)")}
-              .value=${d.spread_factor ?? 0}
+              .label=${PL("Frequency (MHz)")}
+              .description=${PL("Overrides the operating frequency (0 = calculated from the region, preset and slot)")}
+              .value=${d.override_frequency ?? 0}
               .min=${0}
-              .max=${12}
-              @change=${(e) => this._updateField("spread_factor", e.detail.value)}
+              .step=${0.001}
+              @change=${(e) => this._updateField("override_frequency", e.detail.value)}
             ></mesh-number-input>
-
-            <mesh-number-input
-              .label=${PL("Coding Rate")}
-              .description=${PL("Override coding rate (0 = use preset)")}
-              .value=${d.coding_rate ?? 0}
-              .min=${0}
-              .max=${8}
-              @change=${(e) => this._updateField("coding_rate", e.detail.value)}
-            ></mesh-number-input>
+            ${usePreset
+              ? ""
+              : html`
+                  <mesh-number-input
+                    .label=${PL("Bandwidth (kHz)")}
+                    .description=${PL("Override bandwidth (0 = use preset)")}
+                    .value=${d.bandwidth ?? 0}
+                    .min=${0}
+                    @change=${(e) => this._updateField("bandwidth", e.detail.value)}
+                  ></mesh-number-input>
+                  <mesh-number-input
+                    .label=${PL("Spread Factor")}
+                    .description=${PL("Override spread factor (0 = use preset)")}
+                    .value=${d.spread_factor ?? 0}
+                    .min=${0}
+                    .max=${12}
+                    @change=${(e) => this._updateField("spread_factor", e.detail.value)}
+                  ></mesh-number-input>
+                  <mesh-number-input
+                    .label=${PL("Coding Rate")}
+                    .description=${PL("Override coding rate (0 = use preset)")}
+                    .value=${d.coding_rate ?? 0}
+                    .min=${0}
+                    .max=${8}
+                    @change=${(e) => this._updateField("coding_rate", e.detail.value)}
+                  ></mesh-number-input>
+                `}
           </div>
 
           <div class="settings-section">
@@ -634,7 +644,7 @@ class MeshSettingsLora extends LitElement {
             ></mesh-toggle>
             <mesh-toggle
               .label=${PL("Boosted RX Gain")}
-              .description=${PL("Enable boosted RX gain on SX1262")}
+              .description=${PL("Enable boosted RX gain")}
               .checked=${d.sx126x_rx_boosted_gain === true}
               @change=${(e) => this._updateField("sx126x_rx_boosted_gain", e.detail.checked)}
             ></mesh-toggle>

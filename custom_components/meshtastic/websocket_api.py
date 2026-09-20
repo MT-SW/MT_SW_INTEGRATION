@@ -67,6 +67,17 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
+def _own_status_message(entry: ConfigEntry) -> str | None:
+    """Status własnej bramki — z konfiguracji modułu, bo własnego rozgłoszenia radio nam nie odsyła."""
+    try:
+        config = entry.runtime_data.client.interface.connected_node_module_config()
+        if config is None:
+            return None
+        return (config.statusmessage.node_status or "").strip() or None
+    except Exception:  # noqa: BLE001 - status jest dodatkiem, nie może zepsuć listy węzłów
+        return None
+
+
 def _remembered(node_data: Mapping[str, Any], saved: Mapping[str, Any], key: str) -> tuple[Mapping[str, Any], Any]:
     """Zwróć (dane, czas zapisu): żywe dane koordynatora albo ostatnie zapisane na dysku.
 
@@ -256,6 +267,7 @@ async def ws_nodes(
 
     tracked = set(entry.runtime_data.coordinator.data or {})
     store = get_store(msg["entry_id"])
+    own_status = _own_status_message(entry)
 
     nodes = []
     for node_id, node in all_nodes.items():
@@ -310,6 +322,13 @@ async def ws_nodes(
                 "via_relay": _as_int((saved_state.get("via") or {}).get("relay")),
                 "via_hops": _as_int((saved_state.get("via") or {}).get("hops")),
                 "via_ts": _as_int((saved_state.get("via") or {}).get("ts")),
+                # ostatnia wiadomość statusu rozgłoszona przez węzeł (moduł Status Message)
+                "status_message": (
+                    own_status
+                    if node_id == gateway_id
+                    else ((saved_state.get("status") or {}).get("text") or None)
+                ),
+                "status_ts": None if node_id == gateway_id else _as_int((saved_state.get("status") or {}).get("ts")),
                 "via_snr": _as_float((saved_state.get("via") or {}).get("snr")),
                 "via_rssi": _as_int((saved_state.get("via") or {}).get("rssi")),
                 "via_mqtt": bool(node.get("viaMqtt")),
