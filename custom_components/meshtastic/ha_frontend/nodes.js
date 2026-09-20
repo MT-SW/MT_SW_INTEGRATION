@@ -455,7 +455,7 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
-  /* Funkcje MT_SW (diagnostyka na żądanie) mają sens tylko na firmware z FW+ w wersji 2 lub nowszej.
+  /* Funkcje MT_SW (diagnostyka na żądanie) mają sens tylko na firmware MT_SW_FW w wersji 2 lub nowszej.
      Pytamy bramkę raz, przy pierwszym otwarciu szczegółów węzła — backend pamięta wynik,
      a na starym firmware nie zaczynamy od zbędnego pakietu do radia przy starcie panelu. */
   async _ensureCapabilities() {

@@ -225,23 +225,23 @@ class MeshMessagesTab extends LitElement {
 
   _renderMessage(message) {
     const meta = [];
-    // Sygnał, z jakim wiadomość dotarła do bramki — dla każdej odebranej, nie tylko
-    // prywatnej. Po skokach opisuje łącze z przekaźnikiem, dlatego obok jest "via (…)".
-    if (typeof message.rx_snr === "number") {
-      meta.push(`SNR ${message.rx_snr.toFixed(1)} dB`);
-    }
-    if (typeof message.rx_rssi === "number" && message.rx_rssi !== 0) {
-      meta.push(`RSSI ${message.rx_rssi} dBm`);
-    }
-    if (typeof message.hops_away === "number") {
-      if (message.hops_away === 0) {
-        meta.push(t(this.hass, "hops.direct"));
-      } else {
-        const via = message.relay_node
-          ? ` ${t(this.hass, "nodes.via")} (${relayLabel(this.nodes, { node_id: message.from }, message.relay_node)})`
-          : "";
-        meta.push(`${formatHops(this.hass, message.hops_away)}${via}`);
+    // Dymek jest krótki: przy połączeniu bezpośrednim pokazuje sygnał (SNR i RSSI), a po
+    // skokach — liczbę skoków i przekaźnik, przez który wiadomość doleciała. SNR i RSSI po
+    // skokach opisują tylko ostatni odcinek, więc zostawiamy je dla okna szczegółów.
+    const hops = message.hops_away;
+    if (hops === 0) {
+      if (typeof message.rx_snr === "number") {
+        meta.push(`SNR ${message.rx_snr.toFixed(1)} dB`);
       }
+      if (typeof message.rx_rssi === "number" && message.rx_rssi !== 0) {
+        meta.push(`RSSI ${message.rx_rssi} dBm`);
+      }
+      meta.push(t(this.hass, "hops.direct"));
+    } else if (typeof hops === "number") {
+      const via = message.relay_node
+        ? ` ${t(this.hass, "nodes.via")} (${relayLabel(this.nodes, { node_id: message.from }, message.relay_node)})`
+        : "";
+      meta.push(`${formatHops(this.hass, hops)}${via}`);
     }
 
     return html`

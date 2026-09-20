@@ -7,8 +7,9 @@
  *
  * Wysłana: status, przekaźniki, które usłyszały wiadomość (z SNR i RSSI każdego)
  * oraz — dla wiadomości prywatnej — potwierdzenie od adresata z drogą, którą
- * wróciło. Odebrana: czy dotarła bezpośrednio (SNR i RSSI), czy przez ile
- * skoków i przez jaki przekaźnik.
+ * wróciło. Odebrana: czy dotarła bezpośrednio, czy przez ile skoków i przez jaki
+ * przekaźnik, oraz poziom sygnału (SNR i RSSI) — także po skokach, wtedy jako
+ * sygnał do ostatniego przekaźnika.
  *
  * Firmware podaje przekaźnik tylko jako ostatni bajt numeru węzła
  * (relay_node), więc nazwę dobieramy z bazy węzłów. Przekaźnik, którego
@@ -90,24 +91,30 @@ class MeshMessageInfo extends LitElement {
     return parts.length ? parts.join(" · ") : t(this.hass, "common.unknown");
   }
 
-  /* Bezpośrednio -> SNR i RSSI; inaczej liczba skoków i ostatni przekaźnik. */
+  /* Trasa (bezpośrednio albo liczba skoków i przekaźnik, przez który doleciało)
+     oraz poziom sygnału. Po skokach SNR i RSSI opisują ostatni odcinek — do
+     przekaźnika — więc dostają osobną etykietę. */
   _routeRows(info) {
-    if (info.hops_away === 0) {
-      return html`
-        ${this._row(t(this.hass, "messages.info.route"), t(this.hass, "messages.info.direct"))}
-        ${this._row(t(this.hass, "messages.info.signal"), this._signal(info))}
-      `;
-    }
-    if (typeof info.hops_away === "number") {
-      return html`
-        ${this._row(t(this.hass, "messages.info.route"), this._hops(info.hops_away))}
-        ${info.relay_node
-          ? this._row(t(this.hass, "messages.info.via"), this._relayName(info.relay_node))
-          : ""}
-      `;
-    }
-    // firmware nadawcy nie podał liczby skoków — pokazujemy to, co mamy
-    return this._row(t(this.hass, "messages.info.signal"), this._signal(info));
+    const hops = info.hops_away;
+    const relayed = typeof hops === "number" && hops > 0;
+    return html`
+      ${hops === 0
+        ? this._row(t(this.hass, "messages.info.route"), t(this.hass, "messages.info.direct"))
+        : ""}
+      ${relayed
+        ? html`
+            ${this._row(t(this.hass, "messages.info.route"), this._hops(hops))}
+            ${this._row(
+              t(this.hass, "messages.info.via"),
+              info.relay_node ? this._relayName(info.relay_node) : t(this.hass, "messages.info.relay_unknown")
+            )}
+          `
+        : ""}
+      ${this._row(
+        t(this.hass, relayed ? "messages.info.signal_relay" : "messages.info.signal"),
+        this._signal(info)
+      )}
+    `;
   }
 
   _statusText(message) {

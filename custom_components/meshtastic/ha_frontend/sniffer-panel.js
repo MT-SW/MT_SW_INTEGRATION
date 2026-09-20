@@ -314,7 +314,7 @@ class MeshSettingsSniffer extends LitElement {
     if (!status.supported) {
       return html`<span class="badge danger">${PL("Not supported")}</span>`;
     }
-    return html`<span class="badge success">${PL("Supported")} · FW+ v${status.fw_plus_version}</span>`;
+    return html`<span class="badge success">${PL("Supported")} · MT_SW_FW v${status.fw_plus_version}</span>`;
   }
 
   _supportNote() {
@@ -324,10 +324,10 @@ class MeshSettingsSniffer extends LitElement {
     }
     if (status.reason === "old_firmware") {
       const minimum = status.min_fw_plus_version || MIN_FW_PLUS_VERSION;
-      return PL("Firmware is too old: FW+ version {n} or newer is required.").replace("{n}", minimum);
+      return PL("Firmware is too old: MT_SW_FW version {n} or newer is required.").replace("{n}", minimum);
     }
     if (status.reason === "timeout") {
-      return PL("The radio did not answer. Firmware without FW+ does not support the sniffer.");
+      return PL("The radio did not answer. Firmware other than MT_SW_FW does not support the sniffer.");
     }
     return this._errorText(status.reason);
   }
