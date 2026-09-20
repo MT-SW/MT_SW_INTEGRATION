@@ -696,12 +696,46 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
+  /* Liczba skoków w kolejnych pomiarach trasy: jedna oś czasu dla całej historii,
+     dwie linie — w przód (route) i powrotna (routeBack). Skoki to pośrednie węzły
+     z RouteDiscovery, tak samo jak w opisie trasy ("bez skoków" = pusta lista). */
+  _traceHopPoints() {
+    return (this._traceHistory || []).map((entry) => {
+      const route = entry.route || {};
+      return {
+        ts: entry.ts,
+        towards: (route.route || []).length,
+        back: Array.isArray(route.routeBack) ? route.routeBack.length : null,
+      };
+    });
+  }
+
   _renderTraceHistory() {
     if (!this._traceHistory || !this._traceHistory.length) {
       return html``;
     }
+    const points = this._traceHopPoints();
     return html`
       <div class="detail-section">${t(this.hass, "nodes.traceroute.history")}</div>
+      ${points.length >= 2
+        ? html`
+            <div class="route-note">${t(this.hass, "nodes.traceroute.chart_note")}</div>
+            <div class="chart-wrap">
+              <mesh-line-chart
+                .points=${points}
+                .language=${this.hass.language}
+                .unit=${""}
+                .height=${140}
+                .fit=${true}
+                .emptyLabel=${t(this.hass, "nodes.history.empty")}
+                .series=${[
+                  { key: "towards", label: t(this.hass, "nodes.traceroute.hops_towards"), color: "#4FC3F7" },
+                  { key: "back", label: t(this.hass, "nodes.traceroute.hops_back"), color: "#F5C839" },
+                ]}
+              ></mesh-line-chart>
+            </div>
+          `
+        : ""}
       <div class="trace-history">
         ${this._traceHistory
           .slice()

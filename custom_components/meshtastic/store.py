@@ -51,7 +51,8 @@ SAVE_DELAY = 10
 
 MAX_MESSAGES = 2000
 MAX_TIMESERIES_POINTS = 1500
-MAX_TRACEROUTES_PER_NODE = 10
+# Wykres skoków w czasie potrzebuje dłuższej historii niż lista ostatnich tras.
+MAX_TRACEROUTES_PER_NODE = 50
 MAX_NODE_HISTORY_POINTS = 300
 # Jakość sygnału zbieramy z każdego pakietu od węzła, więc serii jest więcej niż
 # w telemetrii; na dysk trafia jednak nie częściej niż co 5 minut, żeby ciągły
@@ -185,6 +186,13 @@ class PanelStore:
         self._node_state = data.get("node_state", {})
         self._traceroutes = data.get("traceroutes", {})
         self._node_history = data.get("node_history", {})
+        # Wcześniejsza wersja zapisywała też pakiety po skokach (pola snrVia/rssiVia);
+        # nie mówią nic o łączu z samym węzłem, więc znikają z historii.
+        for kinds in self._node_history.values():
+            if "signal" in kinds:
+                kinds["signal"] = [
+                    point for point in kinds["signal"] if point.get("snr") is not None or point.get("rssi") is not None
+                ]
         LOGGER.debug(
             "Panel store %s: wczytano %d wiadomości, %d próbek, %d węzłów ze stanem",
             self._entry_id,
@@ -489,24 +497,20 @@ class PanelStore:
     def _record_signal(  # noqa: PLR0913
         self, sender: int, packet_id: Any, hops: int | None, snr: float | None, rssi: int | None, now: int
     ) -> None:
-        """Dopisz punkt do historii jakości sygnału węzła — po jednym na pakiet.
+        """Dopisz punkt do historii jakości sygnału węzła — po jednym na pakiet słyszany bezpośrednio.
 
-        Odczyty z pakietu bezpośredniego opisują łącze z samym węzłem (pola snr/rssi),
-        a z pakietu po skokach — tylko ostatni odcinek do przekaźnika (snrVia/rssiVia),
-        więc trafiają do osobnych linii wykresu. Bez informacji o skokach nie da się
-        ich rozróżnić, więc takiego pakietu nie zapisujemy.
+        Tylko pakiety bez skoków: SNR i RSSI opisują wtedy łącze z samym węzłem. Po skokach
+        mierzymy odcinek do przekaźnika, który nie mówi nic o tym węźle, więc takich pakietów
+        nie zapisujemy (podobnie jak tych bez informacji o skokach).
         """
-        if hops is None or (snr is None and rssi is None):
+        if hops != 0 or (snr is None and rssi is None):
             return
         # Ten sam pakiet może przyjść dwa razy (kopia ze sniffera) — liczymy go raz.
         if isinstance(packet_id, int) and self._signal_last_id.get(sender) == packet_id:
             return
         if isinstance(packet_id, int):
             self._signal_last_id[sender] = packet_id
-        suffix = "" if hops == 0 else "Via"
-        self._record_node_point(
-            sender, "signal", {"hops": hops, f"snr{suffix}": snr, f"rssi{suffix}": rssi}, persist=False
-        )
+        self._record_node_point(sender, "signal", {"snr": snr, "rssi": rssi}, persist=False)
         if now - self._signal_saved_at >= SIGNAL_SAVE_INTERVAL_MS:
             self._signal_saved_at = now
             self._schedule_save()
