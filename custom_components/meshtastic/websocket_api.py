@@ -12,6 +12,7 @@ jedynego połączenia do radia, którym zarządza MeshtasticApiClient.
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -972,7 +973,7 @@ def _sniffer_status(store: Any, *, supported: bool, reason: str | None = None) -
         "supported": supported,
         "reason": reason,
         "fw_plus_version": log.fw_plus_version,
-        "min_fw_plus_version": ondemand.SNIFFER_MIN_FW_PLUS_VERSION,
+        "min_fw_plus_version": ondemand.MIN_FW_PLUS_VERSION,
         "enabled": log.enabled,
         "count": log.count,
         "capacity": log.capacity,
@@ -980,7 +981,75 @@ def _sniffer_status(store: Any, *, supported: bool, reason: str | None = None) -
     }
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/sniffer_state", vol.Required("entry_id"): str})
+# Brak odpowiedzi na pytanie o FW+ znaczy zwykle firmware bez OnDemand. Na takim radiu każda
+# próba to kilka sekund czekania i zbędny pakiet, a panele pytają przy każdym otwarciu,
+# więc taki wynik pamiętamy przez 10 minut (przycisk "Sprawdź ponownie" pomija ten czas).
+FW_PROBE_RETRY_SECONDS = 600
+
+
+async def _fw_plus_version(
+    entry: ConfigEntry, store: Any, node_id: int, *, force: bool = False
+) -> tuple[int | None, str | None]:
+    """Wersja FW+ własnej bramki: (wersja, None) albo (None, przyczyna braku).
+
+    Wersję z funkcjami MT_SW (od 2) trzymamy do końca połączenia. Starszą, jak i brak
+    odpowiedzi, pamiętamy tylko przez FW_PROBE_RETRY_SECONDS: po aktualizacji
+    firmware nie chcemy ciągle pokazywać starego wyniku.
+    """
+    log = store.sniffer
+    if force:
+        log.fw_plus_version = None
+        log.fw_plus_error = None
+    recently = time.monotonic() - log.fw_plus_checked_at < FW_PROBE_RETRY_SECONDS
+    if log.fw_plus_version is not None and (log.fw_plus_version >= ondemand.MIN_FW_PLUS_VERSION or recently):
+        return log.fw_plus_version, None
+    if log.fw_plus_error == "timeout" and recently:
+        return None, log.fw_plus_error
+    try:
+        version = await ondemand.query_fw_plus_version(entry.runtime_data.client.interface, node_id)
+    except OnDemandError as err:
+        if err.code == "timeout":
+            log.fw_plus_error = err.code
+            log.fw_plus_checked_at = time.monotonic()
+        return None, err.code
+    log.fw_plus_version = version
+    log.fw_plus_error = None
+    log.fw_plus_checked_at = time.monotonic()
+    return version, None
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/capabilities", vol.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_capabilities(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Czy bramka ma firmware z funkcjami MT_SW (OnDemand, sniffer) — od FW+ w wersji 2 wszystkie naraz."""
+    target = _sniffer_target(hass, connection, msg)
+    if target is None:
+        return
+    entry, store, node_id = target
+    version, error = await _fw_plus_version(entry, store, node_id)
+    connection.send_result(
+        msg["id"],
+        {
+            "supported": version is not None and version >= ondemand.MIN_FW_PLUS_VERSION,
+            "fw_plus_version": version,
+            "min_fw_plus_version": ondemand.MIN_FW_PLUS_VERSION,
+            "reason": error,
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/sniffer_state",
+        vol.Required("entry_id"): str,
+        vol.Optional("force", default=False): bool,
+    }
+)
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_sniffer_state(
@@ -1000,13 +1069,11 @@ async def ws_sniffer_state(
     log = store.sniffer
     interface = entry.runtime_data.client.interface
 
-    try:
-        if log.fw_plus_version is None:
-            log.fw_plus_version = await ondemand.query_fw_plus_version(interface, node_id)
-    except OnDemandError as err:
-        connection.send_result(msg["id"], _sniffer_status(store, supported=False, reason=err.code))
+    version, error = await _fw_plus_version(entry, store, node_id, force=msg.get("force", False))
+    if error is not None:
+        connection.send_result(msg["id"], _sniffer_status(store, supported=False, reason=error))
         return
-    if log.fw_plus_version < ondemand.SNIFFER_MIN_FW_PLUS_VERSION:
+    if version < ondemand.MIN_FW_PLUS_VERSION:
         connection.send_result(msg["id"], _sniffer_status(store, supported=False, reason="old_firmware"))
         return
 
@@ -1038,7 +1105,8 @@ async def ws_sniffer_set(
         return
     entry, store, node_id = target
     log = store.sniffer
-    if log.fw_plus_version is None or log.fw_plus_version < ondemand.SNIFFER_MIN_FW_PLUS_VERSION:
+    version, _error = await _fw_plus_version(entry, store, node_id)
+    if version is None or version < ondemand.MIN_FW_PLUS_VERSION:
         connection.send_error(msg["id"], "sniffer_unsupported", "unsupported")
         return
     try:
@@ -1221,6 +1289,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_traceroute_history,
         ws_node_history,
         ws_ondemand,
+        ws_capabilities,
         ws_sniffer_state,
         ws_sniffer_set,
         ws_sniffer_log,

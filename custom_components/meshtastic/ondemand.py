@@ -15,7 +15,8 @@ STATE, każde z odpowiedzią RESPONSE_SNIFFER_STATE. Firmware honoruje włączen
 i wyłączenie wyłącznie wtedy, gdy polecenie przychodzi od lokalnie podłączonego
 telefonu, więc adresatem jest zawsze własna bramka. Stan jest tylko w RAM
 urządzenia (po restarcie zawsze wyłączony), a wsparcie wykrywamy przez
-REQUEST_FW_PLUS_VERSION: wersja >= 3 oznacza sniffer.
+REQUEST_FW_PLUS_VERSION. Od wersji 2 firmware ma wszystkie funkcje MT_SW naraz
+(OnDemand i sniffer), więc jeden próg wystarcza dla całego panelu.
 """
 
 from __future__ import annotations
@@ -35,7 +36,10 @@ from .aiomeshtastic.protobuf import mesh_pb2, ondemand_pb2, portnums_pb2
 from .const import LOGGER
 
 ON_DEMAND_PORT = 354
-SNIFFER_MIN_FW_PLUS_VERSION = 3
+# Firmware z funkcjami MT_SW zgłasza domyślnie FW+ w wersji 2 — od niej są
+# dostępne wszystkie: OnDemand, sniffer i reszta.
+MIN_FW_PLUS_VERSION = 2
+SNIFFER_MIN_FW_PLUS_VERSION = MIN_FW_PLUS_VERSION
 
 # Nazwa zapytania w panelu -> typ żądania. Sniffera tu nie ma celowo: ma własne
 # polecenia, bo działa wyłącznie lokalnie.

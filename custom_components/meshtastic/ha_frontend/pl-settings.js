@@ -472,8 +472,8 @@ const PL_STRINGS = {
   "Strict — Require Authentication": "Ścisły — Wymagaj uwierzytelnienia",
 
   "Traffic Management": "Zarządzanie ruchem",
-  "MT_SW firmware extension for shaping mesh traffic — not part of stock Meshtastic.":
-    "Rozszerzenie firmware MT_SW do kształtowania ruchu sieciowego — nieobecne w oficjalnym Meshtastic.",
+  "Limits mesh traffic: minimum interval between positions, direct NodeInfo replies, rate limiting and dropping of unknown packets.":
+    "Ogranicza ruch w sieci mesh: minimalny odstęp między pozycjami, bezpośrednie odpowiedzi NodeInfo, limit szybkości i odrzucanie nieznanych pakietów.",
   "Position Min Interval (secs)": "Min. interwał pozycji (s)",
   "NodeInfo Direct Response Max Hops": "Maks. skoków dla bezpośredniej odpowiedzi NodeInfo",
   "Rate Limit Window (secs)": "Okno ograniczenia (s)",
@@ -481,8 +481,8 @@ const PL_STRINGS = {
   "Unknown Packet Threshold": "Próg nieznanych pakietów",
 
   "Mesh Beacon": "Meshbeacon",
-  "MT_SW firmware extension: periodically announces this mesh to nearby networks.":
-    "Rozszerzenie firmware MT_SW: okresowo ogłasza tę sieć mesh pobliskim sieciom.",
+  "Periodically announces this mesh to nearby nodes.":
+    "Okresowo ogłasza tę sieć mesh pobliskim węzłom.",
   "Channel and target offers are configured on the device and are not editable here yet.":
     "Oferowany kanał i cele nadawania konfiguruje się na urządzeniu — nie są jeszcze edytowalne z panelu.",
   "Beacon Message": "Wiadomość meshbeacon",
@@ -491,19 +491,14 @@ const PL_STRINGS = {
   "Offered Preset": "Oferowany preset",
 
   Sniffer: "Sniffer",
-  "Sniffer Mode": "Tryb sniffera",
   "MT_SW firmware extension: forward packets overheard but not addressed to this node.":
     "Rozszerzenie firmware MT_SW: przekazuj pakiety odsłuchane, ale nieadresowane do tego węzła.",
-  "Forward locally overheard packets not addressed to this node to the app":
-    "Przekazuj do aplikacji lokalnie odsłuchane pakiety nieadresowane do tego węzła",
-  "Requires MT_SW-branded firmware and app. Other combinations may hang the node.":
-    "Wymaga brandowanej aplikacji i firmware MT_SW. Inne kombinacje mogą zawiesić węzeł.",
 
   "Status Message": "Wiadomość statusu",
-  "MT_SW firmware extension: a custom status text broadcast to the mesh.":
-    "Rozszerzenie firmware MT_SW: własny tekst statusu rozgłaszany do sieci mesh.",
+  "A status message broadcast to the mesh. Other nodes see it in their node list.":
+    "Wiadomość statusu, która jest rozgłaszana do sieci mesh. Inne węzły zobaczą ten status na liście węzłów.",
   "Status Text": "Treść statusu",
-  "Shown to other nodes on the node list": "Wiadomość statusu, która jest rozgłaszana do sieci mesh. Inne węzły zobaczą ten status na liście węzłów.",
+  "Shown to other nodes on the node list": "Widoczny innym węzłom na liście węzłów",
 
   /* baud rate portu szeregowego — liczby zostają, dopisujemy jednostkę */
   "110": "110 bps", "300": "300 bps", "600": "600 bps", "1200": "1200 bps",
@@ -636,7 +631,7 @@ const PL_STRINGS = {
   "Check again": "Sprawdź ponownie",
   "Enable sniffer?": "Włączyć tryb Sniffer?",
   "Enabling the sniffer can delay or drop some chat and telemetry messages, because sniffed packets share the queue to Home Assistant with them.": "Sniffer przekazuje do Home Assistanta każdy pakiet odebrany przez radio, nie tylko te adresowane do tego urządzenia. Przy dużym ruchu w sieci może to spowodować opóźnienie lub utratę części wiadomości czatu bądź telemetrii, ponieważ współdzielą tę samą kolejkę transmisji.",
-  "Firmware is too old: FW+ version 3 or newer is required.": "Firmware jest za stary: wymagana jest wersja FW+ 3 lub nowsza.",
+  "Firmware is too old: FW+ version {n} or newer is required.": "Firmware jest za stary: wymagana jest wersja FW+ {n} lub nowsza.",
   "The radio did not answer. Firmware without FW+ does not support the sniffer.": "Radio nie odpowiedziało. Firmware bez FW+ nie obsługuje sniffera.",
   "The radio did not answer in time.": "Radio nie odpowiedziało w czasie.",
   "The radio is not connected.": "Radio nie jest połączone.",

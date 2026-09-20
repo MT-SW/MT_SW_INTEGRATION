@@ -83,6 +83,7 @@ class MeshNodesTab extends LitElement {
       _statsRequest: { type: Object },
       _ondemandOpen: { type: Boolean },
       _activeCategory: { type: String },
+      _mtsw: { type: Boolean },
       _neighborsShown: { type: Boolean },
     };
   }
@@ -106,6 +107,8 @@ class MeshNodesTab extends LitElement {
     this._statsRequest = null;
     this._ondemandOpen = false;
     this._activeCategory = null;
+    this._mtsw = null;
+    this._mtswRequested = false;
     this._neighborsShown = false;
   }
 
@@ -294,6 +297,7 @@ class MeshNodesTab extends LitElement {
         this._ondemandOpen = false;
         this._activeCategory = null;
         this._neighborsShown = false;
+        this._ensureCapabilities();
       }}>
         <td class="star-cell">${this._renderStar(node)}</td>
         <td class="short" data-label=${t(this.hass, "nodes.col.short_name")}>${node.short_name || "—"}</td>
@@ -433,20 +437,40 @@ class MeshNodesTab extends LitElement {
             </div>
           `
         )}
-        <div class="category ${this._ondemandOpen ? "active" : ""}">
-          <span class="category-name">${tr("nodes.cat.ondemand")}</span>
-          <span class="category-buttons">
-            <button class="action" ?disabled=${busy} @click=${() => (this._ondemandOpen = !this._ondemandOpen)}>
-              ${tr(this._ondemandOpen ? "nodes.cat.close" : "nodes.cat.open")}
-            </button>
-            <span class="action-placeholder"></span>
-          </span>
-        </div>
+        ${this._mtsw
+          ? html`<div class="category ${this._ondemandOpen ? "active" : ""}">
+              <span class="category-name">${tr("nodes.cat.ondemand")}</span>
+              <span class="category-buttons">
+                <button class="action" ?disabled=${busy} @click=${() => (this._ondemandOpen = !this._ondemandOpen)}>
+                  ${tr(this._ondemandOpen ? "nodes.cat.close" : "nodes.cat.open")}
+                </button>
+                <span class="action-placeholder"></span>
+              </span>
+            </div>`
+          : ""}
       </div>
       ${this._busy ? html`<div class="status">${tr("nodes.action.working")}</div>` : ""}
       ${this._notice ? html`<div class="status ok">${this._notice}</div>` : ""}
       ${this._error ? html`<div class="status error">${this._error}</div>` : ""}
     `;
+  }
+
+  /* Funkcje MT_SW (diagnostyka na żądanie) mają sens tylko na firmware z FW+ w wersji 2 lub nowszej.
+     Pytamy bramkę raz, przy pierwszym otwarciu szczegółów węzła — backend pamięta wynik,
+     a na starym firmware nie zaczynamy od zbędnego pakietu do radia przy starcie panelu. */
+  async _ensureCapabilities() {
+    if (this._mtswRequested || !this.hass || !this.entryId) {
+      return;
+    }
+    this._mtswRequested = true;
+    try {
+      const result = await this.hass.callWS({ type: "meshtastic/capabilities", entry_id: this.entryId });
+      this._mtsw = Boolean(result && result.supported);
+    } catch (err) {
+      // bramka jeszcze niegotowa — spróbujemy przy następnym otwarciu
+      this._mtswRequested = false;
+      this._mtsw = false;
+    }
   }
 
   /* Widok jednej kategorii naraz — po wybraniu następnej poprzednia znika,
@@ -828,7 +852,7 @@ class MeshNodesTab extends LitElement {
                   .request=${this._statsRequest}
                 ></mesh-node-stats>`
               : ""}
-            ${this._ondemandOpen
+            ${this._ondemandOpen && this._mtsw
               ? html`<mesh-node-ondemand
                   .hass=${this.hass}
                   .entryId=${this.entryId}

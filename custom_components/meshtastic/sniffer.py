@@ -174,6 +174,9 @@ class SnifferLog:
         # restarcie integracji trzeba go zapytać, zanim zaczniemy zbierać.
         self.enabled: bool | None = None
         self.fw_plus_version: int | None = None
+        # brak odpowiedzi na pytanie o FW+ pamiętamy przez jakiś czas (patrz websocket_api)
+        self.fw_plus_error: str | None = None
+        self.fw_plus_checked_at = 0.0
         self.capacity = capacity
         self._entries: deque[dict[str, Any]] = deque(maxlen=capacity)
         self._seq = 0

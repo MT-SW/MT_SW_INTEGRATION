@@ -443,7 +443,7 @@ class MeshtasticPanel extends LitElement {
           return { ok: true, names };
         }
         case "sniffer_state":
-          return this._softWs({ type: "meshtastic/sniffer_state", entry_id: entryId });
+          return this._softWs({ type: "meshtastic/sniffer_state", entry_id: entryId, force: Boolean(data.force) });
         case "sniffer_set":
           return this._softWs({ type: "meshtastic/sniffer_set", entry_id: entryId, enabled: Boolean(data.enabled) });
         case "sniffer_log":

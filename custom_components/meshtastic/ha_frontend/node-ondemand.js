@@ -17,6 +17,7 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { t, formatUptime, formatRelative } from "./i18n.js";
 import { formatKb, formatNumber } from "./stats-history.js";
 import { portLabel, routingErrorLabel } from "./port-names.js";
+import { MIN_FW_PLUS_VERSION } from "./firmware.js";
 
 export const ONDEMAND_QUERIES = [
   "node_stats",
@@ -429,7 +430,7 @@ class MeshNodeOnDemand extends LitElement {
     const version = d.versionNumber;
     return html`
       ${this._row(t(this.hass, "ondemand.stats.fwplus"), this._num(version))}
-      ${version >= 3 ? html`<div class="route-note">${t(this.hass, "ondemand.fwplus.sniffer")}</div>` : ""}
+      ${version >= MIN_FW_PLUS_VERSION ? html`<div class="route-note">${t(this.hass, "ondemand.fwplus.mtsw")}</div>` : ""}
     `;
   }
 

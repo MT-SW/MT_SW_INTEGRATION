@@ -21,6 +21,7 @@ import { PL } from "./pl-settings.js";
 import { settingsStyles, badgeStyles } from "./styles.js";
 import "./components.js";
 import { portLabel } from "./port-names.js";
+import { MIN_FW_PLUS_VERSION } from "./firmware.js";
 
 const POLL_MS = 2000;
 const NAMES_REFRESH_MS = 30000;
@@ -126,10 +127,11 @@ class MeshSettingsSniffer extends LitElement {
 
   /* ── dane ─────────────────────────────────────────────────── */
 
-  async _checkStatus() {
+  /* force pomija zapamiętany wynik — przycisk "Sprawdź ponownie" ma naprawdę zapytać radio. */
+  async _checkStatus(force = false) {
     this._checking = true;
     this._error = "";
-    const res = await this.wsCommand("meshtastic_ui/sniffer_state");
+    const res = await this.wsCommand("meshtastic_ui/sniffer_state", { force });
     this._checking = false;
     if (res && res.ok) {
       this._status = res;
@@ -321,7 +323,8 @@ class MeshSettingsSniffer extends LitElement {
       return "";
     }
     if (status.reason === "old_firmware") {
-      return PL("Firmware is too old: FW+ version 3 or newer is required.");
+      const minimum = status.min_fw_plus_version || MIN_FW_PLUS_VERSION;
+      return PL("Firmware is too old: FW+ version {n} or newer is required.").replace("{n}", minimum);
     }
     if (status.reason === "timeout") {
       return PL("The radio did not answer. Firmware without FW+ does not support the sniffer.");
@@ -362,7 +365,7 @@ class MeshSettingsSniffer extends LitElement {
                 ${PL("Disable sniffer")}
               </button>`
             : ""}
-          <button class="btn" ?disabled=${this._busy || this._checking} @click=${() => this._checkStatus()}>
+          <button class="btn" ?disabled=${this._busy || this._checking} @click=${() => this._checkStatus(true)}>
             ${PL("Check again")}
           </button>
         </div>

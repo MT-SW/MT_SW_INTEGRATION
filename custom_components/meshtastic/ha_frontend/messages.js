@@ -9,6 +9,7 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatRelative, formatHops } from "./i18n.js";
+import { relayLabel } from "./hops.js";
 import "./message-info.js";
 
 const MAX_TEXT_LENGTH = 228;
@@ -224,15 +225,23 @@ class MeshMessagesTab extends LitElement {
 
   _renderMessage(message) {
     const meta = [];
-    const isDm = message.to_node !== null && message.to_node !== undefined;
+    // Sygnał, z jakim wiadomość dotarła do bramki — dla każdej odebranej, nie tylko
+    // prywatnej. Po skokach opisuje łącze z przekaźnikiem, dlatego obok jest "via (…)".
     if (typeof message.rx_snr === "number") {
       meta.push(`SNR ${message.rx_snr.toFixed(1)} dB`);
     }
-    if (isDm && typeof message.rx_rssi === "number") {
+    if (typeof message.rx_rssi === "number" && message.rx_rssi !== 0) {
       meta.push(`RSSI ${message.rx_rssi} dBm`);
     }
     if (typeof message.hops_away === "number") {
-      meta.push(message.hops_away === 0 ? t(this.hass, "hops.direct") : formatHops(this.hass, message.hops_away));
+      if (message.hops_away === 0) {
+        meta.push(t(this.hass, "hops.direct"));
+      } else {
+        const via = message.relay_node
+          ? ` ${t(this.hass, "nodes.via")} (${relayLabel(this.nodes, { node_id: message.from }, message.relay_node)})`
+          : "";
+        meta.push(`${formatHops(this.hass, message.hops_away)}${via}`);
+      }
     }
 
     return html`

@@ -1003,8 +1003,9 @@ if (!customElements.get("mesh-settings-paxcounter")) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   MT_SW firmware extensions — nieobecne w oficjalnym Meshtastic,
-   ale zwracane przez firmware MT_SW i widoczne w aplikacji MT_SW_APP.
+   Zarządzanie ruchem, Meshbeacon i Wiadomość statusu — moduły z nowszego
+   firmware Meshtastic. Starsze radia ich nie zgłaszają, więc panel pokazuje
+   je tylko wtedy, gdy radio je zwróci.
    ══════════════════════════════════════════════════════════ */
 
 const MESH_BEACON_REGIONS = [
@@ -1037,7 +1038,7 @@ class MeshSettingsTrafficManagement extends ModuleConfigPanel {
       <div class="settings-panel">
         <div class="settings-panel-header">
           <h3>${PL("Traffic Management")}</h3>
-          <p>${PL("MT_SW firmware extension for shaping mesh traffic — not part of stock Meshtastic.")}</p>
+          <p>${PL("Limits mesh traffic: minimum interval between positions, direct NodeInfo replies, rate limiting and dropping of unknown packets.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="settings-section">
@@ -1094,7 +1095,7 @@ class MeshSettingsMeshBeacon extends ModuleConfigPanel {
       <div class="settings-panel">
         <div class="settings-panel-header">
           <h3>${PL("Mesh Beacon")}</h3>
-          <p>${PL("MT_SW firmware extension: periodically announces this mesh to nearby networks.")}</p>
+          <p>${PL("Periodically announces this mesh to nearby nodes.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="info-banner">
@@ -1151,7 +1152,7 @@ class MeshSettingsStatusMessage extends ModuleConfigPanel {
       <div class="settings-panel">
         <div class="settings-panel-header">
           <h3>${PL("Status Message")}</h3>
-          <p>${PL("MT_SW firmware extension: a custom status text broadcast to the mesh.")}</p>
+          <p>${PL("A status message broadcast to the mesh. Other nodes see it in their node list.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="settings-section">
