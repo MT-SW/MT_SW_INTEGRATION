@@ -9,6 +9,14 @@ import "./modules.js";
 import "./sniffer-panel.js";
 import "./nodedb-panel.js";
 import {
+  REGIONS,
+  MODEM_PRESETS,
+  APPROX_PRECISION_BITS,
+  PRECISE_BITS,
+  DEFAULT_APPROX_BITS,
+  precisionLabel,
+} from "./lora-options.js";
+import {
   settingsStyles,
   formStyles,
   dialogStyles,
@@ -20,66 +28,10 @@ import {
 } from "./styles.js";
 
 /* ── LoRa modem presets & region enum maps ── */
-const MODEM_PRESETS = [
-  { value: "LONG_FAST", label: "LONG FAST" },
-  { value: "LONG_SLOW", label: "LONG SLOW" },
-  { value: "VERY_LONG_SLOW", label: "VERY LONG SLOW" },
-  { value: "MEDIUM_SLOW", label: "MEDIUM SLOW" },
-  { value: "MEDIUM_FAST", label: "MEDIUM FAST" },
-  { value: "SHORT_SLOW", label: "SHORT SLOW" },
-  { value: "SHORT_FAST", label: "SHORT FAST" },
-  { value: "LONG_MODERATE", label: "LONG MODERATE" },
-  { value: "SHORT_TURBO", label: "SHORT TURBO" },
-  { value: "LONG_TURBO", label: "LONG TURBO" },
-  { value: "LITE_FAST", label: "LITE FAST" },
-  { value: "LITE_SLOW", label: "LITE SLOW" },
-  { value: "NARROW_FAST", label: "NARROW FAST" },
-  { value: "NARROW_SLOW", label: "NARROW SLOW" },
-  { value: "TINY_FAST", label: "TINY FAST" },
-  { value: "TINY_SLOW", label: "TINY SLOW" },
-  { value: "MEDIUM_TURBO", label: "MEDIUM TURBO" },
-];
 
-const REGIONS = [
-  { value: "UNSET", label: "UNSET" },
-  { value: "US", label: "US" },
-  { value: "EU_433", label: "EU 433" },
-  { value: "EU_868", label: "EU 868" },
-  { value: "CN", label: "CN" },
-  { value: "JP", label: "JP" },
-  { value: "ANZ", label: "ANZ" },
-  { value: "KR", label: "KR" },
-  { value: "TW", label: "TW" },
-  { value: "RU", label: "RU" },
-  { value: "IN", label: "IN" },
-  { value: "NZ_865", label: "NZ 865" },
-  { value: "TH", label: "TH" },
-  { value: "LORA_24", label: "LORA 24" },
-  { value: "UA_433", label: "UA 433" },
-  { value: "UA_868", label: "UA 868" },
-  { value: "MY_433", label: "MY 433" },
-  { value: "MY_919", label: "MY 919" },
-  { value: "SG_923", label: "SG 923" },
-  { value: "PH_433", label: "PH 433" },
-  { value: "PH_868", label: "PH 868" },
-  { value: "PH_915", label: "PH 915" },
-  { value: "ANZ_433", label: "ANZ 433" },
-  { value: "KZ_433", label: "KZ 433" },
-  { value: "KZ_863", label: "KZ 863" },
-  { value: "NP_865", label: "NP 865" },
-  { value: "BR_902", label: "BR 902" },
-  { value: "ITU1_2M", label: "ITU1 2M" },
-  { value: "ITU2_2M", label: "ITU2 2M" },
-  { value: "EU_866", label: "EU 866" },
-  { value: "EU_874", label: "EU 874" },
-  { value: "EU_917", label: "EU 917" },
-  { value: "EU_N_868", label: "EU N 868" },
-  { value: "ITU3_2M", label: "ITU3 2M" },
-  { value: "ITU1_70CM", label: "ITU1 70CM" },
-  { value: "ITU2_70CM", label: "ITU2 70CM" },
-  { value: "ITU3_70CM", label: "ITU3 70CM" },
-  { value: "ITU2_125CM", label: "ITU2 125CM" },
-];
+
+/* NetworkConfig.enabled_protocols to maska bitów; UDP_BROADCAST to bit 1. */
+const UDP_BROADCAST = 1;
 
 const CHANNEL_ROLES = [
   { value: "DISABLED", label: PL("Disabled") },
@@ -643,6 +595,18 @@ class MeshSettingsLora extends LitElement {
               @change=${(e) => this._updateField("override_duty_cycle", e.detail.checked)}
             ></mesh-toggle>
             <mesh-toggle
+              .label=${PL("OK to MQTT")}
+              .description=${PL("Allow other nodes to forward this node's messages to the internet over MQTT")}
+              .checked=${d.config_ok_to_mqtt === true}
+              @change=${(e) => this._updateField("config_ok_to_mqtt", e.detail.checked)}
+            ></mesh-toggle>
+            <mesh-toggle
+              .label=${PL("Ignore MQTT")}
+              .description=${PL("Ignore messages that arrived through MQTT")}
+              .checked=${d.ignore_mqtt === true}
+              @change=${(e) => this._updateField("ignore_mqtt", e.detail.checked)}
+            ></mesh-toggle>
+            <mesh-toggle
               .label=${PL("Boosted RX Gain")}
               .description=${PL("Enable boosted RX gain")}
               .checked=${d.sx126x_rx_boosted_gain === true}
@@ -707,6 +671,31 @@ class MeshSettingsChannels extends LitElement {
           cursor: pointer; font-size: 13px; white-space: nowrap;
         }
         .gen-btn:hover { border-color: var(--primary-color); }
+        .position-block { margin-top: 8px; }
+        .precision-slider { margin: 8px 0 4px; }
+        .precision-title {
+          display: flex;
+          justify-content: space-between;
+          font-size: 13px;
+          margin-bottom: 4px;
+        }
+        .precision-value { color: var(--primary-color); font-weight: 600; }
+        .precision-slider input[type="range"] { width: 100%; accent-color: var(--primary-color); }
+        .precision-ends {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: var(--secondary-text-color);
+        }
+        .position-warning {
+          margin-top: 8px;
+          padding: 8px 12px;
+          font-size: 12px;
+          border-radius: 8px;
+          color: #f57c00;
+          background: rgba(245, 124, 0, 0.1);
+          border: 1px solid rgba(245, 124, 0, 0.3);
+        }
       `,
     ];
   }
@@ -730,6 +719,12 @@ class MeshSettingsChannels extends LitElement {
         uplink_enabled: ch.settings?.uplink_enabled ?? false,
         downlink_enabled: ch.settings?.downlink_enabled ?? false,
         position_precision: ch.settings?.module_settings?.position_precision ?? 0,
+        is_muted: ch.settings?.module_settings?.is_muted ?? false,
+        // ostatnia dokładność przybliżona — do niej wracamy po wyłączeniu "precyzyjnej lokalizacji"
+        approx_precision: (() => {
+          const bits = ch.settings?.module_settings?.position_precision ?? 0;
+          return bits >= APPROX_PRECISION_BITS[0] && bits <= APPROX_PRECISION_BITS.at(-1) ? bits : DEFAULT_APPROX_BITS;
+        })(),
       };
     });
     this._dirtyIndexes = new Set();
@@ -741,6 +736,83 @@ class MeshSettingsChannels extends LitElement {
     this._drafts[index] = { ...this._drafts[index], [field]: value };
     this._dirtyIndexes.add(index);
     this.requestUpdate();
+  }
+
+  /* Udostępnianie lokalizacji na kanale: 0 = wyłączone, 10-19 = przybliżona (suwak), 32 = dokładna. */
+  _setSharing(index, on) {
+    const draft = this._drafts[index];
+    this._updateChannelField(index, "position_precision", on ? draft.approx_precision : 0);
+  }
+
+  _setPrecise(index, on) {
+    const draft = this._drafts[index];
+    this._updateChannelField(index, "position_precision", on ? PRECISE_BITS : draft.approx_precision);
+  }
+
+  _setApproxPrecision(index, bits) {
+    this._drafts[index] = { ...this._drafts[index], approx_precision: bits };
+    this._updateChannelField(index, "position_precision", bits);
+  }
+
+  /* Klucz jednobajtowy (domyślny AQ==) albo brak klucza znają wszyscy — lokalizacja poszłaby w eter jawnie. */
+  _isKnownKey(psk) {
+    try {
+      return !psk || atob(psk).length <= 1;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  _renderPosition(index, draft) {
+    const bits = Number(draft.position_precision) || 0;
+    const sharing = bits > 0;
+    const precise = bits === PRECISE_BITS;
+    const approx = Number(draft.approx_precision) || DEFAULT_APPROX_BITS;
+    return html`
+      <div class="position-block">
+        <mesh-toggle
+          .label=${PL("Location sharing")}
+          .description=${PL("Periodically send this node's position on this channel")}
+          .checked=${sharing}
+          @change=${(e) => this._setSharing(index, e.detail.checked)}
+        ></mesh-toggle>
+        ${sharing
+          ? html`
+              <mesh-toggle
+                .label=${PL("Precise location")}
+                .description=${PL("Send the exact position instead of an approximate one")}
+                .checked=${precise}
+                @change=${(e) => this._setPrecise(index, e.detail.checked)}
+              ></mesh-toggle>
+              ${precise
+                ? ""
+                : html`
+                    <div class="precision-slider">
+                      <div class="precision-title">
+                        <span>${PL("Location accuracy")}</span>
+                        <span class="precision-value">${precisionLabel(approx)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min=${APPROX_PRECISION_BITS[0]}
+                        max=${APPROX_PRECISION_BITS.at(-1)}
+                        step="1"
+                        .value=${String(approx)}
+                        @input=${(e) => this._setApproxPrecision(index, Number(e.target.value))}
+                      />
+                      <div class="precision-ends">
+                        <span>${precisionLabel(APPROX_PRECISION_BITS[0])}</span>
+                        <span>${precisionLabel(APPROX_PRECISION_BITS.at(-1))}</span>
+                      </div>
+                    </div>
+                  `}
+              ${this._isKnownKey(draft.psk)
+                ? html`<div class="position-warning">${PL("This channel uses a known key, so anyone can read the location you send.")}</div>`
+                : ""}
+            `
+          : ""}
+      </div>
+    `;
   }
 
   _generatePsk(index) {
@@ -755,19 +827,23 @@ class MeshSettingsChannels extends LitElement {
     this.requestUpdate();
 
     const draft = this._drafts[index];
+    // Rola należy do samego kanału, a pozycja i wyciszenie do jego module_settings —
+    // w złym miejscu radio je pomijało (kanał dodatkowy wracał wyłączony).
     const settings = {
-      role: draft.role,
       name: draft.name,
       uplink_enabled: draft.uplink_enabled,
       downlink_enabled: draft.downlink_enabled,
+      module_settings: {
+        position_precision: draft.position_precision,
+        is_muted: draft.is_muted,
+      },
     };
     if (draft.psk) {
       settings.psk = draft.psk;
     }
 
     const result = await this.wsCommand("meshtastic_ui/set_channel", {
-      index,
-      settings,
+      channel: { index, role: draft.role, settings },
     });
 
     this._saving = false;
@@ -863,6 +939,8 @@ class MeshSettingsChannels extends LitElement {
                 @change=${(e) => this._updateChannelField(index, "downlink_enabled", e.detail.checked)}
               ></mesh-toggle>
             </div>
+
+            ${this._renderPosition(index, draft)}
 
             ${isDirty ? html`
               <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
@@ -1796,7 +1874,7 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
       <div class="settings-panel">
         <div class="settings-panel-header">
           <h3>${PL("Network Configuration")}</h3>
-          <p>${PL("Configure WiFi, Ethernet, NTP server, and syslog settings.")}</p>
+          <p>${PL("Configure WiFi, UDP broadcast, NTP server, and syslog settings.")}</p>
         </div>
         <div class="settings-panel-body">
           <div class="settings-section">
@@ -1830,13 +1908,16 @@ class MeshSettingsNetwork extends ConfigSectionPanel {
 
           <div class="settings-section">
             <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--secondary-text-color); letter-spacing: 0.5px; margin-bottom: 12px;">
-              ${PL("Ethernet")}
+              ${PL("UDP")}
             </div>
             <mesh-toggle
-              .label=${PL("Ethernet Enabled")}
-              .description=${PL("Enable Ethernet connectivity")}
-              .checked=${d.eth_enabled === true}
-              @change=${(e) => this._updateField("eth_enabled", e.detail.checked)}
+              .label=${PL("UDP Broadcast")}
+              .description=${PL("Enable broadcasting packets over UDP on the local network")}
+              .checked=${(Number(d.enabled_protocols) & UDP_BROADCAST) !== 0}
+              @change=${(e) => this._updateField(
+                "enabled_protocols",
+                e.detail.checked ? (Number(d.enabled_protocols) | UDP_BROADCAST) : (Number(d.enabled_protocols) & ~UDP_BROADCAST)
+              )}
             ></mesh-toggle>
           </div>
 

@@ -10,6 +10,7 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatRelative, formatHops } from "./i18n.js";
 import { relayLabel } from "./hops.js";
+import { splitLinks, imageUrls, canEmbed } from "./link-preview.js";
 import "./message-info.js";
 
 const MAX_TEXT_LENGTH = 228;
@@ -29,6 +30,9 @@ class MeshMessagesTab extends LitElement {
       _error: { type: String },
       _deleting: { type: Boolean },
       _info: { type: Object },
+      _autoImages: { type: Boolean },
+      _shownImages: { type: Object },
+      _failedImages: { type: Object },
     };
   }
 
@@ -43,6 +47,75 @@ class MeshMessagesTab extends LitElement {
     this._error = null;
     this._deleting = false;
     this._info = null;
+    // Podgląd obrazków z linków: domyślnie włączony, ustawienie wspólne dla wszystkich przeglądarek (serwer).
+    this._autoImages = true;
+    this._shownImages = new Set(); // obrazki załadowane ręcznie, gdy automatyka jest wyłączona
+    this._failedImages = new Set();
+    this._settingsRequested = false;
+  }
+
+  async _loadUiSettings() {
+    if (this._settingsRequested || !this.hass) {
+      return;
+    }
+    this._settingsRequested = true;
+    try {
+      const result = await this.hass.callWS({ type: "meshtastic/ui_settings" });
+      this._autoImages = result.settings.auto_load_images !== false;
+    } catch (err) {
+      // bez ustawień zostaje wartość domyślna
+    }
+  }
+
+  async _toggleImages() {
+    const next = !this._autoImages;
+    this._autoImages = next;
+    try {
+      await this.hass.callWS({ type: "meshtastic/ui_settings_set", settings: { auto_load_images: next } });
+    } catch (err) {
+      this._autoImages = !next;
+    }
+  }
+
+  _showImage(url) {
+    this._shownImages = new Set([...this._shownImages, url]);
+  }
+
+  _imageFailed(url) {
+    this._failedImages = new Set([...this._failedImages, url]);
+  }
+
+  _pageProtocol() {
+    return globalThis.location ? globalThis.location.protocol : "https:";
+  }
+
+  /* Tekst wiadomości z klikalnymi linkami (nowa karta, bez przekazywania źródła). */
+  _renderText(text) {
+    return html`${splitLinks(text).map((part) =>
+      part.type === "link"
+        ? html`<a class="msg-link" href=${part.value} target="_blank" rel="noopener noreferrer" @click=${(e) => e.stopPropagation()}>${part.value}</a>`
+        : part.value
+    )}`;
+  }
+
+  /* Podglądy obrazków z linków. Wyłączona automatyka nie ładuje nic bez kliknięcia —
+     obrazek pochodzi od obcego serwera, więc jego pobranie zdradza mu adres tej przeglądarki. */
+  _renderImages(text) {
+    return imageUrls(text)
+      .filter((url) => canEmbed(url, this._pageProtocol()))
+      .map((url) => {
+        if (this._failedImages.has(url)) {
+          return html`<div class="image-note">${t(this.hass, "messages.image_failed")}</div>`;
+        }
+        if (!this._autoImages && !this._shownImages.has(url)) {
+          return html`<button class="image-load" @click=${(e) => { e.stopPropagation(); this._showImage(url); }}>
+            <ha-icon icon="mdi:image-outline"></ha-icon> ${t(this.hass, "messages.image_load")}
+          </button>`;
+        }
+        return html`<a class="image-preview" href=${url} target="_blank" rel="noopener noreferrer" @click=${(e) => e.stopPropagation()}>
+          <img src=${url} loading="lazy" decoding="async" referrerpolicy="no-referrer" alt=${t(this.hass, "messages.image_alt")} @error=${() => this._imageFailed(url)} />
+        </a>`;
+      });
   }
 
   _nodeName(nodeId) {
@@ -265,7 +338,8 @@ class MeshMessagesTab extends LitElement {
           >
             <ha-icon icon="mdi:trash-can-outline"></ha-icon>
           </button>
-          <div class="text">${message.text}</div>
+          <div class="text">${this._renderText(message.text)}</div>
+          ${this._renderImages(message.text)}
           <div class="meta">
             <span title=${new Date(message.ts).toLocaleString(this.hass.language)}>
               ${formatRelative(this.hass, message.ts)}
@@ -282,6 +356,9 @@ class MeshMessagesTab extends LitElement {
   }
 
   updated(changed) {
+    if (changed.has("hass")) {
+      this._loadUiSettings();
+    }
     // Przejście z listy węzłów: rozmowa może jeszcze nie istnieć w historii,
     // więc tworzymy ją pusto przy pierwszym wyborze.
     if (changed.has("selectKey") && this.selectKey) {
@@ -336,6 +413,10 @@ class MeshMessagesTab extends LitElement {
     }
 
     const remaining = MAX_TEXT_LENGTH - (this._draft || "").length;
+    // Miniatury obrazków z linków w pisanej wiadomości — widać, co odbiorcy zobaczą pod tekstem.
+    const draftImages = this._autoImages
+      ? imageUrls(this._draft || "").filter((url) => canEmbed(url, this._pageProtocol()))
+      : [];
 
     return html`
       <div class="split">
@@ -357,6 +438,11 @@ class MeshMessagesTab extends LitElement {
               : html`<div class="empty-state">${t(this.hass, "messages.no_messages")}</div>`}
           </div>
 
+          ${draftImages.length
+            ? html`<div class="draft-images">
+                ${draftImages.map((url) => html`<img src=${url} referrerpolicy="no-referrer" alt=${t(this.hass, "messages.image_alt")} @error=${(e) => { e.target.style.display = "none"; }} />`)}
+              </div>`
+            : ""}
           <div class="composer">
             <textarea
               rows="2"
@@ -370,6 +456,13 @@ class MeshMessagesTab extends LitElement {
               @keydown=${(e) => this._onKeyDown(e, active)}
             ></textarea>
             <div class="composer-side">
+              <button
+                class="img-toggle ${this._autoImages ? "on" : ""}"
+                title=${t(this.hass, this._autoImages ? "messages.images_on" : "messages.images_off")}
+                @click=${() => this._toggleImages()}
+              >
+                <ha-icon icon="mdi:image-outline"></ha-icon>
+              </button>
               <span class="counter ${remaining < 20 ? "low" : ""}">${remaining}</span>
               <ha-button
                 unelevated
@@ -610,6 +703,45 @@ class MeshMessagesTab extends LitElement {
           white-space: pre-wrap;
           overflow-wrap: anywhere;
         }
+
+        .msg-link { color: inherit; text-decoration: underline; }
+
+        .image-preview { display: block; margin-top: 6px; }
+        .image-preview img {
+          display: block;
+          max-width: 100%;
+          max-height: 240px;
+          border-radius: 8px;
+        }
+
+        .image-load {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 6px;
+          padding: 4px 10px;
+          border: 1px solid var(--divider-color);
+          border-radius: 14px;
+          background: transparent;
+          color: inherit;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .image-note { margin-top: 6px; font-size: 12px; opacity: 0.7; }
+
+        .draft-images { display: flex; gap: 8px; padding: 6px 12px 0; }
+        .draft-images img { max-height: 64px; max-width: 96px; border-radius: 6px; }
+
+        .img-toggle {
+          border: none;
+          background: transparent;
+          color: var(--secondary-text-color);
+          cursor: pointer;
+          padding: 2px;
+          opacity: 0.6;
+        }
+        .img-toggle.on { color: var(--primary-color); opacity: 1; }
 
         .meta {
           display: flex;

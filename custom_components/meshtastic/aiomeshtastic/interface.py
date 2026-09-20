@@ -959,11 +959,27 @@ class MeshInterface:
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
     async def set_channel(self, channel: Mapping[str, Any], node: int | None = None) -> None:
+        """Zapisz kanał na radiu.
+
+        Radio podmienia cały kanał, więc pola, których panel nie zna (id, use_aead, wyciszenie…),
+        wracałyby do wartości domyślnych. Dlatego dla własnej bramki wychodzimy od kanału z
+        lokalnej kopii, a przesłane wartości nakładamy na niego; po zapisie kopia się odświeża.
+        Rola (PRIMARY, SECONDARY, DISABLED) należy do samego kanału, nie do jego ustawień.
+        """
         from google.protobuf.json_format import ParseDict  # noqa: PLC0415
 
+        channel_message = channel_pb2.Channel()
+        index = int(channel.get("index", 0) or 0)
+        cached = self._connected_node_channels if node is None else None
+        if cached is not None and 0 <= index < len(cached):
+            channel_message.CopyFrom(cached[index])
+        ParseDict(dict(channel), channel_message, ignore_unknown_fields=True)
+
         admin_message = admin_pb2.AdminMessage()
-        ParseDict(dict(channel), admin_message.set_channel, ignore_unknown_fields=True)
+        admin_message.set_channel.CopyFrom(channel_message)
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        if cached is not None and 0 <= index < len(cached):
+            cached[index] = channel_message
 
     async def device_action(self, action: str, node: int | None = None) -> None:
         """Restart, wyłączenie, reset fabryczny albo reset bazy węzłów."""

@@ -6,6 +6,13 @@ import {
 import "./components.js";
 import { PL } from "./pl-settings.js";
 import {
+  REGIONS,
+  MODEM_PRESETS,
+  APPROX_PRECISION_BITS,
+  PRECISE_BITS,
+  precisionLabel,
+} from "./lora-options.js";
+import {
   settingsStyles,
   formStyles,
   saveBarStyles,
@@ -183,17 +190,8 @@ class ModuleConfigPanel extends LitElement {
 function mapReportPrecisions() {
   return [
     { value: "0", label: PL("Default") },
-    { value: "10", label: PL("±23 km") },
-    { value: "11", label: PL("±12 km") },
-    { value: "12", label: PL("±5.8 km") },
-    { value: "13", label: PL("±2.9 km") },
-    { value: "14", label: PL("±1.5 km") },
-    { value: "15", label: PL("±730 m") },
-    { value: "16", label: PL("±360 m") },
-    { value: "17", label: PL("±180 m") },
-    { value: "18", label: PL("±90 m") },
-    { value: "19", label: PL("±45 m") },
-    { value: "32", label: PL("Precise location") },
+    ...APPROX_PRECISION_BITS.map((bits) => ({ value: String(bits), label: precisionLabel(bits) })),
+    { value: String(PRECISE_BITS), label: precisionLabel(PRECISE_BITS) },
   ];
 }
 
@@ -1008,26 +1006,11 @@ if (!customElements.get("mesh-settings-paxcounter")) {
    je tylko wtedy, gdy radio je zwróci.
    ══════════════════════════════════════════════════════════ */
 
-const MESH_BEACON_REGIONS = [
-  { value: "UNSET", label: PL("None") },
-  { value: "US", label: "US" },
-  { value: "EU_433", label: "EU 433" },
-  { value: "EU_868", label: "EU 868" },
-  { value: "CN", label: "CN" },
-  { value: "JP", label: "JP" },
-  { value: "ANZ", label: "ANZ" },
-  { value: "KR", label: "KR" },
-  { value: "TW", label: "TW" },
-  { value: "RU", label: "RU" },
-  { value: "IN", label: "IN" },
-];
-
-const MESH_BEACON_PRESETS = [
-  { value: "LONG_FAST", label: "LONG_FAST" },
-  { value: "MEDIUM_FAST", label: "MEDIUM_FAST" },
-  { value: "SHORT_FAST", label: "SHORT_FAST" },
-  { value: "SHORT_TURBO", label: "SHORT_TURBO" },
-];
+/* Region "brak" na początku: pusty region znaczy, że nic nie oferujemy. Reszta to pełna lista z LoRa. */
+const MESH_BEACON_REGIONS = REGIONS.map((region) => (region.value === "UNSET" ? { value: "UNSET", label: PL("None") } : region));
+const MAX_BEACON_TARGETS = 8;
+const FLAG_LISTEN_ENABLED = 1;
+const FLAG_BROADCAST_ENABLED = 2;
 
 class MeshSettingsTrafficManagement extends ModuleConfigPanel {
   get _section() { return "traffic_management"; }
@@ -1089,8 +1072,87 @@ if (!customElements.get("mesh-settings-traffic-management")) {
 class MeshSettingsMeshBeacon extends ModuleConfigPanel {
   get _section() { return "mesh_beacon"; }
 
+  constructor() {
+    super();
+    this._showKey = false;
+  }
+
+  /* flags to maska bitów (nasłuch, nadawanie, tryb zgodności) — zmieniamy tylko własny bit. */
+  _flag(mask) {
+    return (Number(this._draft.flags) & mask) !== 0;
+  }
+
+  _setFlag(mask, on) {
+    const flags = Number(this._draft.flags) || 0;
+    this._updateField("flags", on ? (flags | mask) : (flags & ~mask));
+  }
+
+  /* Oferowany kanał (nazwa i klucz) siedzi w zagnieżdżonym obiekcie broadcast_offer_channel. */
+  _updateOffer(field, value) {
+    this._updateField("broadcast_offer_channel", { ...(this._draft.broadcast_offer_channel || {}), [field]: value });
+  }
+
+  _targets() {
+    return this._draft.broadcast_targets || [];
+  }
+
+  _updateTarget(index, field, value) {
+    this._updateField(
+      "broadcast_targets",
+      this._targets().map((target, i) => (i === index ? { ...target, [field]: value } : target))
+    );
+  }
+
+  _addTarget() {
+    if (this._targets().length >= MAX_BEACON_TARGETS) {
+      return;
+    }
+    this._updateField("broadcast_targets", [
+      ...this._targets(),
+      { preset: "LONG_FAST", region: this._draft.broadcast_offer_region || "UNSET", channel_index: 0 },
+    ]);
+  }
+
+  _removeTarget(index) {
+    this._updateField("broadcast_targets", this._targets().filter((_, i) => i !== index));
+  }
+
+  _renderTarget(target, index) {
+    return html`
+      <div class="beacon-target">
+        <div class="beacon-target-head">
+          <span>${PL("Target {n}").replace("{n}", String(index + 1))}</span>
+          <button class="gen-btn" @click=${() => this._removeTarget(index)}>${PL("Remove target")}</button>
+        </div>
+        <div class="form-grid">
+          <mesh-select
+            .label=${PL("Modem Preset")}
+            .value=${String(target.preset || "LONG_FAST")}
+            .options=${MODEM_PRESETS}
+            @change=${(e) => this._updateTarget(index, "preset", e.detail.value)}
+          ></mesh-select>
+          <mesh-select
+            .label=${PL("Region")}
+            .value=${String(target.region || "UNSET")}
+            .options=${MESH_BEACON_REGIONS}
+            @change=${(e) => this._updateTarget(index, "region", e.detail.value)}
+          ></mesh-select>
+          <mesh-number-input
+            .label=${PL("Channel index")}
+            .value=${target.channel_index ?? 0}
+            .min=${0}
+            .max=${7}
+            @change=${(e) => this._updateTarget(index, "channel_index", e.detail.value)}
+          ></mesh-number-input>
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     const d = this._draft;
+    const offer = d.broadcast_offer_channel || {};
+    const targets = this._targets();
     return html`
       <div class="settings-panel">
         <div class="settings-panel-header">
@@ -1098,9 +1160,21 @@ class MeshSettingsMeshBeacon extends ModuleConfigPanel {
           <p>${PL("Periodically announces this mesh to nearby nodes.")}</p>
         </div>
         <div class="settings-panel-body">
-          <div class="info-banner">
-            ${PL("Channel and target offers are configured on the device and are not editable here yet.")}
+          <div class="settings-section">
+            <mesh-toggle
+              .label=${PL("Broadcast Mesh Beacon packets")}
+              .description=${PL("Periodically announces this mesh to nearby nodes.")}
+              .checked=${this._flag(FLAG_BROADCAST_ENABLED)}
+              @change=${(e) => this._setFlag(FLAG_BROADCAST_ENABLED, e.detail.checked)}
+            ></mesh-toggle>
+            <mesh-toggle
+              .label=${PL("Listen for Mesh Beacon packets")}
+              .description=${PL("Catch invitations announced by nearby meshes")}
+              .checked=${this._flag(FLAG_LISTEN_ENABLED)}
+              @change=${(e) => this._setFlag(FLAG_LISTEN_ENABLED, e.detail.checked)}
+            ></mesh-toggle>
           </div>
+
           <div class="settings-section">
             <div class="form-grid">
               <mesh-text-input
@@ -1124,16 +1198,96 @@ class MeshSettingsMeshBeacon extends ModuleConfigPanel {
               <mesh-select
                 .label=${PL("Offered Preset")}
                 .value=${String(d.broadcast_offer_preset || "LONG_FAST")}
-                .options=${MESH_BEACON_PRESETS}
+                .options=${MODEM_PRESETS}
                 @change=${(e) => this._updateField("broadcast_offer_preset", e.detail.value)}
               ></mesh-select>
             </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">${PL("Offered channel")}</div>
+            <div class="form-grid">
+              <mesh-text-input
+                .label=${PL("Offered channel name")}
+                .value=${offer.name || ""}
+                .maxlength=${11}
+                @change=${(e) => this._updateOffer("name", e.detail.value)}
+              ></mesh-text-input>
+              <div class="key-row">
+                <mesh-text-input
+                  type=${this._showKey ? "text" : "password"}
+                  .label=${PL("Offered channel key (base64)")}
+                  .value=${offer.psk || ""}
+                  placeholder=${PL("Base64 encoded key")}
+                  @change=${(e) => this._updateOffer("psk", e.detail.value)}
+                ></mesh-text-input>
+                <button class="gen-btn" @click=${() => { this._showKey = !this._showKey; this.requestUpdate(); }}>
+                  ${this._showKey ? PL("Hide") : PL("Show")}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">${PL("Broadcast targets")}</div>
+            ${targets.map((target, index) => this._renderTarget(target, index))}
+            <button
+              class="gen-btn"
+              ?disabled=${targets.length >= MAX_BEACON_TARGETS}
+              @click=${() => this._addTarget()}
+            >
+              ${PL("Add target")}
+            </button>
           </div>
         </div>
         <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}
           @save=${this._save} @discard=${this._resetDraft}></mesh-save-bar>
       </div>
     `;
+  }
+
+  static get styles() {
+    return [
+      ...(Array.isArray(super.styles) ? super.styles : [super.styles]),
+      css`
+        .section-title {
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: var(--secondary-text-color);
+          letter-spacing: 0.5px;
+          margin-bottom: 12px;
+        }
+        .key-row { display: flex; gap: 8px; align-items: flex-end; }
+        .key-row mesh-text-input { flex: 1; }
+        .beacon-target {
+          padding: 12px;
+          margin-bottom: 10px;
+          border: 1px solid var(--divider-color);
+          border-radius: 10px;
+        }
+        .beacon-target-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 13px;
+          font-weight: 600;
+          margin-bottom: 8px;
+        }
+        .gen-btn {
+          padding: 8px 14px;
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
+          cursor: pointer;
+          font-size: 13px;
+          white-space: nowrap;
+        }
+        .gen-btn:hover { border-color: var(--primary-color); }
+        .gen-btn[disabled] { opacity: 0.5; cursor: default; }
+      `,
+    ];
   }
 }
 if (!customElements.get("mesh-settings-mesh-beacon")) {

@@ -223,6 +223,7 @@ async def ws_channels(
                 "uplink_enabled": bool(settings.get("uplinkEnabled")),
                 "downlink_enabled": bool(settings.get("downlinkEnabled")),
                 "position_precision": (settings.get("moduleSettings", {}) or {}).get("positionPrecision"),
+                "is_muted": bool((settings.get("moduleSettings", {}) or {}).get("isMuted")),
             }
         )
 
@@ -1414,6 +1415,56 @@ async def ws_map_settings_set(
     connection.send_result(msg["id"], {"saved": True})
 
 
+# ── Ustawienia interfejsu panelu (wspólne dla wszystkich przeglądarek) ──
+# Na razie jedno: czy czat sam ładuje podglądy obrazków z linków. Jak klucze map, ma być
+# raz dla całego Home Assistanta, a nie osobno w każdej przeglądarce i w aplikacji mobilnej.
+
+UI_SETTINGS_VERSION = 1
+UI_SETTINGS_DEFAULTS: dict[str, Any] = {"auto_load_images": True}
+
+
+def _ui_settings_store(hass: HomeAssistant) -> Store:
+    key = f"{DOMAIN}_ui_settings_store"
+    store = hass.data.get(key)
+    if store is None:
+        store = Store(hass, UI_SETTINGS_VERSION, f"{DOMAIN}.ui_settings")
+        hass.data[key] = store
+    return store
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/ui_settings"})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_ui_settings(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Ustawienia interfejsu panelu; brakujące wartości mają domyślne."""
+    saved = await _ui_settings_store(hass).async_load()
+    connection.send_result(msg["id"], {"settings": {**UI_SETTINGS_DEFAULTS, **(saved or {})}})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/ui_settings_set",
+        vol.Required("settings"): vol.Schema({vol.Optional("auto_load_images"): bool}),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_ui_settings_set(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Zmień ustawienia interfejsu panelu — tylko przesłane pola, reszta zostaje."""
+    store = _ui_settings_store(hass)
+    merged = {**UI_SETTINGS_DEFAULTS, **((await store.async_load()) or {}), **msg["settings"]}
+    await store.async_save(merged)
+    connection.send_result(msg["id"], {"settings": merged})
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -1449,6 +1500,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_nodedb_auto_set,
         ws_map_settings,
         ws_map_settings_set,
+        ws_ui_settings,
+        ws_ui_settings_set,
         ws_set_config,
         ws_delete_message,
         ws_delete_conversation,
