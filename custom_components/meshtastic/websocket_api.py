@@ -20,9 +20,10 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.storage import Store
 
-from . import ondemand
+from . import nodedb_cleanup, ondemand
 from .aiomeshtastic.interface import TelemetryType
 from .const import DOMAIN
+from .nodedb_cleanup import NoCriteriaError
 from .ondemand import OnDemandError
 from .store import get_store
 
@@ -1210,6 +1211,133 @@ async def ws_storage_clear(
     connection.send_result(msg["id"], {"cleared": msg["kind"]})
 
 
+# ── czyszczenie bazy węzłów radia (Ustawienia → Pamięć) ──────────────
+
+_NODEDB_FILTER = {
+    vol.Required("entry_id"): str,
+    vol.Optional("inactive_days", default=0): vol.All(int, vol.Range(min=0, max=365)),
+    vol.Optional("kind", default="all"): vol.In(list(nodedb_cleanup.KINDS)),
+}
+
+
+async def _nodedb_candidates(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> tuple[Any, list[dict[str, Any]]] | None:
+    """Węzły do usunięcia dla wybranych warunków; przy błędzie odpowiada i zwraca None.
+
+    Lista zawsze powstaje po stronie serwera z aktualnej bazy radia — panel podaje tylko
+    warunki, więc nie da się usunąć czegokolwiek spoza tego, co pokazał podgląd.
+    """
+    entry = _entry_by_id(hass, msg["entry_id"])
+    store = get_store(msg["entry_id"])
+    if entry is None or store is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return None
+    try:
+        nodes = await entry.runtime_data.client.async_get_all_nodes()
+    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
+        connection.send_error(msg["id"], "nodes_failed", str(err))
+        return None
+    try:
+        candidates = nodedb_cleanup.select_candidates(
+            nodes,
+            own_node=(entry.runtime_data.gateway_node or {}).get("num"),
+            protected=set(entry.runtime_data.coordinator.data or {}),
+            inactive_days=msg.get("inactive_days", 0),
+            kind=msg.get("kind", "all"),
+        )
+    except NoCriteriaError:
+        connection.send_error(msg["id"], "no_criteria", "Wybierz czas nieaktywności albo rodzaj węzłów")
+        return None
+    return store, candidates
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/nodedb_preview", **_NODEDB_FILTER})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_nodedb_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Ile i które węzły zostałyby usunięte — bez usuwania czegokolwiek."""
+    found = await _nodedb_candidates(hass, connection, msg)
+    if found is None:
+        return
+    _store, candidates = found
+    limit = nodedb_cleanup.PREVIEW_LIMIT
+    connection.send_result(
+        msg["id"],
+        {"count": len(candidates), "nodes": candidates[:limit], "more": max(0, len(candidates) - limit)},
+    )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/nodedb_clean", **_NODEDB_FILTER})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_nodedb_clean(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Usuń wybrane węzły z bazy radia. Usuwanie trwa w tle, postęp podaje nodedb_status."""
+    found = await _nodedb_candidates(hass, connection, msg)
+    if found is None:
+        return
+    store, candidates = found
+    if store.cleanup.running:
+        connection.send_error(msg["id"], "busy", "Czyszczenie już trwa")
+        return
+    if not candidates:
+        connection.send_result(msg["id"], {"started": False, "total": 0})
+        return
+    store.start_cleanup([item["node_id"] for item in candidates], "manual")
+    connection.send_result(msg["id"], {"started": True, "total": len(candidates)})
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/nodedb_status", vol.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_nodedb_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Postęp bieżącego (albo ostatniego) usuwania i ustawienia automatycznego czyszczenia."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], {"job": store.cleanup.status(), "auto": dict(store.auto_clean)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/nodedb_auto_set",
+        vol.Required("entry_id"): str,
+        vol.Required("enabled"): bool,
+        vol.Required("inactivity_days"): vol.All(int, vol.Range(min=1, max=365)),
+        vol.Required("interval_days"): vol.All(int, vol.Range(min=1, max=90)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_nodedb_auto_set(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Włącz/wyłącz automatyczne czyszczenie bazy węzłów i ustaw jego progi."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    settings = store.set_auto_clean(
+        enabled=msg["enabled"], inactivity_days=msg["inactivity_days"], interval_days=msg["interval_days"]
+    )
+    connection.send_result(msg["id"], {"auto": settings})
+
+
 # ── Ustawienia mapy (źródło kafli i klucze API) ──────────────────────
 # Trzymane po stronie serwera, a nie w localStorage przeglądarki: klucz
 # wpisany raz ma być widoczny w każdej przeglądarce i w aplikacji mobilnej HA.
@@ -1296,6 +1424,10 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_sniffer_clear,
         ws_storage_stats,
         ws_storage_clear,
+        ws_nodedb_preview,
+        ws_nodedb_clean,
+        ws_nodedb_status,
+        ws_nodedb_auto_set,
         ws_map_settings,
         ws_map_settings_set,
         ws_set_config,

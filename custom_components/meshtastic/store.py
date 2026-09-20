@@ -15,6 +15,7 @@ najstarsze rekordy.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -37,6 +38,7 @@ from .api import (
     EventMeshtasticApiTelemetryType,
 )
 from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER
+from .nodedb_cleanup import DAY_SECONDS, CleanupJob, normalize_auto, select_candidates
 from .sniffer import SnifferLog
 
 if TYPE_CHECKING:
@@ -62,6 +64,10 @@ SIGNAL_SAVE_INTERVAL_MS = 5 * 60 * 1000
 # Próbkujemy z koordynatora, nie ze zdarzeń telemetrii — dzięki temu wykresy
 # rosną także wtedy, gdy nikt nie ma otwartego panelu.
 TIMESERIES_SAMPLE_SECONDS = 60
+# Jak często sprawdzamy, czy nadszedł czas na automatyczne czyszczenie bazy węzłów (interwał
+# ustawia użytkownik w dniach, więc godzinne sprawdzenie w zupełności wystarcza).
+AUTO_CLEAN_CHECK_INTERVAL = timedelta(hours=1)
+AUTO_CLEAN_NODES_TIMEOUT_SECONDS = 30
 
 # Pola zapisywane w historii statystyk węzła (pakiety i zasoby). MessageToDict
 # pomija wartości zerowe, więc brakujące pole w pakiecie oznacza 0 — zapisujemy
@@ -171,6 +177,10 @@ class PanelStore:
         self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
+        # czyszczenie bazy węzłów radia: stan bieżącego zadania (tylko w pamięci) i ustawienia
+        # automatyki (na dysku), patrz nodedb_cleanup.py
+        self.cleanup = CleanupJob()
+        self.auto_clean: dict[str, Any] = normalize_auto(None)
         # tylko w pamięci: ostatni pakiet zapisany w historii sygnału (na węzeł) i czas zapisu na dysk
         self._signal_last_id: dict[int, int] = {}
         self._signal_saved_at = 0
@@ -186,6 +196,7 @@ class PanelStore:
         self._node_state = data.get("node_state", {})
         self._traceroutes = data.get("traceroutes", {})
         self._node_history = data.get("node_history", {})
+        self.auto_clean = normalize_auto(data.get("auto_clean"))
         # Wcześniejsza wersja zapisywała też pakiety po skokach (pola snrVia/rssiVia);
         # nie mówią nic o łączu z samym węzłem, więc znikają z historii.
         for kinds in self._node_history.values():
@@ -215,6 +226,7 @@ class PanelStore:
             async_track_time_interval(
                 self._hass, self._sample_gateway, timedelta(seconds=TIMESERIES_SAMPLE_SECONDS)
             ),
+            async_track_time_interval(self._hass, self._auto_clean_tick, AUTO_CLEAN_CHECK_INTERVAL),
         ]
 
     async def async_stop(self) -> None:
@@ -232,6 +244,7 @@ class PanelStore:
             "node_state": self._node_state,
             "traceroutes": self._traceroutes,
             "node_history": self._node_history,
+            "auto_clean": self.auto_clean,
         }
 
     def _schedule_save(self) -> None:
@@ -304,6 +317,79 @@ class PanelStore:
         self._messages = []
         self._schedule_save()
         self._notify("cleared", {})
+
+    # ── czyszczenie bazy węzłów radia (Ustawienia → Pamięć) ─────────────
+
+    def set_auto_clean(self, *, enabled: bool, inactivity_days: int, interval_days: int) -> dict[str, Any]:
+        """Zapisz ustawienia automatycznego czyszczenia.
+
+        Po włączeniu pierwsze sprawdzenie wypada dopiero po pełnym interwale — nikt
+        nie chce, żeby samo kliknięcie przełącznika od razu kasowało węzły.
+        """
+        was_enabled = self.auto_clean["enabled"]
+        self.auto_clean.update(
+            normalize_auto({"enabled": enabled, "inactivity_days": inactivity_days, "interval_days": interval_days})
+            | {"last_run": self.auto_clean["last_run"], "last_removed": self.auto_clean["last_removed"]}
+        )
+        if enabled and not was_enabled:
+            self.auto_clean["last_run"] = time.time()
+        self._schedule_save()
+        return dict(self.auto_clean)
+
+    def start_cleanup(self, node_ids: list[int], source: str) -> bool:
+        """Uruchom usuwanie w tle; False, gdy poprzednie jeszcze trwa. Postęp: self.cleanup.status()."""
+        if self.cleanup.running:
+            return False
+        client = self._entry.runtime_data.client
+        self.cleanup.begin(len(node_ids), source)
+        self._hass.async_create_background_task(
+            self._cleanup_task(client, list(node_ids)), f"meshtastic_nodedb_cleanup_{self._entry_id}"
+        )
+        return True
+
+    async def _cleanup_task(self, client: Any, node_ids: list[int]) -> None:
+        try:
+            await self.cleanup.run(client, node_ids)
+        finally:
+            self.cleanup.finish()
+            if self.cleanup.source == "auto":
+                self.auto_clean["last_removed"] = self.cleanup.removed
+                self._schedule_save()
+            LOGGER.info(
+                "Czyszczenie bazy węzłów (%s): usunięto %d, nie udało się %d z %d",
+                self.cleanup.source,
+                self.cleanup.removed,
+                self.cleanup.failed,
+                self.cleanup.total,
+            )
+
+    async def _auto_clean_tick(self, _now: Any = None) -> None:
+        """Co godzinę: jeśli automatyka jest włączona i minął interwał, wyczyść nieaktywne węzły."""
+        settings = self.auto_clean
+        if not settings["enabled"] or self.cleanup.running:
+            return
+        last_run = settings["last_run"]
+        if last_run is not None and time.time() - last_run < settings["interval_days"] * DAY_SECONDS:
+            return
+        runtime = getattr(self._entry, "runtime_data", None)
+        if runtime is None:
+            return
+        try:
+            nodes = await asyncio.wait_for(runtime.client.async_get_all_nodes(), AUTO_CLEAN_NODES_TIMEOUT_SECONDS)
+        except Exception:  # noqa: BLE001 - radio niedostępne: spróbujemy przy następnym sprawdzeniu
+            LOGGER.debug("Automatyczne czyszczenie: nie udało się pobrać bazy węzłów", exc_info=True)
+            return
+        candidates = select_candidates(
+            nodes,
+            own_node=(runtime.gateway_node or {}).get("num"),
+            protected=set(runtime.coordinator.data or {}),
+            inactive_days=settings["inactivity_days"],
+        )
+        settings["last_run"] = time.time()
+        settings["last_removed"] = 0
+        self._schedule_save()
+        if candidates:
+            self.start_cleanup([item["node_id"] for item in candidates], "auto")
 
     # ── magazyn: statystyki i czyszczenie (zakładka Ustawienia → Pamięć) ─
 

@@ -7,6 +7,7 @@ import "./components.js";
 import { PL } from "./pl-settings.js";
 import "./modules.js";
 import "./sniffer-panel.js";
+import "./nodedb-panel.js";
 import {
   settingsStyles,
   formStyles,
@@ -1231,6 +1232,10 @@ class MeshSettingsStorage extends LitElement {
           letter-spacing: 0.5px;
           margin-top: 2px;
         }
+        .section-title {
+          margin: 4px 0 8px;
+          font-size: 15px;
+        }
         .feedback {
           margin-top: 16px;
           padding: 10px 16px;
@@ -1315,6 +1320,12 @@ class MeshSettingsStorage extends LitElement {
             `)}
           </div>
 
+          <mesh-nodedb-cleanup
+            .wsCommand=${this.wsCommand}
+            @nodedb-cleaned=${() => this._loadStats()}
+          ></mesh-nodedb-cleanup>
+
+          <h4 class="section-title">${PL("Panel data")}</h4>
           <div class="device-actions-grid">
             ${this._actions().map((a) => html`
               <div

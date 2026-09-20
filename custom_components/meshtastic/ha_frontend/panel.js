@@ -450,6 +450,24 @@ class MeshtasticPanel extends LitElement {
           return this._softWs({ type: "meshtastic/sniffer_log", entry_id: entryId, since: data.since || 0 });
         case "sniffer_clear":
           return this._softWs({ type: "meshtastic/sniffer_clear", entry_id: entryId });
+        case "nodedb_status":
+          return this._softWs({ type: "meshtastic/nodedb_status", entry_id: entryId });
+        case "nodedb_preview":
+        case "nodedb_clean":
+          return this._softWs({
+            type: `meshtastic/${name}`,
+            entry_id: entryId,
+            inactive_days: data.inactive_days || 0,
+            kind: data.kind || "all",
+          });
+        case "nodedb_auto_set":
+          return this._softWs({
+            type: "meshtastic/nodedb_auto_set",
+            entry_id: entryId,
+            enabled: Boolean(data.enabled),
+            inactivity_days: data.inactivity_days,
+            interval_days: data.interval_days,
+          });
         default:
           console.warn("MT_SW: nieobsługiwane polecenie ustawień", name);
           return null;
