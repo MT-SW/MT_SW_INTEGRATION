@@ -183,6 +183,7 @@ class PanelStore:
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
         self._mqtt_sniffer = MqttSniffer(hass, lambda: getattr(entry.runtime_data, "client", None))
+        self._mqtt_sniffer_stored: bool | None = None
         # czyszczenie bazy węzłów radia: stan bieżącego zadania (tylko w pamięci) i ustawienia
         # automatyki (na dysku), patrz nodedb_cleanup.py
         self.cleanup = CleanupJob()
@@ -203,6 +204,7 @@ class PanelStore:
         self._traceroutes = data.get("traceroutes", {})
         self._node_history = data.get("node_history", {})
         self.auto_clean = normalize_auto(data.get("auto_clean"))
+        self._mqtt_sniffer_stored = data.get("mqtt_sniffer_enabled")
         # Wcześniejsza wersja zapisywała też pakiety po skokach (pola snrVia/rssiVia);
         # nie mówią nic o łączu z samym węzłem, więc znikają z historii.
         for kinds in self._node_history.values():
@@ -234,10 +236,13 @@ class PanelStore:
             ),
             async_track_time_interval(self._hass, self._auto_clean_tick, AUTO_CLEAN_CHECK_INTERVAL),
         ]
-        mqtt_sniffer_options = self._entry.options.get(CONF_OPTION_MQTT_SNIFFER, {})
-        self.sniffer.mqtt_enabled = mqtt_sniffer_options.get(
-            CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
-        )
+        if self._mqtt_sniffer_stored is not None:
+            self.sniffer.mqtt_enabled = self._mqtt_sniffer_stored
+        else:
+            mqtt_sniffer_options = self._entry.options.get(CONF_OPTION_MQTT_SNIFFER, {})
+            self.sniffer.mqtt_enabled = mqtt_sniffer_options.get(
+                CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
+            )
         if self.sniffer.mqtt_enabled:
             self._mqtt_sniffer.start(self._handle_mqtt_entry)
 
@@ -258,6 +263,7 @@ class PanelStore:
             "traceroutes": self._traceroutes,
             "node_history": self._node_history,
             "auto_clean": self.auto_clean,
+            "mqtt_sniffer_enabled": self.sniffer.mqtt_enabled,
         }
 
     def _schedule_save(self) -> None:
@@ -563,16 +569,13 @@ class PanelStore:
         self.sniffer.add_mqtt_packet(packet, _now_ms(), local_node)
 
     async def async_set_mqtt_sniffer(self, enabled: bool) -> None:
+        """Włącz/wyłącz na żywo z panelu — bez reloadu integracji (radio nie jest ruszane)."""
         self.sniffer.mqtt_enabled = enabled
         if enabled:
             self._mqtt_sniffer.start(self._handle_mqtt_entry)
         else:
             await self._mqtt_sniffer.stop()
-        current = dict(self._entry.options.get(CONF_OPTION_MQTT_SNIFFER, {}))
-        current[CONF_OPTION_MQTT_SNIFFER_ENABLE] = enabled
-        new_options = dict(self._entry.options)
-        new_options[CONF_OPTION_MQTT_SNIFFER] = current
-        self._hass.config_entries.async_update_entry(self._entry, options=new_options)
+        self._schedule_save()
 
     @property
     def mqtt_sniffer_connected(self) -> bool:
