@@ -1143,17 +1143,6 @@ async def ws_sniffer_set(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{WS_PREFIX}/sniffer_log",
-        vol.Required("entry_id"): str,
-        vol.Optional("since", default=0): int,
-        vol.Optional("limit", default=5000): vol.All(int, vol.Range(min=1, max=5000)),
-    }
-)
-@websocket_api.require_admin
-@websocket_api.async_response
-
-@websocket_api.websocket_command(
-    {
         vol.Required("type"): f"{WS_PREFIX}/sniffer_mqtt_set",
         vol.Required("entry_id"): str,
         vol.Required("enabled"): bool,
@@ -1174,6 +1163,17 @@ async def ws_sniffer_mqtt_set(
     await store.async_set_mqtt_sniffer(msg["enabled"])
     connection.send_result(msg["id"], _sniffer_status(store, supported=True))
 
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/sniffer_log",
+        vol.Required("entry_id"): str,
+        vol.Optional("since", default=0): int,
+        vol.Optional("limit", default=5000): vol.All(int, vol.Range(min=1, max=5000)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
 async def ws_sniffer_log(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
