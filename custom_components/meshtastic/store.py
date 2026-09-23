@@ -40,7 +40,7 @@ from .api import (
     EventMeshtasticApiTelemetryType,
 )
 from .aiomeshtastic.protobuf import mesh_pb2
-from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER, CONF_OPTION_MQTT_SNIFFER, CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAUL
+from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER, CONF_OPTION_MQTT_SNIFFER, CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
 from .nodedb_cleanup import DAY_SECONDS, CleanupJob, normalize_auto, select_candidates
 from .sniffer import SnifferLog
 from .mqtt_sniffer import MqttSniffer
