@@ -57,6 +57,44 @@ class MeshImageViewer extends LitElement {
     document.removeEventListener("keydown", this._onKey);
   }
 
+  async _save() {
+    const suggestedName = this.src.split("?")[0].split("/").pop() || "photo.jpg";
+    if (window.showSaveFilePicker) {
+      let handle;
+      try {
+        handle = await window.showSaveFilePicker({ suggestedName });
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+        console.error("Nie udało się otworzyć okienka zapisu", err);
+        return;
+      }
+      try {
+        const response = await fetch(this.src);
+        const blob = await response.blob();
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } catch (err) {
+        console.error("Nie udało się zapisać zdjęcia", err);
+      }
+      return;
+    }
+    try {
+      const response = await fetch(this.src);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = suggestedName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error("Nie udało się zapisać zdjęcia", err);
+    }
+  }
+
   updated(changed) {
     if (changed.has("src")) {
       this._reset();
@@ -135,6 +173,9 @@ class MeshImageViewer extends LitElement {
     return html`
       <div class="backdrop" @click=${this._onBackdrop} @wheel=${this._onWheel}>
         <div class="toolbar">
+          <button class="save" title="Zapisz zdjęcie" @click=${() => this._save()}>
+            <ha-icon icon="mdi:content-save-outline"></ha-icon>
+          </button>
           <a class="original" href=${this.src} target="_blank" rel="noopener noreferrer">
             <ha-icon icon="mdi:open-in-new"></ha-icon>
           </a>
@@ -184,7 +225,8 @@ class MeshImageViewer extends LitElement {
         z-index: 1;
       }
       .close,
-      .original {
+      .original,
+      .save {
         width: 40px;
         height: 40px;
         display: flex;
@@ -197,9 +239,11 @@ class MeshImageViewer extends LitElement {
         font-size: 18px;
         cursor: pointer;
         text-decoration: none;
+        font-family: inherit;
       }
       .close:hover,
-      .original:hover {
+      .original:hover,
+      .save:hover {
         background: rgba(255, 255, 255, 0.3);
       }
     `;

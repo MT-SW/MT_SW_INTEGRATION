@@ -43,6 +43,9 @@ from .const import (
     CONF_OPTION_TCP_PROXY_ENABLE_DEFAULT,
     CONF_OPTION_TCP_PROXY_PORT,
     CONF_OPTION_TCP_PROXY_PORT_DEFAULT,
+    CONF_OPTION_MQTT_SNIFFER,
+    CONF_OPTION_MQTT_SNIFFER_ENABLE,
+    CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT,
     CONF_OPTION_WEB_CLIENT_ENABLE,
     CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT,
     CONF_OPTION_WEB_CLIENT_PORT,
@@ -192,6 +195,18 @@ def _build_meshtastic_tcp_schema(
                 CONF_OPTION_TCP_PROXY_PORT,
                 default=options.get(CONF_OPTION_TCP_PROXY_PORT, CONF_OPTION_TCP_PROXY_PORT_DEFAULT),
             ): cv.positive_int,
+        }
+    )
+
+def _build_mqtt_sniffer_schema(
+    options: dict[str, Any],
+) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_OPTION_MQTT_SNIFFER_ENABLE,
+                default=options.get(CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT),
+            ): cv.boolean,
         }
     )
 
@@ -740,6 +755,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 else:
                     new_data[CONF_OPTION_TCP_PROXY] = user_input[CONF_OPTION_TCP_PROXY]
 
+            if CONF_OPTION_MQTT_SNIFFER in user_input:
+                new_data[CONF_OPTION_MQTT_SNIFFER] = user_input[CONF_OPTION_MQTT_SNIFFER]
+
             if not errors:
                 return self.async_create_entry(
                     title="",
@@ -766,6 +784,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if CONF_OPTION_TCP_PROXY in self.options
             else self.config_entry.options.get(CONF_OPTION_TCP_PROXY, {})
         )
+        mqtt_sniffer_options = (
+            self.options[CONF_OPTION_MQTT_SNIFFER]
+            if CONF_OPTION_MQTT_SNIFFER in self.options
+            else self.config_entry.options.get(CONF_OPTION_MQTT_SNIFFER, {})
+        )
         options_schema = vol.Schema(
             {
                 vol.Required(CONF_OPTION_FILTER_NODES, default=list(selected_nodes.keys())): cv.multi_select(
@@ -784,6 +807,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Required(CONF_OPTION_TCP_PROXY): data_entry_flow.section(
                     _build_meshtastic_tcp_schema(tcp_proxy_options), {"collapsed": "tcp_proxy" in errors}
+                ),
+                vol.Required(CONF_OPTION_MQTT_SNIFFER): data_entry_flow.section(
+                    _build_mqtt_sniffer_schema(mqtt_sniffer_options), {"collapsed": True}
                 ),
             }
         )

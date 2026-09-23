@@ -115,7 +115,9 @@ def describe_payload(port: int | None, payload: bytes) -> str:  # noqa: PLR0911,
     return ""
 
 
-def build_entry(packet: Mapping[str, Any], seq: int, now_ms: int, local_node: int | None) -> dict[str, Any]:
+def build_entry(
+    packet: Mapping[str, Any], seq: int, now_ms: int, local_node: int | None, *, source: str = "radio"
+) -> dict[str, Any]:
     """Zamień pakiet (MessageToDict z API) na wpis logu.
 
     Wpis ma tylko proste typy, więc idzie wprost do JSON-a w panelu i do
@@ -163,6 +165,8 @@ def build_entry(packet: Mapping[str, Any], seq: int, now_ms: int, local_node: in
         "broadcast": destination == BROADCAST,
         "from_us": local_node is not None and sender == local_node,
         "to_us": local_node is not None and destination == local_node,
+        "source": source,
+        "mqtt_channel_name": packet.get("mqtt_channel_name"),
     }
 
 
@@ -180,6 +184,7 @@ class SnifferLog:
         self.capacity = capacity
         self._entries: deque[dict[str, Any]] = deque(maxlen=capacity)
         self._seq = 0
+        self.mqtt_enabled = False
 
     @property
     def last_seq(self) -> int:
@@ -194,6 +199,12 @@ class SnifferLog:
             return
         self._seq += 1
         self._entries.append(build_entry(packet, self._seq, now_ms, local_node))
+
+    def add_mqtt_packet(self, packet: Mapping[str, Any], now_ms: int, local_node: int | None) -> None:
+        if not self.mqtt_enabled:
+            return
+        self._seq += 1
+        self._entries.append(build_entry(packet, self._seq, now_ms, local_node, source="mqtt"))
 
     def entries_since(self, seq: int = 0, limit: int = MAX_ENTRIES) -> list[dict[str, Any]]:
         """Wpisy nowsze niż seq (od najstarszego); przy nadmiarze — najnowsze limit wpisów."""

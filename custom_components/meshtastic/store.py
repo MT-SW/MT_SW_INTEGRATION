@@ -40,9 +40,10 @@ from .api import (
     EventMeshtasticApiTelemetryType,
 )
 from .aiomeshtastic.protobuf import mesh_pb2
-from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER
+from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER, CONF_OPTION_MQTT_SNIFFER, CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAUL
 from .nodedb_cleanup import DAY_SECONDS, CleanupJob, normalize_auto, select_candidates
 from .sniffer import SnifferLog
+from .mqtt_sniffer import MqttSniffer
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -181,6 +182,7 @@ class PanelStore:
         self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
+        self._mqtt_sniffer = MqttSniffer(hass, lambda: getattr(entry.runtime_data, "client", None))
         # czyszczenie bazy węzłów radia: stan bieżącego zadania (tylko w pamięci) i ustawienia
         # automatyki (na dysku), patrz nodedb_cleanup.py
         self.cleanup = CleanupJob()
@@ -232,12 +234,19 @@ class PanelStore:
             ),
             async_track_time_interval(self._hass, self._auto_clean_tick, AUTO_CLEAN_CHECK_INTERVAL),
         ]
+        mqtt_sniffer_options = self._entry.options.get(CONF_OPTION_MQTT_SNIFFER, {})
+        self.sniffer.mqtt_enabled = mqtt_sniffer_options.get(
+            CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
+        )
+        if self.sniffer.mqtt_enabled:
+            self._mqtt_sniffer.start(self._handle_mqtt_entry)
 
     async def async_stop(self) -> None:
         for unsub in self._unsubscribes:
             unsub()
         self._unsubscribes = []
         self._listeners = []
+        await self._mqtt_sniffer.stop()
         # wymuś zapis oczekujących zmian, zanim wpis zniknie
         await self._store.async_save(self._as_dict())
 
@@ -547,6 +556,31 @@ class PanelStore:
         self._remember_status(packet, local_node)
         if self.sniffer.enabled:
             self.sniffer.add_packet(packet, _now_ms(), local_node)
+
+    def _handle_mqtt_entry(self, packet: dict[str, Any]) -> None:
+        gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
+        local_node = gateway_node.get("num")
+        self.sniffer.add_mqtt_packet(packet, _now_ms(), local_node)
+
+    async def async_set_mqtt_sniffer(self, enabled: bool) -> None:
+        self.sniffer.mqtt_enabled = enabled
+        if enabled:
+            self._mqtt_sniffer.start(self._handle_mqtt_entry)
+        else:
+            await self._mqtt_sniffer.stop()
+        current = dict(self._entry.options.get(CONF_OPTION_MQTT_SNIFFER, {}))
+        current[CONF_OPTION_MQTT_SNIFFER_ENABLE] = enabled
+        new_options = dict(self._entry.options)
+        new_options[CONF_OPTION_MQTT_SNIFFER] = current
+        self._hass.config_entries.async_update_entry(self._entry, options=new_options)
+
+    @property
+    def mqtt_sniffer_connected(self) -> bool:
+        return self._mqtt_sniffer.connected
+
+    @property
+    def mqtt_sniffer_error(self) -> str | None:
+        return self._mqtt_sniffer.last_error
 
     def _remember_status(self, packet: dict[str, Any], local_node: int | None) -> None:
         """Wiadomość statusu węzła: moduł Status Message rozgłasza ją pakietem NODE_STATUS_APP.

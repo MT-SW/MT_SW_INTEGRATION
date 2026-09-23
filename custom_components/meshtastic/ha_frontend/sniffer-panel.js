@@ -29,6 +29,7 @@ const PAGE_ROWS = 300;
 const BROADCAST = 0xffffffff;
 
 const CSV_COLUMNS = [
+  "source",
   "time",
   "seq",
   "from",
@@ -91,6 +92,7 @@ class MeshSettingsSniffer extends LitElement {
   constructor() {
     super();
     this._status = null;
+    this._mqttBusy = false;
     this._checking = false;
     this._busy = false;
     this._error = "";
@@ -189,6 +191,19 @@ class MeshSettingsSniffer extends LitElement {
     if (res.enabled !== enabled) {
       this._error = PL("The radio kept the previous sniffer state.");
     }
+    this._pollLog();
+  }
+
+  async _setMqttSniffer(enabled) {
+    this._mqttBusy = true;
+    this._error = "";
+    const res = await this.wsCommand("meshtastic_ui/sniffer_mqtt_set", { enabled });
+    this._mqttBusy = false;
+    if (!res || !res.ok) {
+      this._error = this._errorText(res && res.error);
+      return;
+    }
+    this._status = res;
     this._pollLog();
   }
 
@@ -371,6 +386,32 @@ class MeshSettingsSniffer extends LitElement {
         </div>
         ${this._error ? html`<div class="error">${this._error}</div>` : ""}
       </div>
+
+      <div class="settings-section">
+        <div class="row">
+          <span class="row-label">${PL("MQTT sniffer")}</span>
+          <span>
+            ${this._status && this._status.mqtt_connected
+              ? html`<span class="badge success">${PL("Connected")}</span>`
+              : html`<span class="badge secondary">${PL("Not connected")}</span>`}
+          </span>
+        </div>
+        <div class="note">
+          ${PL("Subscribes directly to the MQTT broker your gateway's MQTT module uses, so it also sees traffic from other gateways on the same broker/channel — not only your own radio. Runs entirely in Home Assistant and keeps its setting across restarts.")}
+        </div>
+        ${this._status && this._status.mqtt_error
+          ? html`<div class="note">${this._status.mqtt_error}</div>`
+          : ""}
+        <div class="buttons">
+          ${this._status && this._status.mqtt_enabled
+            ? html`<button class="btn" ?disabled=${this._mqttBusy} @click=${() => this._setMqttSniffer(false)}>
+                ${PL("Disable MQTT sniffer")}
+              </button>`
+            : html`<button class="btn primary" ?disabled=${this._mqttBusy} @click=${() => this._setMqttSniffer(true)}>
+                ${PL("Enable MQTT sniffer")}
+              </button>`}
+        </div>
+      </div>
     `;
   }
 
@@ -391,7 +432,8 @@ class MeshSettingsSniffer extends LitElement {
     return html`
       <div class="details">
         <div><span class="k">${PL("Packet ID")}</span> ${entry.id ?? "—"}</div>
-        <div><span class="k">${PL("Channel")}</span> ${entry.channel ?? "—"}</div>
+        <div><span class="k">${PL("Channel")}</span> ${entry.mqtt_channel_name || entry.channel || "—"}</div>
+        <div><span class="k">${PL("Source")}</span> ${entry.source === "mqtt" ? "MQTT" : PL("Radio")}</div>
         <div><span class="k">${PL("Hop limit / start")}</span> ${hops}</div>
         <div><span class="k">${PL("Relay")}</span> ${relay}</div>
         <div><span class="k">${PL("Flags")}</span> ${flags.length ? flags.join(", ") : "—"}</div>
@@ -444,6 +486,7 @@ class MeshSettingsSniffer extends LitElement {
                       <th>${PL("Time")}</th>
                       <th>${PL("From")}</th>
                       <th>${PL("To")}</th>
+                      <th>${PL("Source")}</th>
                       <th>${PL("Port")}</th>
                       <th>${PL("Info")}</th>
                       <th>${PL("Signal")}</th>
@@ -457,6 +500,7 @@ class MeshSettingsSniffer extends LitElement {
                           <td class="time">${this._time(entry.ts)}</td>
                           <td>${this._label(entry.from)}</td>
                           <td>${this._label(entry.to)}</td>
+                          <td>${entry.source === "mqtt" ? "MQTT" : PL("Radio")}</td>
                           <td title=${entry.port}>${this._portText(entry)}</td>
                           <td class="info">${entry.info || (entry.encrypted ? PL("Encrypted") : "")}</td>
                           <td>${this._signal(entry)}</td>

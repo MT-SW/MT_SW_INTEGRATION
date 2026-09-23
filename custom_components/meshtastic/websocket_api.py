@@ -999,6 +999,9 @@ def _sniffer_status(store: Any, *, supported: bool, reason: str | None = None) -
         "count": log.count,
         "capacity": log.capacity,
         "last_seq": log.last_seq,
+        "mqtt_enabled": log.mqtt_enabled,
+        "mqtt_connected": store.mqtt_sniffer_connected,
+        "mqtt_error": store.mqtt_sniffer_error,
     }
 
 
@@ -1148,6 +1151,29 @@ async def ws_sniffer_set(
 )
 @websocket_api.require_admin
 @websocket_api.async_response
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/sniffer_mqtt_set",
+        vol.Required("entry_id"): str,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_sniffer_mqtt_set(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    entry = _entry_by_id(hass, msg["entry_id"])
+    store = get_store(msg["entry_id"])
+    if entry is None or store is None:
+        connection.send_error(msg["id"], "not_found", "Bramka nie jest jeszcze gotowa")
+        return
+    await store.async_set_mqtt_sniffer(msg["enabled"])
+    connection.send_result(msg["id"], _sniffer_status(store, supported=True))
+
 async def ws_sniffer_log(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
@@ -1164,6 +1190,7 @@ async def ws_sniffer_log(
             "entries": store.sniffer.entries_since(msg["since"], msg["limit"]),
             "last_seq": store.sniffer.last_seq,
             "enabled": store.sniffer.enabled,
+            "mqtt_enabled": store.sniffer.mqtt_enabled,
             "count": store.sniffer.count,
             "capacity": store.sniffer.capacity,
         },
@@ -1492,6 +1519,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_capabilities,
         ws_sniffer_state,
         ws_sniffer_set,
+        ws_sniffer_mqtt_set,
         ws_sniffer_log,
         ws_sniffer_clear,
         ws_storage_stats,

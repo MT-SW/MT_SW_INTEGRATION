@@ -609,6 +609,15 @@ const PL_STRINGS = {
   "Network name": "Nazwa sieci",
 
   /* ── Sniffer ── */
+    "MQTT sniffer": "Sniffer MQTT",
+  "Connected": "Połączony",
+  "Not connected": "Niepołączony",
+  "Subscribes directly to the MQTT broker your gateway's MQTT module uses, so it also sees traffic from other gateways on the same broker/channel — not only your own radio. Runs entirely in Home Assistant and keeps its setting across restarts.":
+    "Łączy się bezpośrednio z brokerem MQTT, którego używa moduł MQTT Twojej bramki, więc widzi też ruch innych bram na tym samym brokerze/kanale — nie tylko Twoje własne radio. Działa w całości po stronie Home Assistant i pamięta ustawienie po restarcie.",
+  "Enable MQTT sniffer": "Włącz sniffer MQTT",
+  "Disable MQTT sniffer": "Wyłącz sniffer MQTT",
+  "Source": "Źródło",
+  "Radio": "Radio",
   "The sniffer works only on the radio connected to Home Assistant. Its state lives in the radio's RAM, so it is always off after a reboot.": "Sniffer działa tylko na radiu podłączonym do Home Assistant. Jego stan jest w pamięci RAM radia, więc po restarcie zawsze jest wyłączony.",
   "Firmware support": "Wsparcie w firmware",
   "Sniffer state": "Tryb sniffera",
