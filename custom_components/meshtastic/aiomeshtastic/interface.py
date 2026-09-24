@@ -1241,8 +1241,46 @@ class MeshInterface:
         if node is None:
             await self._connected_node_ready.wait()
             node = self._connected_node_info.my_node_num
-        result = await self.send_admin_message(node, admin_message, ack=True)
-        removed = result is not None
+        # Czekamy WYŁĄCZNIE na ACK (want_response=False). Wcześniej szło to
+        # przez send_admin_message(ack=True), które ustawiało też
+        # want_response=True — a firmware na remove_by_nodenum nie odsyła
+        # żadnej odpowiedzi AdminMessage, tylko routing NO_RESPONSE. Wywołanie
+        # czekało więc bez końca na odpowiedź, która nigdy nie przychodzi:
+        # panel wisiał, a węzeł zostawał na liście, mimo że radio zdążyło go
+        # już usunąć.
+        try:
+            ack = await asyncio.wait_for(
+                self._connection.send_mesh_packet(
+                    channel_index=self._get_admin_channel_index(node=node),
+                    to_node=node,
+                    message=admin_message,
+                    port_num=portnums_pb2.PortNum.ADMIN_APP,
+                    priority=MeshPacket.Priority.RELIABLE,
+                    want_response=False,
+                    ack=True,
+                ),
+                timeout=15,
+            )
+        except TimeoutError:
+            self._logger.info("No ACK from the radio for removing node %d within 15 s", node_num_to_remove)
+            return False
+
+        removed = False
+        if ack is not None:
+            routing = ack.app_payload
+            error = (
+                routing.error_reason
+                if routing is not None and routing.HasField("error_reason")
+                else mesh_pb2.Routing.Error.NONE
+            )
+            if error == mesh_pb2.Routing.Error.NONE:
+                removed = True
+            else:
+                self._logger.warning(
+                    "Radio rejected removing node %d: %s",
+                    node_num_to_remove,
+                    mesh_pb2.Routing.Error.Name(error),
+                )
         if removed:
             # The device only confirmed removing this from its own on-device
             # database — our local _node_database (built up client-side from
