@@ -25,7 +25,6 @@ from homeassistant.const import (
     LIGHT_LUX,
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS,
-    UnitOfDensity,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfInformation,
@@ -35,6 +34,16 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfVolumetricFlux,
 )
+
+# UnitOfDensity istnieje dopiero w nowszym HA — na starszym (min. 2024.11 wg
+# hacs.json) sam import wywracał całą platformę sensor. Samo zakomentowanie
+# nie wystarczy, bo niżej jest używana przy czujnikach jakości powietrza.
+try:
+    from homeassistant.const import UnitOfDensity
+
+    MICROGRAMS_PER_CUBIC_METER = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
+except ImportError:
+    from homeassistant.const import CONCENTRATION_MICROGRAMS_PER_CUBIC_METER as MICROGRAMS_PER_CUBIC_METER
 
 from . import LOGGER, helpers
 from .entity import MeshtasticNodeEntity
@@ -1035,20 +1044,20 @@ def _build_air_quality_metrics_sensors(
         for node_id, node_info in nodes_with_environment_metrics.items():
             add_sensor = partial(add_sensor_base, node_id, node_info)
 
-            add_sensor("pm10Standard", SensorDeviceClass.PM10, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("pm25Standard", SensorDeviceClass.PM25, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("pm100Standard", None, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm10Standard", SensorDeviceClass.PM10, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm25Standard", SensorDeviceClass.PM25, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm100Standard", None, MICROGRAMS_PER_CUBIC_METER)
 
-            add_sensor("pm10Environmental", SensorDeviceClass.PM10, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("pm25Environmental", SensorDeviceClass.PM25, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("pm100Environmental", None, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm10Environmental", SensorDeviceClass.PM10, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm25Environmental", SensorDeviceClass.PM25, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("pm100Environmental", None, MICROGRAMS_PER_CUBIC_METER)
 
-            add_sensor("particles03um", None, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("particles05um", None, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("particles10um", SensorDeviceClass.PM10, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("particles25um", SensorDeviceClass.PM25, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("particles50um", None, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
-            add_sensor("particles100um", None, UnitOfDensity.MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles03um", None, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles05um", None, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles10um", SensorDeviceClass.PM10, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles25um", SensorDeviceClass.PM25, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles50um", None, MICROGRAMS_PER_CUBIC_METER)
+            add_sensor("particles100um", None, MICROGRAMS_PER_CUBIC_METER)
     except:  # noqa: E722
         LOGGER.warning("Failed to create air quality metric entities", exc_info=True)
 

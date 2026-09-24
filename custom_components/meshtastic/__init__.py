@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import datetime
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, cast
 
-from homeassistant import config_entries
 from homeassistant.components.logbook import DOMAIN as LOGBOOK_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
@@ -33,6 +33,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceConnectionCollisionError
 from homeassistant.helpers.entity_component import EntityComponent
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.typing import UNDEFINED, ConfigType
 from homeassistant.loader import async_get_loaded_integration
@@ -71,7 +72,13 @@ from .entity import (
     GatewayEntity,
     MeshtasticEntity,
 )
-from .helpers import async_prune_stale_node_entities, fetch_meshtastic_hardware_names, node_identity_key
+from .helpers import (
+    async_prune_stale_node_entities,
+    device_by_connection,
+    device_by_identifier,
+    fetch_meshtastic_hardware_names,
+    node_identity_key,
+)
 from .image_upload import async_register_upload_view
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
@@ -214,39 +221,56 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
 ) -> bool:
-    _migrate_sensor_display_options(hass, entry)
+    """
+    Start wpisu w trzech niezależnych warstwach.
 
-    coordinator = MeshtasticDataUpdateCoordinator(hass=hass)
-    if coordinator.config_entry is None:
-        coordinator.config_entry = entry
+    1. Transport — połączenie z radiem. Jedyna rzecz, bez której nic nie ma
+       sensu; jej porażka to ConfigEntryNotReady (HA ponowi próbę sam).
+    2. Aplikacja — panel, wiadomości, usługi, proxy TCP, klient WWW. Nie
+       zależy od koordynatora ani rejestru urządzeń.
+    3. Statystyki — koordynator, urządzenia i encje HA. Błąd tutaj (np. kolizja
+       w rejestrze urządzeń po utracie bazy w radiu) jest logowany i ponawiany
+       w tle, ale NIE zatrzymuje startu wpisu ani panelu.
 
+    Wcześniej wszystko szło jednym ciągiem: wyjątek przy tworzeniu jednego
+    urządzenia kończył cały start błędem, zostawiając załadowane platformy
+    ("has already been setup!" przy każdej kolejnej próbie) i niezamknięte
+    połączenie z radiem, które walczyło o jedyne miejsce TCP z nową próbą.
+    """
+    try:
+        _migrate_sensor_display_options(hass, entry)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Failed migrating sensor display options", exc_info=True)
+
+    # --- 1. transport ------------------------------------------------------
     client = MeshtasticApiClient(entry.data, hass=hass, config_entry_id=entry.entry_id)
 
     try:
         await client.connect()
     except Exception as e:
+        with contextlib.suppress(Exception):
+            await client.disconnect()
         raise ConfigEntryNotReady from e
 
     gateway_node = await client.async_get_own_node()
     if "num" not in gateway_node:
         # connected_node_ready() can flip true slightly before the separate listener that
-        # populates our own node's info catches up with the same packet stream (a real race
-        # under rapid reconnects, e.g. right at startup, or right after an options-triggered
-        # reload). Give it a few seconds to catch up before giving up — resolves the common
-        # case within this same setup attempt instead of always bouncing out to HA's slower
-        # ConfigEntryNotReady retry/backoff.
+        # populates our own node's info catches up with the same packet stream. Give it a
+        # few seconds before bouncing out to HA's slower retry/backoff.
         for _ in range(10):
             await asyncio.sleep(0.5)
             gateway_node = await client.async_get_own_node()
             if "num" in gateway_node:
                 break
         else:
-            try:
+            with contextlib.suppress(Exception):
                 await client.disconnect()
-            except Exception:  # noqa: BLE001
-                pass
             msg = "Connected, but the gateway node's own info is not available yet"
             raise ConfigEntryNotReady(msg)
+
+    coordinator = MeshtasticDataUpdateCoordinator(hass=hass)
+    if coordinator.config_entry is None:
+        coordinator.config_entry = entry
 
     entry.runtime_data = MeshtasticData(
         client=client,
@@ -255,50 +279,178 @@ async def async_setup_entry(
         gateway_node=gateway_node,
     )
 
-    # Start the TCP proxy as early as possible — it only needs entry.runtime_data
-    # (set just above), not the rest of this function. Other integrations connecting
-    # through it (e.g. a second HA integration sharing this node) shouldn't have to
-    # wait for platform/entity/device/service setup to finish before the port opens.
+    # --- 2. aplikacja ------------------------------------------------------
+    try:
+        await _async_setup_app_layer(hass, entry)
+    except Exception as err:
+        # Tu trafiają tylko błędy, po których wpis naprawdę nie ma jak działać
+        # (np. magazyn panelu). Sprzątamy wszystko, co zdążyło wstać, zanim HA
+        # spróbuje ponownie — żeby nie zostawić połączenia z radiem.
+        LOGGER.exception("Application layer setup failed")
+        await _async_teardown(hass, entry)
+        raise ConfigEntryNotReady(str(err)) from err
+
+    _last_non_filter_options[entry.entry_id] = _non_filter_options(entry)
+
+    # --- 3. statystyki (nigdy nie przerywa startu) ---------------------------
+    try:
+        await _async_setup_stats_layer(hass, entry)
+    except Exception:  # noqa: BLE001
+        LOGGER.exception("Statistics layer setup failed — the panel keeps working")
+        entry.runtime_data.stats.error = entry.runtime_data.stats.error or "setup"
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    return True
+
+
+async def _async_run_step(entry: MeshtasticConfigEntry, name: str, coro: Awaitable[Any]) -> bool:
+    """Wykonaj jeden niekrytyczny krok startu — porażka jest logowana, nie przerywa reszty."""
+    try:
+        await coro
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Setup step '%s' failed for %s — continuing without it", name, entry.title, exc_info=True)
+        return False
+    return True
+
+
+async def _async_setup_app_layer(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """Panel, wiadomości, usługi, proxy — wszystko, co potrzebuje tylko połączenia z radiem."""
+    data = entry.runtime_data
+
+    # Proxy TCP jak najwcześniej — inne klienty nie muszą czekać na resztę startu.
     if entry.options.get(CONF_OPTION_TCP_PROXY, {}).get(
         CONF_OPTION_TCP_PROXY_ENABLE, CONF_OPTION_TCP_PROXY_ENABLE_DEFAULT
     ):
-        await async_setup_tcp_proxy(hass, entry)
+        await _async_run_step(entry, "tcp proxy", async_setup_tcp_proxy(hass, entry))
 
-    if entry.state == ConfigEntryState.SETUP_IN_PROGRESS:
-        await coordinator.async_config_entry_first_refresh()
+    # Magazyn panelu (historia wiadomości, zapamiętane statystyki węzłów).
+    # Jego błąd wyłącza tylko historię w panelu — nie blokuje statystyk HA
+    # ani reszty panelu (komendy WS obsługują brak magazynu).
+    await _async_run_step(entry, "panel store", async_setup_store(hass, entry))
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    await _async_run_step(entry, "services", services.async_register_gateway(hass, entry))
 
-    await async_setup_store(hass, entry)
-
-    await _setup_meshtastic_devices(hass, entry, client)
-    await _setup_meshtastic_entities(hass, entry, client)
-
-    cancel_device_name_sync = _setup_device_name_sync(hass, entry)
-    _remove_listeners[entry.entry_id].append(cancel_device_name_sync)
-
-    await services.async_register_gateway(hass, entry)
-
-    # listeners
-    cancel_message_logger = await async_setup_message_logger(hass, entry)
-    _remove_listeners[entry.entry_id].append(cancel_message_logger)
+    try:
+        cancel_message_logger = await async_setup_message_logger(hass, entry)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Setup step 'message logger' failed for %s", entry.title, exc_info=True)
+    else:
+        _remove_listeners[entry.entry_id].append(cancel_message_logger)
 
     if entry.options.get(CONF_OPTION_WEB_CLIENT, {}).get(
         CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT
     ):
-        await async_setup_meshtastic_web(hass)
-        await meshtastic_web.async_setup_web_proxy_server(hass, entry)
+        await _async_run_step(entry, "web client", async_setup_meshtastic_web(hass))
+        await _async_run_step(entry, "web client proxy", meshtastic_web.async_setup_web_proxy_server(hass, entry))
 
-    _last_non_filter_options[entry.entry_id] = _non_filter_options(entry)
+    # Po każdym ponownym połączeniu z radiem odśwież dane koordynatora —
+    # zamiast czekać do godzinnego cyklu.
+    @callback
+    def _on_link_state(state: str) -> None:
+        if state == "connected" and entry.state is ConfigEntryState.LOADED:
+            hass.async_create_background_task(
+                data.coordinator.async_request_refresh(), name=f"{DOMAIN}-refresh-after-reconnect"
+            )
 
-    return True
+    data.app_unsubscribers.append(data.client.add_connection_state_listener(_on_link_state))
+
+
+async def _async_setup_stats_layer(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """Koordynator + urządzenia + encje HA. Błędy są logowane i ponawiane w tle."""
+    data = entry.runtime_data
+    stats = data.stats
+
+    # async_refresh (nie async_config_entry_first_refresh) — nieudane pierwsze
+    # odświeżenie nie może wywrócić startu; koordynator spróbuje ponownie sam.
+    await _async_run_step(entry, "first data refresh", data.coordinator.async_refresh())
+
+    await _async_build_stats(hass, entry)
+
+    stats.platforms_forwarded = True
+    if not await _async_run_step(
+        entry, "entity platforms", hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    ):
+        stats.error = stats.error or "platforms"
+
+    try:
+        stats.unsubscribers.append(_setup_device_name_sync(hass, entry))
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Device name sync setup failed", exc_info=True)
+
+
+_STATS_RETRY_MIN_SECONDS = 60
+_STATS_RETRY_MAX_SECONDS = 900
+
+
+async def _async_build_stats(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """Zbuduj urządzenia i encje bramki; przy porażce zaplanuj kolejną próbę."""
+    data = getattr(entry, "runtime_data", None)
+    if data is None:
+        return
+    stats = data.stats
+    if stats.cancel_retry is not None:
+        with contextlib.suppress(Exception):
+            stats.cancel_retry()
+        stats.cancel_retry = None
+    stats.attempts += 1
+    errors: list[str] = []
+
+    try:
+        failed_nodes = await _setup_meshtastic_devices(hass, entry, data.client)
+        if failed_nodes:
+            errors.append(f"devices: {', '.join(str(n) for n in failed_nodes)}")
+    except Exception as err:  # noqa: BLE001
+        LOGGER.warning("Building devices failed", exc_info=True)
+        errors.append(f"devices: {err}")
+
+    if not stats.gateway_entities_added:
+        try:
+            await _setup_meshtastic_entities(hass, entry, data.client)
+            stats.gateway_entities_added = True
+        except Exception as err:  # noqa: BLE001
+            LOGGER.warning("Building gateway entities failed", exc_info=True)
+            errors.append(f"gateway entities: {err}")
+
+    if not errors:
+        if stats.error:
+            LOGGER.info("Statistics layer for %s recovered after %d attempt(s)", entry.title, stats.attempts)
+        stats.error = None
+        stats.ready = True
+        stats.attempts = 0
+        return
+
+    stats.error = "; ".join(errors)
+    delay = min(_STATS_RETRY_MIN_SECONDS * 2 ** max(stats.attempts - 1, 0), _STATS_RETRY_MAX_SECONDS)
+    LOGGER.warning(
+        "Statistics layer for %s is incomplete (%s) — the panel keeps working, retrying in %d s",
+        entry.title,
+        stats.error,
+        delay,
+    )
+
+    @callback
+    def _retry(_now: Any) -> None:
+        stats.cancel_retry = None
+        if entry.state is ConfigEntryState.LOADED:
+            hass.async_create_background_task(_async_build_stats(hass, entry), name=f"{DOMAIN}-stats-retry")
+
+    stats.cancel_retry = async_call_later(hass, delay, _retry)
 
 
 async def _setup_meshtastic_devices(
     hass: HomeAssistant, entry: MeshtasticConfigEntry, client: MeshtasticApiClient
-) -> None:
+) -> list[int]:
+    """
+    Utwórz/uaktualnij urządzenia dla śledzonych węzłów.
+
+    Każdy węzeł osobno — błąd jednego (np. kolizja identyfikatorów w
+    rejestrze) nie blokuje pozostałych. Zwraca listę węzłów, których nie
+    udało się zbudować (pusta = wszystko w porządku).
+    """
+    failed: list[int] = []
     gateway_node = await client.async_get_own_node()
+    if "num" not in gateway_node:
+        gateway_node = entry.runtime_data.gateway_node or {}
     coordinator = entry.runtime_data.coordinator
     nodes = coordinator.data or {}
     device_registry = dr.async_get(hass)
@@ -310,16 +462,26 @@ async def _setup_meshtastic_devices(
     # node already exists in the registry (and has recorded connections) before
     # pass 2 tries to link via_device or compute the closest gateway
     for node_id, node in nodes.items():
-        await _setup_meshtastic_device(
-            client, device_hardware_names, device_registry, entry, gateway_node, node, node_id,
-            ignore_via_device=True,
-        )
+        try:
+            await _setup_meshtastic_device(
+                client, device_hardware_names, device_registry, entry, gateway_node, node, node_id,
+                ignore_via_device=True,
+            )
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Could not create device for node %s", node_id, exc_info=True)
+            failed.append(node_id)
 
     # pass 2: now link via_device / closest-gateway, all targets already exist
     for node_id, node in nodes.items():
-        await _setup_meshtastic_device(
-            client, device_hardware_names, device_registry, entry, gateway_node, node, node_id
-        )
+        if node_id in failed:
+            continue
+        try:
+            await _setup_meshtastic_device(
+                client, device_hardware_names, device_registry, entry, gateway_node, node, node_id
+            )
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Could not link device for node %s", node_id, exc_info=True)
+            failed.append(node_id)
 
     # remove devices for nodes no longer in the filter, based on what is
     # actually registered for this config entry — not just nodes that
@@ -339,9 +501,12 @@ async def _setup_meshtastic_devices(
             configured_identity_keys
         )
         if (legacy_node_ids or identity_keys) and not still_tracked:
-            await _remove_meshtastic_device(device_registry, entry, device)
+            try:
+                await _remove_meshtastic_device(device_registry, entry, device)
+            except Exception:  # noqa: BLE001
+                LOGGER.warning("Could not remove stale device %s", device.id, exc_info=True)
 
-    return gateway_node
+    return failed
 
 
 def _legacy_node_ids_from_device(device: dr.DeviceEntry) -> set[int]:
@@ -425,7 +590,7 @@ def _setup_device_name_sync(hass: HomeAssistant, entry: MeshtasticConfigEntry) -
             return
 
         device_registry = dr.async_get(hass)
-        device = device_registry.async_get_device_by_identifier((DOMAIN, str(node_id)), entry.entry_id)
+        device = device_by_identifier(device_registry, (DOMAIN, str(node_id)), entry.entry_id)
         if device is not None and device.name != new_name:
             device_registry.async_update_device(device.id, name=new_name)
 
@@ -440,6 +605,55 @@ async def _remove_meshtastic_device(
         device_registry.async_remove_device(device.id)
     else:
         device_registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
+
+
+def _is_other_identity(device: dr.DeviceEntry, identity_key: str) -> bool:
+    """Czy urządzenie ma już klucz publiczny INNY niż podana tożsamość."""
+    if not identity_key.startswith("pk_"):
+        return False
+    device_keys = {i for d, i in device.identifiers if d == DOMAIN and i.startswith("pk_")}
+    return bool(device_keys) and identity_key not in device_keys
+
+
+def _release_identifiers(
+    device_registry: DeviceRegistry,
+    entry: MeshtasticConfigEntry,
+    identifiers: set[tuple[str, str]],
+    *,
+    keep_device_id: str | None,
+    node_id: int,
+) -> None:
+    """Odbierz podane identyfikatory wszystkim urządzeniom wpisu poza keep_device_id."""
+    handled: set[str] = set()
+    for identifier in identifiers:
+        owner = device_by_identifier(device_registry, identifier, entry.entry_id)
+        if owner is None or owner.id == keep_device_id or owner.id in handled:
+            continue
+        handled.add(owner.id)
+        remaining = {i for i in owner.identifiers if i not in identifiers}
+        if not any(d == DOMAIN for d, _ in remaining):
+            # Nic własnego mu nie zostaje — to był tylko tymczasowy duplikat
+            # tego samego węzła. Encje przepną się same przy najbliższym
+            # dodaniu (device_info), a urządzenie docelowe przejmie nazwę.
+            LOGGER.info(
+                "Removing duplicate device %s (%s) — its identifiers belong to node %s",
+                owner.id,
+                owner.name,
+                node_id,
+            )
+            if owner.config_entries == {entry.entry_id}:
+                device_registry.async_remove_device(owner.id)
+            else:
+                device_registry.async_update_device(owner.id, remove_config_entry_id=entry.entry_id)
+            continue
+        LOGGER.info(
+            "Moving identifiers %s of node %s away from device %s (%s)",
+            sorted(i for _, i in owner.identifiers & identifiers),
+            node_id,
+            owner.id,
+            owner.name,
+        )
+        device_registry.async_update_device(owner.id, new_identifiers=remaining)
 
 
 async def _setup_meshtastic_device(  # noqa: PLR0913
@@ -469,10 +683,16 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     # first time (e.g. right after a firmware update that enables it),
     # since in that case the old device has neither the new identity_key
     # nor the new node number recorded yet
-    existing_device = device_registry.async_get_device_by_identifier((DOMAIN, identity_key), entry.entry_id)
+    existing_device = device_by_identifier(device_registry, (DOMAIN, identity_key), entry.entry_id)
     existing_device_is_same_identity = existing_device is not None
     if existing_device is None:
-        existing_device = device_registry.async_get_device_by_identifier((DOMAIN, str(node_id)), entry.entry_id)
+        by_num = device_by_identifier(device_registry, (DOMAIN, str(node_id)), entry.entry_id)
+        if by_num is not None and _is_other_identity(by_num, identity_key):
+            # ten sam numer, ale urządzenie należy do INNEGO klucza publicznego
+            # (np. węzeł po regeneracji klucza) — nie sklejamy tożsamości; numer
+            # zostanie mu odebrany niżej w _release_identifiers()
+            by_num = None
+        existing_device = by_num
         existing_device_is_same_identity = existing_device is not None
     if existing_device is None and mac_address:
         # MAC-only match: ten sam fizyczny sprzęt, ale NIE wiadomo czy to ta sama
@@ -480,7 +700,7 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
         # radiu). Nadal przydatne niżej do via_device/connections, ale nie wolno
         # z niego dziedziczyć starych identyfikatorów — inaczej zregenerowany
         # węzeł zlewa się na stałe z poprzednikiem i nigdy nie da się go usunąć.
-        existing_device = device_registry.async_get_device_by_connection(
+        existing_device = device_by_connection(device_registry, 
             (dr.CONNECTION_NETWORK_MAC, mac_address), entry.entry_id
          )
         existing_device_is_same_identity = False
@@ -539,23 +759,46 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
     if existing_device is not None and existing_device_is_same_identity:
         identifiers |= {(d, i) for d, i in existing_device.identifiers if d == DOMAIN}
 
+    # Żaden INNY wpis urządzenia nie może trzymać identyfikatora, który za
+    # chwilę przypiszemy temu węzłowi — nowszy rejestr urządzeń HA zamiast
+    # scalać rzuca wtedy DeviceInfoError. Zdarza się to np. po utracie bazy
+    # w radiu: węzeł wraca najpierw bez klucza publicznego (powstaje osobne
+    # urządzenie z samym numerem), a po chwili z kluczem, który ma już stare
+    # urządzenie. Właścicielem zostaje urządzenie dopasowane po tożsamości.
+    _release_identifiers(
+        device_registry,
+        entry,
+        identifiers,
+        keep_device_id=existing_device.id if existing_device is not None and existing_device_is_same_identity else None,
+        node_id=node_id,
+    )
+
     via_device_id = None
     if via_device is not None:
-        via_device_entry = device_registry.async_get_device_by_identifier(via_device, entry.entry_id)
+        via_device_entry = device_by_identifier(device_registry, via_device, entry.entry_id)
         via_device_id = via_device_entry.id if via_device_entry else None
 
-    d = device_registry.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers=identifiers,
-        name=node["user"]["longName"],
-        model=device_hardware_names.get(node["user"]["hwModel"], None),
-        model_id=str(node["user"]["hwModel"]),
-        serial_number=node["user"]["id"],
-        via_device_id=via_device_id,
-        sw_version=client.metadata.get("firmwareVersion")
+    device_kwargs = {
+        "config_entry_id": entry.entry_id,
+        "name": node["user"]["longName"],
+        "model": device_hardware_names.get(node["user"]["hwModel"], None),
+        "model_id": str(node["user"]["hwModel"]),
+        "serial_number": node["user"]["id"],
+        "via_device_id": via_device_id,
+        "sw_version": client.metadata.get("firmwareVersion")
         if gateway_node["num"] == node_id and client.metadata
         else None,
-    )
+    }
+    try:
+        d = device_registry.async_get_or_create(identifiers=identifiers, **device_kwargs)
+    except Exception:  # noqa: BLE001
+        # ostatnia deska ratunku: sama stabilna tożsamość, bez dziedziczonych numerów
+        LOGGER.info(
+            "Device registry rejected merged identifiers for node %s, retrying with identity only",
+            node_id,
+            exc_info=True,
+        )
+        d = device_registry.async_get_or_create(identifiers={(DOMAIN, identity_key)}, **device_kwargs)
     try:
         device_registry.async_update_device(
             d.id,
@@ -644,62 +887,83 @@ async def async_unload_entry(
     hass: HomeAssistant,
     entry: MeshtasticConfigEntry,
 ) -> bool:
-    # ensure that we disconnect first to prevent later issues with duplicate connection in case of errors
-    try:
-        if entry.runtime_data and entry.runtime_data.client:
-            await entry.runtime_data.client.disconnect()
-    except:  # noqa: E722
-        LOGGER.warning("Failed to disconnect client during unload of entry", exc_info=True)
-
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        for entity in [
-            e for e in hass.data[DATA_COMPONENT].entities if e.registry_entry.config_entry_id == entry.entry_id
-        ]:
-            await hass.data[DATA_COMPONENT].async_remove_entity(entity.entity_id)
-
-        await async_unload_store(entry.entry_id)
-        await services.async_unregister_gateway(hass, entry)
-
-        for remove_listener in _remove_listeners.pop(entry.entry_id, []):
-            remove_listener()
-
-        _last_non_filter_options.pop(entry.entry_id, None)
-
-        active_entries = hass.config_entries.async_entries(DOMAIN, include_ignore=False, include_disabled=False)
-        any_web_client_enabled = any(
-            e.options.get(CONF_OPTION_WEB_CLIENT, {}).get(
-                CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT
-            )
-            for e in active_entries
-        )
-
-        if not any_web_client_enabled:
-            await async_unload_meshtastic_web(hass)
-
-        await meshtastic_web.async_unload_web_proxy_server(hass, entry)
-        await async_unload_tcp_proxy(hass, entry)
-
+    data = getattr(entry, "runtime_data", None)
+    unload_ok = True
+    if data is not None and data.stats.platforms_forwarded:
+        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    await _async_teardown(hass, entry)
     return unload_ok
 
 
-_reload_lock = asyncio.Lock()
+async def _async_teardown(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:
+    """
+    Posprzątaj wszystko, co wpis mógł uruchomić — każdy krok osobno.
 
+    Wołane przy zwykłym wyładowaniu i przy nieudanym starcie. Połączenie z
+    radiem zamykamy na początku, żeby nowa próba nie walczyła ze starym
+    gniazdem o jedyne miejsce TCP w urządzeniu.
+    """
+    data = getattr(entry, "runtime_data", None)
 
-async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: MeshtasticConfigEntry,
-) -> None:
-    async with _reload_lock:
-        token = None
-        if config_entries.current_entry.get() is None:
-            token = config_entries.current_entry.set(entry)
+    if data is not None:
+        with contextlib.suppress(Exception):
+            if data.stats.cancel_retry is not None:
+                data.stats.cancel_retry()
+                data.stats.cancel_retry = None
+        for unsubscribe in [*data.app_unsubscribers, *data.stats.unsubscribers]:
+            with contextlib.suppress(Exception):
+                unsubscribe()
+        data.app_unsubscribers.clear()
+        data.stats.unsubscribers.clear()
+
         try:
-            await async_unload_entry(hass, entry)
-            await async_setup_entry(hass, entry)
-        finally:
-            if token:
-                config_entries.current_entry.reset(token)
+            await data.client.disconnect()
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Failed to disconnect client during unload of entry", exc_info=True)
+
+        with contextlib.suppress(Exception):
+            await data.coordinator.async_shutdown()
+
+    component = hass.data.get(DATA_COMPONENT)
+    if component is not None:
+        for entity in list(component.entities):
+            registry_entry = getattr(entity, "registry_entry", None)
+            if registry_entry is not None and registry_entry.config_entry_id == entry.entry_id:
+                with contextlib.suppress(Exception):
+                    await component.async_remove_entity(entity.entity_id)
+
+    for name, step in (
+        ("store", lambda: async_unload_store(entry.entry_id)),
+        ("services", lambda: services.async_unregister_gateway(hass, entry)),
+        ("web client proxy", lambda: meshtastic_web.async_unload_web_proxy_server(hass, entry)),
+        ("tcp proxy", lambda: async_unload_tcp_proxy(hass, entry)),
+    ):
+        try:
+            await step()
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("Unload step '%s' failed", name, exc_info=True)
+
+    for remove_listener in _remove_listeners.pop(entry.entry_id, []):
+        with contextlib.suppress(Exception):
+            remove_listener()
+
+    _last_non_filter_options.pop(entry.entry_id, None)
+
+    active_entries = [
+        e
+        for e in hass.config_entries.async_entries(DOMAIN, include_ignore=False, include_disabled=False)
+        if e.entry_id != entry.entry_id
+    ]
+    any_web_client_enabled = any(
+        e.options.get(CONF_OPTION_WEB_CLIENT, {}).get(CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT)
+        for e in active_entries
+    )
+    if not any_web_client_enabled:
+        with contextlib.suppress(Exception):
+            await async_unload_meshtastic_web(hass)
+
+
+_filter_lock = asyncio.Lock()
 
 
 def _non_filter_options(entry: MeshtasticConfigEntry) -> dict[str, Any]:
@@ -719,10 +983,10 @@ async def _async_apply_node_filter_change(hass: HomeAssistant, entry: Meshtastic
     filter — both of those already exist as idempotent, re-runnable
     functions used at normal setup time.
     """
-    async with _reload_lock:
+    async with _filter_lock:
         coordinator = entry.runtime_data.coordinator
         await coordinator.async_request_refresh()
-        await _setup_meshtastic_devices(hass, entry, entry.runtime_data.client)
+        await _async_build_stats(hass, entry)
         await async_prune_stale_node_entities(hass, entry)
 
 
@@ -730,32 +994,26 @@ async def _async_options_updated(hass: HomeAssistant, entry: MeshtasticConfigEnt
     """
     Update listener for the config entry's options.
 
-    If only the tracked node filter changed (nothing that affects the
-    connection itself, like host/port or the TCP proxy/web client
-    settings), apply it live instead of doing a full unload+setup reload —
-    avoids disconnecting the gateway connection and briefly marking every
-    entity unavailable just because a node was added or removed. Any other
-    kind of options change still gets a full reload, same as before.
+    Zmiana samej listy śledzonych węzłów jest stosowana na żywo (bez
+    rozłączania z radiem). Każda inna zmiana opcji to pełne przeładowanie —
+    ale przez mechanizm Home Assistanta (async_schedule_reload), a nie przez
+    własne unload+setup, które omijało maszynę stanów HA i przy nakładających
+    się przeładowaniach dawało "Config entry was never loaded!" / "has
+    already been setup!".
     """
     non_filter_options = _non_filter_options(entry)
     previous = _last_non_filter_options.get(entry.entry_id)
     _last_non_filter_options[entry.entry_id] = non_filter_options
 
-    can_apply_live = (
-        previous is not None and previous == non_filter_options and entry.state == ConfigEntryState.LOADED
-    )
-
-    if can_apply_live:
+    if previous is not None and previous == non_filter_options:
+        if entry.state is not ConfigEntryState.LOADED:
+            # start jeszcze trwa (np. koordynator sam poprawił numer węzła
+            # w opcjach) — start i tak zbuduje stan z aktualnych opcji
+            return
         if entry.entry_id in _filter_apply_in_progress:
-            # A filter-apply is already running for this entry. The most
-            # likely reason we got called again is that run's own
-            # coordinator refresh self-healing a migrated/deduped node
-            # number back into options (see _async_update_data) — that
-            # in-progress run will already pick up the fully-resolved
-            # state once it gets to rebuilding devices/entities, so
-            # there is nothing extra to do here. Without this guard, a
-            # migration detected during the live-apply path would
-            # recursively re-enter this listener while still running.
+            # A filter-apply is already running for this entry — most likely
+            # its own coordinator refresh self-healing a migrated node number
+            # back into options. That run already picks up the resolved state.
             return
         _filter_apply_in_progress.add(entry.entry_id)
         try:
@@ -766,7 +1024,7 @@ async def _async_options_updated(hass: HomeAssistant, entry: MeshtasticConfigEnt
         finally:
             _filter_apply_in_progress.discard(entry.entry_id)
 
-    await async_reload_entry(hass, entry)
+    hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: MeshtasticConfigEntry) -> bool:
@@ -811,7 +1069,7 @@ async def _add_entities_for_entry(hass: HomeAssistant, entities: list[Entity], e
         device_id = UNDEFINED
         identifiers = getattr(e, "_device_identifiers", None)
         if identifiers:
-            device = device_registry.async_get_device_by_identifier(next(iter(identifiers)), entry.entry_id)
+            device = device_by_identifier(device_registry, next(iter(identifiers)), entry.entry_id)
             if device:
                 device_id = device.id
         try:

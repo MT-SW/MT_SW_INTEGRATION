@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 
 from . import nodedb_cleanup, ondemand
@@ -96,6 +97,13 @@ def _remembered(node_data: Mapping[str, Any], saved: Mapping[str, Any], key: str
     return data, (remembered.get("ts") if data else None)
 
 
+def _client_connected(client: Any) -> bool:
+    try:
+        return bool(client.is_connected)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
     """Zbierz status bramki z koordynatora i klienta API.
 
@@ -141,7 +149,13 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         "is_unmessagable": bool(user.get("isUnmessagable")),
         "hw_model": user.get("hwModel"),
         "role": user.get("role"),
-        "available": bool(coordinator.last_update_success and node_id is not None),
+        # Dostępność = żywe łącze z radiem, a nie stan koordynatora statystyk —
+        # panel działa niezależnie od warstwy statystyk.
+        "available": bool(node_id is not None and _client_connected(client)),
+        "connected": _client_connected(client),
+        "session": getattr(client, "session_id", None),
+        "stats_ok": bool(getattr(data, "stats", None) is None or data.stats.error is None),
+        "stats_error": getattr(getattr(data, "stats", None), "error", None),
         "firmware_version": metadata.get("firmwareVersion"),
         "device_state_version": metadata.get("deviceStateVersion"),
         "has_wifi": metadata.get("hasWifi"),
@@ -230,6 +244,123 @@ async def ws_channels(
     connection.send_result(msg["id"], {"channels": channels})
 
 
+def _coordinate(position: Mapping[str, Any], name: str) -> float | None:
+    """Współrzędna w stopniach — radio podaje ją jako liczbę całkowitą *1e7 (latitudeI)."""
+    value = position.get(name)
+    if value is not None:
+        return value
+    scaled = position.get(f"{name}I")
+    if scaled is None:
+        return None
+    try:
+        return round(float(scaled) * 1e-7, 7)
+    except (TypeError, ValueError):
+        return None
+
+
+class _NodePayloadContext:
+    """Dane wspólne dla całej listy węzłów — liczone raz, nie per węzeł."""
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        self.entry = entry
+        gateway_node = entry.runtime_data.gateway_node or {}
+        self.gateway_id = gateway_node.get("num")
+        try:
+            self.gateway_signs = bool((entry.runtime_data.client.metadata or {}).get("hasXeddsa"))
+        except Exception:  # noqa: BLE001 - metadata jest best-effort, nie może zerwać listy węzłów
+            self.gateway_signs = False
+        try:
+            self.tracked = set(entry.runtime_data.coordinator.data or {})
+        except Exception:  # noqa: BLE001 - warstwa statystyk nie może zepsuć panelu
+            self.tracked = set()
+        self.store = get_store(entry.entry_id)
+        self.own_status = _own_status_message(entry)
+
+
+def _node_payload(context: _NodePayloadContext, node_id: int, node: Mapping[str, Any]) -> dict[str, Any]:
+    """Jeden wiersz listy węzłów panelu — wspólny dla ws_nodes i subskrypcji na żywo."""
+    gateway_id = context.gateway_id
+    store = context.store
+    own_status = context.own_status
+    tracked = context.tracked
+    gateway_signs = context.gateway_signs
+    user = node.get("user", {}) or {}
+    position = node.get("position", {}) or {}
+    device_metrics = node.get("deviceMetrics", {}) or {}
+    environment_metrics = node.get("environmentMetrics", {}) or {}
+    # Sąsiedzi i status podpisywania żyją tylko w pamięci połączenia z
+    # radiem i znikają po restarcie integracji — dopóki nie przyjdzie
+    # świeży pakiet od danego węzła, sięgamy do tego, co zdążyliśmy
+    # zapisać na dysk przed restartem.
+    saved_state = store.node_state(node_id) if store is not None else {}
+    neighbor_info = node.get("neighborInfo") or saved_state.get("neighbor_info") or {}
+    # Węzeł podpisuje pakiety, jeśli samo urządzenie oznaczyło tak jego wpis
+    # w bazie (hasXeddsaSigned — zostaje między czyszczeniami bazy) albo
+    # widzieliśmy od niego podpisaną wiadomość. Własnej bramki radio nigdy
+    # nie ocenia po odebranych pakietach (nie słyszy siebie), więc ona
+    # podpisuje wtedy, gdy firmware ma XEdDSA (DeviceMetadata.has_xeddsa).
+    signed = node.get("hasXeddsaSigned") or saved_state.get("signed", False)
+    if node_id == gateway_id and gateway_signs:
+        signed = True
+
+    neighbors = [
+        {
+            "node_id": neighbor.get("nodeId"),
+            "snr": _as_float(neighbor.get("snr")),
+        }
+        for neighbor in (neighbor_info.get("neighbors") or [])
+        if neighbor.get("nodeId") is not None
+    ]
+
+    return {
+        "node_id": node_id,
+        "node_hex": f"!{node_id:08x}" if isinstance(node_id, int) else None,
+        "long_name": user.get("longName"),
+        "short_name": user.get("shortName"),
+        "hw_model": user.get("hwModel"),
+        "role": user.get("role"),
+        "is_gateway": node_id == gateway_id,
+        "is_tracked": node_id in tracked,
+        "is_favorite": bool(node.get("isFavorite")),
+        "is_ignored": bool(node.get("isIgnored")),
+        "is_muted": bool(node.get("isMuted")),
+        "heard_on_current_lora": node.get("heardOnCurrentLora"),
+        "channel": _as_int(node.get("channel")),
+        "last_heard": node.get("lastHeard"),
+        "snr": _as_float(node.get("snr")),
+        "signed": bool(signed),
+        "hops_away": _as_int(node.get("hopsAway")),
+        # droga ostatniego pakietu od tego węzła (ostatni bajt przekaźnika i skoki)
+        "via_relay": _as_int((saved_state.get("via") or {}).get("relay")),
+        "via_hops": _as_int((saved_state.get("via") or {}).get("hops")),
+        "via_ts": _as_int((saved_state.get("via") or {}).get("ts")),
+        # ostatnia wiadomość statusu rozgłoszona przez węzeł (moduł Status Message)
+        "status_message": (
+            own_status
+            if node_id == gateway_id
+            else ((saved_state.get("status") or {}).get("text") or None)
+        ),
+        "status_ts": None if node_id == gateway_id else _as_int((saved_state.get("status") or {}).get("ts")),
+        "via_snr": _as_float((saved_state.get("via") or {}).get("snr")),
+        "via_rssi": _as_int((saved_state.get("via") or {}).get("rssi")),
+        "via_mqtt": bool(node.get("viaMqtt")),
+        "latitude": _coordinate(position, "latitude"),
+        "longitude": _coordinate(position, "longitude"),
+        "altitude": _as_int(position.get("altitude")),
+        "position_time": position.get("time"),
+        "precision_bits": _as_int(position.get("precisionBits")),
+        "battery_level": _as_int(device_metrics.get("batteryLevel")),
+        "voltage": _as_float(device_metrics.get("voltage")),
+        "channel_utilization": _as_float(device_metrics.get("channelUtilization")),
+        "air_util_tx": _as_float(device_metrics.get("airUtilTx")),
+        "uptime_seconds": _as_int(device_metrics.get("uptimeSeconds")),
+        "temperature": _as_float(environment_metrics.get("temperature")),
+        "humidity": _as_float(environment_metrics.get("relativeHumidity")),
+        "pressure": _as_float(environment_metrics.get("barometricPressure")),
+        "neighbors": neighbors,
+    }
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{WS_PREFIX}/nodes",
@@ -248,109 +379,119 @@ async def ws_nodes(
         connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
         return
 
-    gateway_node = entry.runtime_data.gateway_node or {}
-    gateway_id = gateway_node.get("num")
-    try:
-        gateway_signs = bool((entry.runtime_data.client.metadata or {}).get("hasXeddsa"))
-    except Exception:  # noqa: BLE001 - metadata jest best-effort, nie może zerwać listy węzłów
-        gateway_signs = False
-
     # Panel celowo czyta pełną bazę węzłów z urządzenia, a nie coordinator.data.
     # Koordynator jest przefiltrowany opcją "nodes" wpisu konfiguracyjnego,
     # która decyduje wyłącznie o tym, dla których węzłów powstają encje HA.
     # Panel ma pokazywać to samo, co widzi radio — jak klient WWW.
-    try:
-        all_nodes = await entry.runtime_data.client.async_get_all_nodes()
-    except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
-        _LOGGER.warning("Nie udało się pobrać bazy węzłów: %s", err)
-        connection.send_error(msg["id"], "nodes_failed", str(err))
-        return
-
-    tracked = set(entry.runtime_data.coordinator.data or {})
-    store = get_store(msg["entry_id"])
-    own_status = _own_status_message(entry)
-
-    nodes = []
-    for node_id, node in all_nodes.items():
-        user = node.get("user", {}) or {}
-        position = node.get("position", {}) or {}
-        device_metrics = node.get("deviceMetrics", {}) or {}
-        environment_metrics = node.get("environmentMetrics", {}) or {}
-        # Sąsiedzi i status podpisywania żyją tylko w pamięci połączenia z
-        # radiem i znikają po restarcie integracji — dopóki nie przyjdzie
-        # świeży pakiet od danego węzła, sięgamy do tego, co zdążyliśmy
-        # zapisać na dysk przed restartem.
-        saved_state = store.node_state(node_id) if store is not None else {}
-        neighbor_info = node.get("neighborInfo") or saved_state.get("neighbor_info") or {}
-        # Węzeł podpisuje pakiety, jeśli samo urządzenie oznaczyło tak jego wpis
-        # w bazie (hasXeddsaSigned — zostaje między czyszczeniami bazy) albo
-        # widzieliśmy od niego podpisaną wiadomość. Własnej bramki radio nigdy
-        # nie ocenia po odebranych pakietach (nie słyszy siebie), więc ona
-        # podpisuje wtedy, gdy firmware ma XEdDSA (DeviceMetadata.has_xeddsa).
-        signed = node.get("hasXeddsaSigned") or saved_state.get("signed", False)
-        if node_id == gateway_id and gateway_signs:
-            signed = True
-
-        neighbors = [
-            {
-                "node_id": neighbor.get("nodeId"),
-                "snr": _as_float(neighbor.get("snr")),
-            }
-            for neighbor in (neighbor_info.get("neighbors") or [])
-            if neighbor.get("nodeId") is not None
-        ]
-
-        nodes.append(
-            {
-                "node_id": node_id,
-                "node_hex": f"!{node_id:08x}" if isinstance(node_id, int) else None,
-                "long_name": user.get("longName"),
-                "short_name": user.get("shortName"),
-                "hw_model": user.get("hwModel"),
-                "role": user.get("role"),
-                "is_gateway": node_id == gateway_id,
-                "is_tracked": node_id in tracked,
-                "is_favorite": bool(node.get("isFavorite")),
-                "is_ignored": bool(node.get("isIgnored")),
-                "is_muted": bool(node.get("isMuted")),
-                "heard_on_current_lora": node.get("heardOnCurrentLora"),
-                "channel": _as_int(node.get("channel")),
-                "last_heard": node.get("lastHeard"),
-                "snr": _as_float(node.get("snr")),
-                "signed": bool(signed),
-                "hops_away": _as_int(node.get("hopsAway")),
-                # droga ostatniego pakietu od tego węzła (ostatni bajt przekaźnika i skoki)
-                "via_relay": _as_int((saved_state.get("via") or {}).get("relay")),
-                "via_hops": _as_int((saved_state.get("via") or {}).get("hops")),
-                "via_ts": _as_int((saved_state.get("via") or {}).get("ts")),
-                # ostatnia wiadomość statusu rozgłoszona przez węzeł (moduł Status Message)
-                "status_message": (
-                    own_status
-                    if node_id == gateway_id
-                    else ((saved_state.get("status") or {}).get("text") or None)
-                ),
-                "status_ts": None if node_id == gateway_id else _as_int((saved_state.get("status") or {}).get("ts")),
-                "via_snr": _as_float((saved_state.get("via") or {}).get("snr")),
-                "via_rssi": _as_int((saved_state.get("via") or {}).get("rssi")),
-                "via_mqtt": bool(node.get("viaMqtt")),
-                "latitude": position.get("latitude"),
-                "longitude": position.get("longitude"),
-                "altitude": _as_int(position.get("altitude")),
-                "position_time": position.get("time"),
-                "precision_bits": _as_int(position.get("precisionBits")),
-                "battery_level": _as_int(device_metrics.get("batteryLevel")),
-                "voltage": _as_float(device_metrics.get("voltage")),
-                "channel_utilization": _as_float(device_metrics.get("channelUtilization")),
-                "air_util_tx": _as_float(device_metrics.get("airUtilTx")),
-                "uptime_seconds": _as_int(device_metrics.get("uptimeSeconds")),
-                "temperature": _as_float(environment_metrics.get("temperature")),
-                "humidity": _as_float(environment_metrics.get("relativeHumidity")),
-                "pressure": _as_float(environment_metrics.get("barometricPressure")),
-                "neighbors": neighbors,
-            }
-        )
+    context = _NodePayloadContext(entry)
+    nodes = [
+        _node_payload(context, node_id, node)
+        for node_id, node in entry.runtime_data.client.get_all_nodes_sync().items()
+    ]
     nodes.sort(key=lambda n: (n["long_name"] or n["node_hex"] or "").lower())
     connection.send_result(msg["id"], {"nodes": nodes})
+
+
+_NODE_PUSH_DELAY_SECONDS = 0.75
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/subscribe_nodes",
+        vol.Required("entry_id"): str,
+    }
+)
+@callback
+def ws_subscribe_nodes(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """
+    Lista węzłów na żywo — tak jak w aplikacji.
+
+    Najpierw pełna migawka, potem wyłącznie zmienione węzły, zebrane w paczki
+    co ułamek sekundy. Źródłem jest bezpośrednio baza węzłów połączenia z
+    radiem — bez koordynatora statystyk, bez rejestru encji i bez odpytywania
+    co 10 s. Dodanie do ulubionych czy usunięcie węzła widać od razu.
+    """
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+
+    client = entry.runtime_data.client
+    pending: set[int] = set()
+    state: dict[str, Any] = {"handle": None, "full": False}
+
+    def _send(payload: dict[str, Any]) -> None:
+        connection.send_message(websocket_api.event_message(msg["id"], payload))
+
+    def _snapshot() -> None:
+        context = _NodePayloadContext(entry)
+        nodes = [_node_payload(context, node_id, node) for node_id, node in client.get_all_nodes_sync().items()]
+        _send(
+            {
+                "kind": "snapshot",
+                "nodes": nodes,
+                "connected": _client_connected(client),
+                "session": getattr(client, "session_id", None),
+            }
+        )
+
+    @callback
+    def _flush() -> None:
+        state["handle"] = None
+        try:
+            if state["full"]:
+                state["full"] = False
+                pending.clear()
+                _snapshot()
+                return
+            if not pending:
+                return
+            database = client.get_all_nodes_sync()
+            context = _NodePayloadContext(entry)
+            upsert = []
+            remove = []
+            for node_id in pending:
+                node = database.get(node_id)
+                if node is None:
+                    remove.append(node_id)
+                else:
+                    upsert.append(_node_payload(context, node_id, node))
+            pending.clear()
+            _send({"kind": "delta", "upsert": upsert, "remove": remove})
+        except Exception:  # noqa: BLE001 - błąd jednej paczki nie może zerwać subskrypcji
+            _LOGGER.debug("Wysłanie zmian listy węzłów nie powiodło się", exc_info=True)
+
+    @callback
+    def _on_node_changed(node_id: int | None) -> None:
+        if node_id is None:
+            state["full"] = True
+        else:
+            pending.add(node_id)
+        if state["handle"] is None:
+            state["handle"] = hass.loop.call_later(_NODE_PUSH_DELAY_SECONDS, _flush)
+
+    @callback
+    def _on_link_state(link_state: str) -> None:
+        _send({"kind": "connection", "connected": link_state == "connected", "state": link_state})
+
+    remove_node_listener = client.add_node_change_listener(_on_node_changed)
+    remove_link_listener = client.add_connection_state_listener(_on_link_state)
+
+    @callback
+    def _unsubscribe() -> None:
+        remove_node_listener()
+        remove_link_listener()
+        if state["handle"] is not None:
+            state["handle"].cancel()
+            state["handle"] = None
+
+    connection.subscriptions[msg["id"]] = _unsubscribe
+    connection.send_result(msg["id"])
+    _snapshot()
 
 
 @websocket_api.websocket_command(
@@ -1500,6 +1641,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_gateways,
         ws_channels,
         ws_nodes,
+        ws_subscribe_nodes,
         ws_messages,
         ws_timeseries,
         ws_send_message,

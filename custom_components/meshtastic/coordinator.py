@@ -103,6 +103,8 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         self._tracked_identity_by_num: dict[int, str] = {}
         self._pending_removals: set[int] = set()
         self._node_id_migrations: dict[int, int] = {}
+        self._removal_worker: asyncio.Task | None = None
+        self._removal_warned: set[int] = set()
         self._remove_event_listeners = []
         self._remove_event_listeners.append(
             hass.bus.async_listen(EVENT_MESHTASTIC_API_NODE_UPDATED, self._api_node_updated)
@@ -114,6 +116,9 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def async_shutdown(self) -> None:
+        if self._removal_worker is not None and not self._removal_worker.done():
+            self._removal_worker.cancel()
+        self._removal_worker = None
         await super().async_shutdown()
 
         for remove_listener in self._remove_event_listeners:
@@ -200,11 +205,40 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             if attempt < quick_retries:
                 await asyncio.sleep(3)
 
-        self._logger.warning(
-            "Could not remove stale node %d from the on-device node database yet — will keep retrying", node_num
-        )
+        # ostrzeżenie tylko raz na węzeł — kolejne próby co odświeżenie zalewały log
+        log = self._logger.debug if node_num in self._removal_warned else self._logger.warning
+        self._removal_warned.add(node_num)
+        log("Could not remove stale node %d from the on-device node database yet — will keep retrying", node_num)
         self._pending_removals.add(node_num)
         return False
+
+    def _queue_removal(self, node_num: int) -> None:
+        """
+        Zaplanuj usunięcie węzła z bazy radia W TLE.
+
+        Wcześniej każde usunięcie było wykonywane wprost w _async_update_data,
+        po kolei, z 20-sekundowym limitem na sztukę — kilka nieodpowiadających
+        usunięć (np. zaraz po utracie bazy w radiu) potrafiło zatrzymać
+        pierwsze odświeżenie, a z nim cały start integracji.
+        """
+        self._pending_removals.add(node_num)
+        if self._removal_worker is not None and not self._removal_worker.done():
+            return
+        self._removal_worker = self.hass.async_create_background_task(
+            self._process_pending_removals(), name=f"{DOMAIN}-pending-node-removals"
+        )
+
+    async def _process_pending_removals(self) -> None:
+        client = (
+            self.config_entry.runtime_data.client
+            if self.config_entry is not None and self.config_entry.runtime_data is not None
+            else None
+        )
+        if client is None or not client.is_connected:
+            # bez łącza nie ma sensu próbować — wrócimy przy następnym odświeżeniu
+            return
+        for node_num in list(self._pending_removals):
+            await self._attempt_remove_node(node_num)
 
     async def async_request_node_removal(self, node_num: int) -> None:
         """
@@ -325,7 +359,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
 
         if self._pending_removals:
             for node_num in list(self._pending_removals):
-                await self._attempt_remove_node(node_num)
+                self._queue_removal(node_num)
 
         filter_nodes = self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
         filter_node_nums = [el["id"] for el in filter_nodes]
@@ -405,7 +439,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 # future polls — this is what previously let a stale old number win
                 # the dedup below over the node's real, current number. Best-effort:
                 # never let a failure here (radio asleep/busy) break the data update.
-                await self._attempt_remove_node(tracked_num)
+                self._queue_removal(tracked_num)
                 # self-heal the configured number so the filter (and the
                 # options UI) reflect where this node actually lives now
                 updated_el = {**el_config, "id": new_num, "identity_key": known_identity_key}
@@ -464,7 +498,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 resolved_node_nums.discard(existing["id"])
                 resolved_node_nums.add(el_config["id"])
                 self._node_id_migrations[existing["id"]] = el_config["id"]
-                await self._attempt_remove_node(existing["id"])
+                self._queue_removal(existing["id"])
             else:
                 self._logger.info(
                     "Dropping duplicate filter entry for node %d (identity %s already tracked via node %d)",
@@ -474,7 +508,7 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 )
                 resolved_node_nums.discard(el_config["id"])
                 self._node_id_migrations[el_config["id"]] = existing["id"]
-                await self._attempt_remove_node(el_config["id"])
+                self._queue_removal(el_config["id"])
         updated_filter_nodes = deduped_filter_nodes
 
         if filter_changed:

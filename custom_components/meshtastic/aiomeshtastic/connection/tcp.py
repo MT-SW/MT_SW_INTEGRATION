@@ -3,10 +3,22 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
+import contextlib
+import socket
 from asyncio import StreamReader, StreamWriter
 
 from . import ClientApiConnectionError
 from .streaming import StreamingClientTransport
+
+# Po restarcie radio nie zamyka starego gniazda (po prostu znika), więc bez
+# keepalive odczyt czekałby w nieskończoność. Z tymi wartościami jądro samo
+# wykrywa martwe połączenie po ok. 60 s ciszy.
+_KEEPALIVE_OPTIONS = (
+    ("TCP_KEEPIDLE", 30),
+    ("TCP_KEEPINTVL", 10),
+    ("TCP_KEEPCNT", 3),
+)
+_CONNECT_TIMEOUT_SECONDS = 10
 
 
 class TcpConnectionError(ClientApiConnectionError):
@@ -31,35 +43,56 @@ class TcpConnection(StreamingClientTransport):
             await self._disconnect()
             msg = "Can not read bytes"
             raise TcpConnectionError(msg)
+        reader = self._reader
         try:
             if exactly is not None:
-                return await self._reader.readexactly(n=exactly)
-            return await self._reader.read(n=n)
-        except (ConnectionError, TimeoutError) as e:
+                return await reader.readexactly(n=exactly)
+            return await reader.read(n=n)
+        except (OSError, TimeoutError) as e:
             await self._disconnect()
             raise TcpConnectionError from e
 
     async def _write_bytes(self, data: bytes) -> bool:
-        if self._writer is None:
+        writer = self._writer
+        if writer is None or writer.is_closing():
             return False
 
         try:
-            self._writer.write(data)
-        except ConnectionError:
+            writer.write(data)
+        except (OSError, RuntimeError):
             await self._disconnect()
+            return False
         return True
 
     async def _connect(self) -> None:
         self._logger.debug("Connecting to %s:%d", self._host, self._port)
-        self._reader, self._writer = await asyncio.open_connection(self._host, self._port)
+        self._reader, self._writer = await asyncio.wait_for(
+            asyncio.open_connection(self._host, self._port), timeout=_CONNECT_TIMEOUT_SECONDS
+        )
+        self._enable_keepalive()
         self._logger.debug("Connection successful")
+
+    def _enable_keepalive(self) -> None:
+        sock = self._writer.get_extra_info("socket") if self._writer is not None else None
+        if sock is None:
+            return
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            for name, value in _KEEPALIVE_OPTIONS:
+                option = getattr(socket, name, None)
+                if option is not None:
+                    sock.setsockopt(socket.IPPROTO_TCP, option, value)
+        except OSError:
+            self._logger.debug("Could not enable TCP keepalive", exc_info=True)
 
     @property
     def is_connected(self) -> bool:
         return self._writer is not None and self._reader is not None and not self._reader.at_eof()
 
     async def _disconnect(self) -> None:
-        if self._writer:
-            self._writer.close()
-            self._writer = None
-            self._reader = None
+        writer = self._writer
+        self._writer = None
+        self._reader = None
+        if writer is not None:
+            with contextlib.suppress(Exception):
+                writer.close()

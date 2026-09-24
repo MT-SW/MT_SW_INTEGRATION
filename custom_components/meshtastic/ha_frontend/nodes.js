@@ -235,7 +235,11 @@ class MeshNodesTab extends LitElement {
         this.hass,
         kind === "remove_node" ? "nodes.action.removed" : "nodes.action.sent"
       );
-      this.dispatchEvent(new CustomEvent("mtsw-refresh", { bubbles: true, composed: true }));
+      // Lista węzłów aktualizuje się sama (subskrypcja na żywo) — pełne
+      // odświeżenie panelu jest potrzebne tylko dla pozostałych danych.
+      if (kind !== "remove_node") {
+        this.dispatchEvent(new CustomEvent("mtsw-refresh", { bubbles: true, composed: true }));
+      }
       return result && result.result !== undefined ? result.result || true : true;
     } catch (err) {
       console.error("MT_SW: akcja nie powiodła się", kind, err);
@@ -244,6 +248,57 @@ class MeshNodesTab extends LitElement {
     } finally {
       this._busy = null;
     }
+  }
+
+  /* Zmiana węzła w liście panelu od razu, zanim radio potwierdzi —
+     jak w aplikacji. Przy błędzie wracamy do poprzedniego stanu. */
+  _patchNode(nodeId, patch, removed = false) {
+    this.dispatchEvent(
+      new CustomEvent("mtsw-node-patch", {
+        detail: { nodeId, patch, removed },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  async _toggleFlag(node, kind, payload, patch) {
+    if (!this.entryId) {
+      return;
+    }
+    const revert = {};
+    for (const key of Object.keys(patch)) {
+      revert[key] = node[key];
+    }
+    this._patchNode(node.node_id, patch);
+    this._error = null;
+    try {
+      const result = await this.hass.callWS({
+        type: `meshtastic/${kind}`,
+        entry_id: this.entryId,
+        node_id: node.node_id,
+        ...payload,
+      });
+      if (result && result.confirmed === false) {
+        throw new Error(t(this.hass, "nodes.action.unconfirmed"));
+      }
+    } catch (err) {
+      console.error("MT_SW: akcja nie powiodła się", kind, err);
+      this._patchNode(node.node_id, revert);
+      this._error = (err && err.message) || t(this.hass, "nodes.action.failed");
+    }
+  }
+
+  _toggleFavorite(node) {
+    const favorite = !node.is_favorite;
+    return this._toggleFlag(node, "set_favorite", { favorite }, { is_favorite: favorite });
+  }
+
+  _toggleIgnored(node) {
+    const ignored = !node.is_ignored;
+    // firmware zdejmuje ulubienie z ignorowanego węzła
+    const patch = ignored ? { is_ignored: true, is_favorite: false } : { is_ignored: false };
+    return this._toggleFlag(node, "set_ignored", { ignored }, patch);
   }
 
   _openDm(node) {
@@ -264,8 +319,8 @@ class MeshNodesTab extends LitElement {
     }
     const removed = await this._call("remove_node", { node_id: node.node_id });
     if (removed) {
-      // Usuwamy też z lokalnej listy, żeby wiersz zniknął natychmiast,
-      // nie dopiero po następnym odpytaniu.
+      // Usuwamy też z listy panelu, żeby wiersz zniknął natychmiast.
+      this._patchNode(node.node_id, null, true);
       this.nodes = (this.nodes || []).filter((n) => n.node_id !== node.node_id);
       this._detail = null;
     }
@@ -278,7 +333,7 @@ class MeshNodesTab extends LitElement {
         title=${t(this.hass, node.is_favorite ? "nodes.action.unfavorite" : "nodes.action.favorite")}
         @click=${(e) => {
           e.stopPropagation();
-          this._call("set_favorite", { node_id: node.node_id, favorite: !node.is_favorite });
+          this._toggleFavorite(node);
         }}
       >
         ${node.is_favorite ? "★" : "☆"}
@@ -414,15 +469,13 @@ class MeshNodesTab extends LitElement {
         </button>
         <button
           class="action"
-          ?disabled=${busy}
-          @click=${() => this._call("set_favorite", { node_id: node.node_id, favorite: !node.is_favorite })}
+          @click=${() => this._toggleFavorite(node)}
         >
           ${tr(node.is_favorite ? "nodes.action.unfavorite" : "nodes.action.favorite")}
         </button>
         <button
           class="action"
-          ?disabled=${busy}
-          @click=${() => this._call("set_ignored", { node_id: node.node_id, ignored: !node.is_ignored })}
+          @click=${() => this._toggleIgnored(node)}
         >
           ${tr(node.is_ignored ? "nodes.action.unignore" : "nodes.action.ignore")}
         </button>

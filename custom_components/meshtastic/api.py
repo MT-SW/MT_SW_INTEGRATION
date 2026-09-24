@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import uuid
 from copy import deepcopy
 from datetime import timedelta
 from enum import StrEnum
@@ -45,7 +46,7 @@ from .const import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine, Mapping, MutableMapping
+    from collections.abc import Callable, Coroutine, Mapping, MutableMapping
     from types import MappingProxyType, TracebackType
 
     from google.protobuf.message import Message
@@ -118,9 +119,15 @@ class MeshtasticApiClient:
             msg = f"Unsupported connection type {connection_type}"
             raise ValueError(msg)
 
+        # Heartbeat co minutę: radio odpowiada na niego lokalnie pakietem
+        # QueueStatus, co pozwala wykryć martwe łącze (np. po restarcie radia,
+        # który nie zamyka starego gniazda TCP) w ~2,5 min zamiast nigdy.
         self._interface = AioMeshInterface(
-            connection=connection, no_nodes=no_nodes, heartbeat_interval=timedelta(minutes=5)
+            connection=connection, no_nodes=no_nodes, heartbeat_interval=timedelta(seconds=60)
         )
+        # Identyfikator tej sesji klienta — panel po jego zmianie (przeładowanie
+        # wpisu = nowy klient) wie, że musi odnowić subskrypcję węzłów.
+        self.session_id = uuid.uuid4().hex[:12]
         self._packet_processor: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
 
@@ -143,10 +150,23 @@ class MeshtasticApiClient:
             packet_type=portnums_pb2.PortNum.ROUTING_APP, callback=self._on_routing, as_packet=True
         )
 
+    @property
+    def is_connected(self) -> bool:
+        """Czy łącze z radiem jest w tej chwili aktywne (nie trwa ponowne łączenie)."""
+        return self._interface.link_up
+
+    def add_node_change_listener(self, callback: Callable[[int | None], None]) -> Callable[[], None]:
+        return self._interface.add_node_change_listener(callback)
+
+    def add_connection_state_listener(self, callback: Callable[[str], None]) -> Callable[[], None]:
+        return self._interface.add_connection_state_listener(callback)
+
     async def connect(self) -> None:
         try:
             await asyncio.wait_for(self._interface.start(), timeout=30)
         except Exception as e:
+            with contextlib.suppress(Exception):
+                await self._interface.stop()
             raise MeshtasticApiClientCommunicationError from e
 
         try:
@@ -176,10 +196,16 @@ class MeshtasticApiClient:
         self._add_background_task(send_time())
 
     async def disconnect(self) -> None:
-        try:
+        # Każdy krok osobno — wcześniej brak _packet_processor (nieudane
+        # połączenie) przerywał całość przed interface.stop(), zostawiając
+        # otwarte gniazdo, które dalej zajmowało jedyne miejsce w radiu.
+        if self._packet_processor is not None:
             self._packet_processor.cancel()
-            if self._background_tasks:
-                await asyncio.wait([asyncio.create_task(self._cancel_task(t)) for t in self._background_tasks])
+            self._packet_processor = None
+        if self._background_tasks:
+            with contextlib.suppress(Exception):
+                await asyncio.wait([asyncio.create_task(self._cancel_task(t)) for t in list(self._background_tasks)])
+        try:
             await self._interface.stop()
         except Exception as e:
             raise MeshtasticApiClientCommunicationError from e

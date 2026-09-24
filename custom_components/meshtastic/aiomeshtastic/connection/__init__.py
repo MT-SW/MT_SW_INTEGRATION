@@ -6,6 +6,7 @@ import asyncio  # noqa: D104
 import contextlib
 import logging
 import random
+import time
 from abc import abstractmethod
 from collections.abc import AsyncIterable, Awaitable, Callable, Coroutine
 from contextlib import asynccontextmanager
@@ -50,6 +51,11 @@ class ClientApiConnection:
         self._reconnect_completed = asyncio.Event()
         self._reconnect_failed = asyncio.Event()
         self._reconnect_status_lock = asyncio.Lock()
+        # Czas (monotoniczny) ostatniego odebranego pakietu i ostatniego
+        # QueueStatus — na nich opiera się strażnik martwego połączenia
+        # w MeshInterface (radio po restarcie nie zamyka starego gniazda TCP).
+        self._last_rx_monotonic = time.monotonic()
+        self._last_queue_status_monotonic = 0.0
 
     async def connect(self) -> None:
         try:
@@ -58,6 +64,20 @@ class ClientApiConnection:
             raise
         except Exception as e:
             raise ClientApiConnectFailedError from e
+        self._last_rx_monotonic = time.monotonic()
+
+    @property
+    def last_rx_monotonic(self) -> float:
+        return self._last_rx_monotonic
+
+    @property
+    def last_queue_status_monotonic(self) -> float:
+        return self._last_queue_status_monotonic
+
+    async def force_close(self) -> None:
+        """Zamknij gniazdo bez sprzątania słuchaczy — odczyt dostanie EOF i ruszy zwykła ścieżka ponownego łączenia."""
+        with contextlib.suppress(Exception):
+            await self._disconnect()
 
     async def disconnect(self) -> None:
         for listener in self._packet_stream_listeners:
@@ -150,6 +170,7 @@ class ClientApiConnection:
 
         try:
             async for packet in self._packet_stream():
+                self._last_rx_monotonic = time.monotonic()
                 await self._update_queue_status(packet)
                 await self._notify_packet_stream_listeners(packet)
                 # give listener higher change to process packet before continuing ourselves
@@ -166,27 +187,22 @@ class ClientApiConnection:
     async def _update_queue_status(self, packet: mesh_pb2.FromRadio) -> None:
         if packet.HasField("queueStatus"):
             self._queue_status = packet.queueStatus
+            self._last_queue_status_monotonic = time.monotonic()
             self._queue_status_update.set()
             self._queue_status_update.clear()
             self._logger.debug("New Queue Status: %s", repr(self._queue_status).replace("\n", ""))
 
-    async def _notify_packet_stream_listeners(self, packet: mesh_pb2.FromRadio, *, sequential: bool = False) -> None:
-        async def notify(listener: ClientApiConnectionPacketStreamListener, new_packet: mesh_pb2.FromRadio) -> None:
+    async def _notify_packet_stream_listeners(self, packet: mesh_pb2.FromRadio, *, sequential: bool = False) -> None:  # noqa: ARG002
+        # Dostarczanie bez tworzenia zadań i bez czekania na konsumentów.
+        # Wcześniej każdy pakiet tworzył po jednym zadaniu na słuchacza i
+        # czekał na wszystkie — anulowanie w złym momencie zostawiało osierocone
+        # zadania ("Task was destroyed but it is pending!"), a wolny słuchacz
+        # wstrzymywał czytanie z gniazda.
+        for listener in list(self._packet_stream_listeners):
             try:
-                await listener.notify(new_packet)
-            except:  # noqa: E722
+                listener.notify_nowait(packet)
+            except Exception:  # noqa: BLE001
                 self._logger.warning("Listener notify failed: %s", listener, exc_info=True)
-
-        if not self._packet_stream_listeners:
-            return
-
-        if sequential:
-            for listener in self._packet_stream_listeners:
-                await notify(listener, packet)
-        else:
-            await asyncio.wait(
-                [asyncio.create_task(notify(listener, packet)) for listener in self._packet_stream_listeners]
-            )
 
     async def _close_packet_stream_listeners(self) -> None:
         for listener in self._packet_stream_listeners:
@@ -509,6 +525,7 @@ class ClientApiConnection:
                         await self._disconnect()
                     self._logger.debug("Reconnect: disconnecting complete")
                 await self._connect()
+                self._last_rx_monotonic = time.monotonic()
 
                 async with self._reconnect_status_lock:
                     self._reconnect_completed.set()

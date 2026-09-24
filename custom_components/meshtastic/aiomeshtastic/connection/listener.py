@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterable
 from types import TracebackType
 from typing import Self
@@ -11,36 +12,51 @@ from ..protobuf import mesh_pb2  # noqa: TID252
 
 
 class ClientApiConnectionPacketStreamListener:
-    def __init__(self, queue_size: int = 16) -> None:
+    """
+    Kolejka pakietów dla jednego konsumenta strumienia z radia.
+
+    Dostarczanie jest nieblokujące: czytnik gniazda nigdy nie czeka na
+    wolnego konsumenta. Wcześniej kolejka miała 16 miejsc i blokujące put(),
+    więc jeden wolny konsument (np. obsługa zdarzeń HA przy dużej bazie
+    węzłów) wstrzymywał odczyt z gniazda — bufor nadawczy radia się zapychał,
+    a firmware zrywało połączenie. Przy przepełnieniu wypada najstarszy
+    pakiet, nie cały strumień.
+    """
+
+    def __init__(self, queue_size: int = 2048) -> None:
         self._failure: Exception | None = None
-        self._queue = asyncio.Queue(maxsize=queue_size)
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
         self._closed = asyncio.Event()
+        self._signal = asyncio.Event()
+        self.dropped = 0
+
+    def notify_nowait(self, packet: mesh_pb2.FromRadio) -> None:
+        if self._closed.is_set():
+            return
+        try:
+            self._queue.put_nowait(packet)
+        except asyncio.QueueFull:
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self._queue.get_nowait()
+            self.dropped += 1
+            self._queue.put_nowait(packet)
+        self._signal.set()
 
     async def notify(self, packet: mesh_pb2.FromRadio) -> None:
-        await self._queue.put(packet)
+        self.notify_nowait(packet)
 
     def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> mesh_pb2.FromRadio:
-        self._stop_if_needed()
-
-        queue_task = asyncio.create_task(self._queue.get(), name="packet-stream-listener-queue-get")
-        closed_task = asyncio.create_task(self._closed.wait(), name="packet-stream-listener-closed")
-        try:
-            done, pending = await asyncio.wait([queue_task, closed_task], return_when=asyncio.FIRST_COMPLETED)
-        except asyncio.CancelledError:
-            queue_task.cancel()
-            closed_task.cancel()
-            raise
-
-        for task in pending:
-            task.cancel()
-
-        if done == {closed_task}:
+        while True:
+            if not self._queue.empty():
+                return self._queue.get_nowait()
             self._stop_if_needed()
-
-        return await queue_task
+            self._signal.clear()
+            if not self._queue.empty() or self._closed.is_set():
+                continue
+            await self._signal.wait()
 
     def _stop_if_needed(self) -> None:
         if self._closed.is_set():
@@ -57,10 +73,12 @@ class ClientApiConnectionPacketStreamListener:
             return
 
         self._closed.set()
+        self._signal.set()
 
     def set_failure(self, e: Exception) -> None:
         self._failure = e
         self._closed.set()
+        self._signal.set()
 
     def __enter__(self) -> Self:
         return self

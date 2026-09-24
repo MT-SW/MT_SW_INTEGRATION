@@ -18,6 +18,8 @@ export const DEFAULT_LANGUAGE = "pl";
 const STRINGS = {
   pl: {
     "panel.title": "MT_SW_INTEGRATION",
+    "panel.link_down": "Brak połączenia z radiem — trwa ponowne łączenie…",
+    "panel.stats_degraded": "Statystyki Home Assistanta są chwilowo niepełne — panel działa normalnie, ponawiam w tle.",
 
     "tab.radio": "Radio",
     "tab.messages": "Wiadomości",
@@ -417,6 +419,8 @@ const STRINGS = {
 
   en: {
     "panel.title": "MT_SW_INTEGRATION",
+    "panel.link_down": "No connection to the radio — reconnecting…",
+    "panel.stats_degraded": "Home Assistant statistics are temporarily incomplete — the panel works normally, retrying in the background.",
 
     "tab.radio": "Radio",
     "tab.messages": "Messages",

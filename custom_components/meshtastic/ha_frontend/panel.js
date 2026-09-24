@@ -56,6 +56,7 @@ class MeshtasticPanel extends LitElement {
       _moduleConfig: { type: Object },
       _configError: { type: Boolean },
       _configSchema: { type: Object },
+      _linkUp: { type: Boolean },
     };
   }
 
@@ -78,6 +79,13 @@ class MeshtasticPanel extends LitElement {
     this._pollTimer = null;
     this._unsubscribe = null;
     this._subscribedEntryId = null;
+    // Lista węzłów na żywo: migawka + zmiany z meshtastic/subscribe_nodes
+    this._nodeMap = new Map();
+    this._unsubscribeNodes = null;
+    this._nodeSubEntryId = null;
+    this._nodeSubSession = null;
+    this._linkUp = null;
+    this._onNodePatch = (event) => this._applyNodePatch(event.detail || {});
     this._onLocationChanged = () => {
       this._activeTab = tabFromPath();
     };
@@ -102,6 +110,7 @@ class MeshtasticPanel extends LitElement {
     this.addEventListener("mtsw-refresh", this._onRefreshRequest);
     this.addEventListener("mtsw-config-saved", this._onConfigSaved);
     this.addEventListener("mtsw-open-dm", this._onOpenDm);
+    this.addEventListener("mtsw-node-patch", this._onNodePatch);
     this._startPolling();
   }
 
@@ -111,8 +120,10 @@ class MeshtasticPanel extends LitElement {
     this.removeEventListener("mtsw-refresh", this._onRefreshRequest);
     this.removeEventListener("mtsw-config-saved", this._onConfigSaved);
     this.removeEventListener("mtsw-open-dm", this._onOpenDm);
+    this.removeEventListener("mtsw-node-patch", this._onNodePatch);
     this._stopPolling();
     this._unsubscribeMessages();
+    this._unsubscribeNodesNow();
   }
 
   updated(changed) {
@@ -177,7 +188,7 @@ class MeshtasticPanel extends LitElement {
       return;
     }
     await Promise.all([
-      this._refreshNodes(entryId),
+      this._ensureNodeSubscription(entryId),
       this._refreshTimeseries(entryId),
       this._ensureSubscription(entryId),
       this._refreshConfig(entryId),
@@ -196,13 +207,112 @@ class MeshtasticPanel extends LitElement {
     }
   }
 
+  /* Zapasowe jednorazowe pobranie listy — używane tylko, gdy subskrypcja
+     na żywo się nie uda. */
   async _refreshNodes(entryId) {
     try {
       const result = await this.hass.callWS({ type: "meshtastic/nodes", entry_id: entryId });
-      this._nodes = result.nodes || [];
+      this._nodeMap = new Map((result.nodes || []).map((node) => [node.node_id, node]));
+      this._publishNodes();
     } catch (err) {
       console.warn("MT_SW: nie udało się pobrać węzłów", err);
     }
+  }
+
+  /* Subskrypcja listy węzłów — odnawiana, gdy zmieni się bramka albo sesja
+     połączenia (przeładowanie integracji tworzy nowego klienta). */
+  async _ensureNodeSubscription(entryId) {
+    const gateway = (this._gateways || []).find((g) => g.entry_id === entryId);
+    const session = gateway ? gateway.session || null : null;
+    if (
+      this._unsubscribeNodes &&
+      this._nodeSubEntryId === entryId &&
+      this._nodeSubSession === session
+    ) {
+      return;
+    }
+    this._unsubscribeNodesNow();
+    this._nodeSubEntryId = entryId;
+    this._nodeSubSession = session;
+    try {
+      this._unsubscribeNodes = await this.hass.connection.subscribeMessage(
+        (event) => this._onNodesEvent(entryId, event),
+        { type: "meshtastic/subscribe_nodes", entry_id: entryId }
+      );
+    } catch (err) {
+      console.warn("MT_SW: subskrypcja węzłów nie powiodła się, pobieram jednorazowo", err);
+      this._nodeSubEntryId = null;
+      this._nodeSubSession = null;
+      await this._refreshNodes(entryId);
+    }
+  }
+
+  _unsubscribeNodesNow() {
+    if (this._unsubscribeNodes) {
+      try {
+        this._unsubscribeNodes();
+      } catch (err) {
+        console.debug("MT_SW: odsubskrybowanie węzłów nie powiodło się", err);
+      }
+    }
+    this._unsubscribeNodes = null;
+    this._nodeSubEntryId = null;
+    this._nodeSubSession = null;
+  }
+
+  _onNodesEvent(entryId, event) {
+    if (!event || entryId !== this._nodeSubEntryId) {
+      return;
+    }
+    switch (event.kind) {
+      case "snapshot":
+        this._nodeMap = new Map((event.nodes || []).map((node) => [node.node_id, node]));
+        this._linkUp = event.connected !== false;
+        this._publishNodes();
+        break;
+      case "delta":
+        for (const node of event.upsert || []) {
+          this._nodeMap.set(node.node_id, node);
+        }
+        for (const nodeId of event.remove || []) {
+          this._nodeMap.delete(nodeId);
+        }
+        this._publishNodes();
+        break;
+      case "connection":
+        this._linkUp = Boolean(event.connected);
+        if (event.state === "stopped") {
+          // integracja się przeładowuje — ten klient już nie wróci
+          this._unsubscribeNodesNow();
+          setTimeout(() => this._refresh(), 3000);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  _publishNodes() {
+    const list = Array.from(this._nodeMap.values());
+    const key = (node) => (node.long_name || node.node_hex || "").toLowerCase();
+    list.sort((a, b) => key(a).localeCompare(key(b)));
+    this._nodes = list;
+  }
+
+  _applyNodePatch({ nodeId, patch, removed }) {
+    if (nodeId === undefined || nodeId === null) {
+      return;
+    }
+    if (removed) {
+      this._nodeMap.delete(nodeId);
+    } else {
+      const current = this._nodeMap.get(nodeId);
+      if (!current) {
+        return;
+      }
+      this._nodeMap.set(nodeId, { ...current, ...(patch || {}) });
+    }
+    this._publishNodes();
   }
 
   async _refreshTimeseries(entryId) {
@@ -534,6 +644,30 @@ class MeshtasticPanel extends LitElement {
     }
   }
 
+  /* Stan łącza i warstwy statystyk — pływający pasek, żeby nie zmieniać
+     wysokości zakładek (--mtsw-tab-height). */
+  _renderStatusBanner() {
+    const entryId = this._primaryEntryId;
+    const gateway = (this._gateways || []).find((g) => g.entry_id === entryId);
+    if (!gateway) {
+      return "";
+    }
+    const linkUp = this._linkUp === null ? gateway.connected !== false : this._linkUp;
+    const lines = [];
+    if (!linkUp) {
+      lines.push(t(this.hass, "panel.link_down"));
+    }
+    if (gateway.stats_ok === false) {
+      lines.push(t(this.hass, "panel.stats_degraded"));
+    }
+    if (!lines.length) {
+      return "";
+    }
+    return html`<div class="status-banner ${linkUp ? "warn" : "error"}">
+      ${lines.map((line) => html`<div>${line}</div>`)}
+    </div>`;
+  }
+
   render() {
     if (!this.hass) {
       return html``;
@@ -583,6 +717,7 @@ class MeshtasticPanel extends LitElement {
         </div>
 
         ${this._renderTab()}
+        ${this._renderStatusBanner()}
       </ha-top-app-bar-fixed>
     `;
   }
@@ -638,6 +773,27 @@ class MeshtasticPanel extends LitElement {
       .tab.active {
         color: var(--primary-color);
         border-bottom-color: var(--primary-color);
+      }
+
+      .status-banner {
+        position: fixed;
+        left: 50%;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        transform: translateX(-50%);
+        z-index: 5;
+        max-width: min(560px, calc(100vw - 32px));
+        padding: 10px 16px;
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--text-primary-color, #fff);
+        background: var(--warning-color, #ff9800);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        pointer-events: none;
+      }
+
+      .status-banner.error {
+        background: var(--error-color, #db4437);
       }
 
       .gateway-select {

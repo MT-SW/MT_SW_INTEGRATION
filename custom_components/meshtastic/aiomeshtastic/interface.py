@@ -9,6 +9,7 @@ import enum
 import functools
 import itertools
 import random
+import time
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, MutableMapping
 from dataclasses import dataclass
@@ -202,6 +203,19 @@ class MeshInterface:
         )
         self._previous_reconnects = deque(maxlen=10)
 
+        # Słuchacze zmian lokalnej bazy węzłów i stanu łącza — zwykłe funkcje
+        # (nie korutyny), wołane synchronicznie w pętli zdarzeń. Karmią panel
+        # na żywo, niezależnie od koordynatora statystyk.
+        self._node_change_listeners: list[Callable[[int | None], None]] = []
+        self._connection_state_listeners: list[Callable[[str], None]] = []
+        self._link_up = False
+        self._last_reboot_count: int | None = None
+        self._full_resync_task: asyncio.Task | None = None
+        # Strażnik martwego połączenia włącza się dopiero, gdy radio
+        # potwierdzi, że odpowiada na heartbeat (QueueStatus) — starsze
+        # firmware tego nie robią i przy nich strażnik byłby szkodliwy.
+        self._heartbeat_replies_confirmed = False
+
         # MQTT client for persistent connection
         self._mqtt_proxy_enabled = enable_mqtt_proxy
         if self._mqtt_proxy_enabled and not _has_aiomqtt:
@@ -236,6 +250,40 @@ class MeshInterface:
 
         self._app_listeners[packet_type].append(wrapper)
         return lambda: self._app_listeners[packet_type].remove(wrapper)
+
+    def add_node_change_listener(self, callback: Callable[[int | None], None]) -> Callable[[], None]:
+        """Wołane z numerem węzła po każdej zmianie jego wpisu (None = cała baza wczytana od nowa)."""
+        self._node_change_listeners.append(callback)
+        return lambda: self._remove_listener(self._node_change_listeners, callback)
+
+    def add_connection_state_listener(self, callback: Callable[[str], None]) -> Callable[[], None]:
+        """Wołane ze stanem łącza: "connected", "disconnected", "stopped"."""
+        self._connection_state_listeners.append(callback)
+        return lambda: self._remove_listener(self._connection_state_listeners, callback)
+
+    @staticmethod
+    def _remove_listener(listeners: list, callback: Callable) -> None:
+        with contextlib.suppress(ValueError):
+            listeners.remove(callback)
+
+    def _emit_node_changed(self, node_id: int | None) -> None:
+        for callback in list(self._node_change_listeners):
+            try:
+                callback(node_id)
+            except Exception:  # noqa: BLE001
+                self._logger.debug("Node change listener failed", exc_info=True)
+
+    def _set_link_state(self, state: str) -> None:
+        self._link_up = state == "connected"
+        for callback in list(self._connection_state_listeners):
+            try:
+                callback(state)
+            except Exception:  # noqa: BLE001
+                self._logger.debug("Connection state listener failed", exc_info=True)
+
+    @property
+    def link_up(self) -> bool:
+        return self._link_up and self.is_running
 
     def nodes(self) -> Mapping[int, Mapping[str, Any]]:
         return MappingProxyType(self._node_database)
@@ -377,6 +425,7 @@ class MeshInterface:
         self._is_running.clear()
         self._connected_node_ready.clear()
         self._is_stopped.set()
+        self._set_link_state("stopped")
 
         await self._close_packet_streams()
         await self._cancel_processing_tasks()
@@ -542,36 +591,54 @@ class MeshInterface:
         except Exception:
             self._logger.exception("Error publishing MQTT message")
 
+    # Po tylu sekundach bez JAKIEGOKOLWIEK bajtu z radia (mimo heartbeatów,
+    # na które radio odpowiada QueueStatus) uznajemy łącze za martwe.
+    _DEAD_LINK_SECONDS = 150
+
     @process_while_running
     async def _heartbeat_loop(self) -> None:
         while True:
             await asyncio.sleep(self._heartbeat_interval_s)
+            if self._reconnect_lock.locked() or not self._link_up:
+                self._logger.debug("Skipping heartbeat — reconnect in progress")
+                continue
+            sent_at = time.monotonic()
             try:
-                if self._reconnect_lock.locked():
-                    self._logger.debug("Skipping heartbeat during reconnect")
-                    continue
                 self._logger.debug("Sending heartbeat")
-                # Plain, response-less heartbeat only. request_connection_status()
-                # (an AdminMessage round trip) was already tried and proved
-                # unreliable on this hardware (fix-3.13/3.14/3.15) — real
-                # disconnects are caught by the packet stream itself, this is
-                # just a keep-alive poke, not a health check.
+                # Zwykły heartbeat bez rundy AdminMessage — request_connection_status()
+                # okazał się na tym sprzęcie zawodny (fix-3.13..3.15). Firmware
+                # odpowiada na heartbeat pakietem QueueStatus, lokalnie, bez eteru.
                 await self._connection.send_heartbeat()
-            except Exception:  # noqa: BLE001
-                # Informational only — do not force a reconnect on a single
-                # failed heartbeat (same reasoning as fix-3.15).
-                self._logger.info("Heartbeat failed", exc_info=True)
+            except Exception as err:  # noqa: BLE001
+                self._logger.info("Heartbeat failed: %s", err)
+                self._logger.debug("Heartbeat failure details", exc_info=True)
             else:
                 self._logger.debug("Heartbeat success")
 
+            if not self._heartbeat_replies_confirmed:
+                await asyncio.sleep(5)
+                if self._connection.last_queue_status_monotonic >= sent_at:
+                    self._logger.debug("Radio odpowiada na heartbeat — strażnik łącza aktywny")
+                    self._heartbeat_replies_confirmed = True
+                continue
+
+            idle = time.monotonic() - self._connection.last_rx_monotonic
+            if idle > max(self._DEAD_LINK_SECONDS, 2.5 * self._heartbeat_interval_s):
+                self._logger.warning(
+                    "Brak danych z radia od %.0f s mimo heartbeatów — łącze uznane za martwe, łączę ponownie",
+                    idle,
+                )
+                await self._connection.force_close()
+
     async def _process_connected_node_packets(self, packet: mesh_pb2.FromRadio) -> None:
         if packet.HasField("rebooted") and packet.rebooted:
-
-            async def reconnect() -> None:
-                await self.stop()
-                await self.start()
-
-            self._add_background_task(reconnect(), name="reconnect")
+            # Dawniej: stop() + start() w zadaniu tła. stop() anulowało jednak
+            # wszystkie zadania tła, łącznie z tym, które je wywołało, więc
+            # start() nigdy się nie wykonywał i integracja zostawała na stałe
+            # bez połączenia. Teraz połączenie zostaje, a konfigurację i bazę
+            # węzłów po restarcie radia pobieramy ponownie w tle.
+            self._logger.info("Radio zgłosiło restart — pobieram ponownie konfigurację")
+            self._schedule_full_resync()
         elif packet.HasField("my_info"):
             self._connected_node_info = packet.my_info
         elif packet.HasField("metadata"):
@@ -654,29 +721,33 @@ class MeshInterface:
     @process_while_running
     async def _process_from_radio_packets_loop(self) -> None:
         async for from_radio in self._listen_while_running():
-            variant = from_radio.WhichOneof("payload_variant")
-            if variant == "config_complete_id":
-                self._config_reply_cache_complete = True
-            elif variant == "channel":
-                self._config_reply_cache[("channel", from_radio.channel.index)] = from_radio.SerializeToString()
-            elif variant == "node_info":
-                self._config_reply_cache[("node_info", from_radio.node_info.num)] = from_radio.SerializeToString()
-            elif variant == "config":
-                sub = from_radio.config.WhichOneof("payload_variant")
-                self._config_reply_cache[("config", sub)] = from_radio.SerializeToString()
-            elif variant == "moduleConfig":
-                sub = from_radio.moduleConfig.WhichOneof("payload_variant")
-                self._config_reply_cache[("moduleConfig", sub)] = from_radio.SerializeToString()
-            elif variant in ("my_info", "metadata"):
-                self._config_reply_cache[(variant, None)] = from_radio.SerializeToString()
+            await self._handle_from_radio(from_radio)
 
-            await self._process_connected_node_packets(from_radio)
-            await self._process_node_info(from_radio)
+    async def _handle_from_radio(self, from_radio: mesh_pb2.FromRadio) -> None:
+        """Pełna obsługa jednego pakietu z radia — wspólna dla pętli głównej i ponownego łączenia."""
+        variant = from_radio.WhichOneof("payload_variant")
+        if variant == "config_complete_id":
+            self._config_reply_cache_complete = True
+        elif variant == "channel":
+            self._config_reply_cache[("channel", from_radio.channel.index)] = from_radio.SerializeToString()
+        elif variant == "node_info":
+            self._config_reply_cache[("node_info", from_radio.node_info.num)] = from_radio.SerializeToString()
+        elif variant == "config":
+            sub = from_radio.config.WhichOneof("payload_variant")
+            self._config_reply_cache[("config", sub)] = from_radio.SerializeToString()
+        elif variant == "moduleConfig":
+            sub = from_radio.moduleConfig.WhichOneof("payload_variant")
+            self._config_reply_cache[("moduleConfig", sub)] = from_radio.SerializeToString()
+        elif variant in ("my_info", "metadata"):
+            self._config_reply_cache[(variant, None)] = from_radio.SerializeToString()
 
-            for listener in self._packet_stream_listeners:
-                await listener.notify(from_radio)
+        await self._process_connected_node_packets(from_radio)
+        await self._process_node_info(from_radio)
 
-            await self._process_packet_for_app_listener(from_radio)
+        for listener in list(self._packet_stream_listeners):
+            listener.notify_nowait(from_radio)
+
+        await self._process_packet_for_app_listener(from_radio)
 
     def get_config_reply_cache(self) -> list[bytes] | None:
         """Return our own cached config-phase FromRadio bytes, or None if not (yet) complete."""
@@ -745,6 +816,7 @@ class MeshInterface:
                     _normalize_user_dict(node_info_dict["user"], node_info.num)
                 db_node = self._get_or_create_node(node_info.num)
                 db_node.update(node_info_dict)
+                self._emit_node_changed(node_info.num)
 
                 node = self.find_node(node_id) or MeshNode.stub_node(node_id)
                 node_info_packet = FullNodeInfoPacket(packet)
@@ -788,6 +860,7 @@ class MeshInterface:
             n.update(node_info)
 
         self._node_database[node_num] = n
+        self._emit_node_changed(node_num)
 
         return n
 
@@ -828,6 +901,8 @@ class MeshInterface:
                         if not self.is_running:
                             return
                 except Exception:  # noqa: BLE001
+                    if self._link_up:
+                        self._set_link_state("disconnected")
                     await self._reconnect_while_running()
 
     async def _reconnect_while_running(self, *, force: bool = False) -> None:  # noqa: PLR0915
@@ -846,7 +921,10 @@ class MeshInterface:
         while self.is_running:
             if reconnect_counter < reconnect_counter_max:
                 reconnect_counter += 1
-            reconnect_delay = float(random.randint(2**reconnect_counter, 2 ** (reconnect_counter + 1)))  # noqa: S311
+            # 2, 4, 8, 16, 20, 20... s (+ do 25% losowo) — radio po restarcie
+            # wstaje zwykle w kilkanaście sekund, nie ma sensu czekać minutami
+            base_delay = min(2 ** (reconnect_counter + 1), 20)
+            reconnect_delay = base_delay * (1 + random.random() / 4)  # noqa: S311
 
             try:
                 if self._reconnect_lock.locked():
@@ -878,7 +956,9 @@ class MeshInterface:
                         # Pulling a full config on every reconnect is expensive for the
                         # device to generate, and matters a lot more now that reconnects
                         # can happen frequently.
-                        await asyncio.wait_for(self._connection.request_config(minimal=True), timeout=60)
+                        previous_reboot_count = self._last_reboot_count
+                        await asyncio.wait_for(self._request_config_inline(minimal=True), timeout=60)
+                        self._after_reconnect_config(previous_reboot_count)
                         if not self._connected_node_ready.is_set():
                             self._logger.debug("Completed first request config as part of reconnect")
                             self._connected_node_ready.set()
@@ -894,6 +974,7 @@ class MeshInterface:
                         force_reconnect = False
                         self._logger.debug("Reconnect finished")
                         self._reconnect_done.set()
+                        self._set_link_state("connected")
                         return
 
             except asyncio.CancelledError:
@@ -914,8 +995,81 @@ class MeshInterface:
             self._config_reply_cache = {}
             self._config_reply_cache_complete = False
 
+            self._emit_node_changed(None)
             await self._connection.request_config(minimal=self.no_nodes)
             self._connected_node_ready.set()
+            self._last_reboot_count = self._current_reboot_count()
+        self._set_link_state("connected")
+
+    def _current_reboot_count(self) -> int | None:
+        info = self._connected_node_info
+        if info is None:
+            return None
+        return int(info.reboot_count)
+
+    async def _request_config_inline(self, *, minimal: bool) -> bool:
+        """
+        Poproś o konfigurację i od razu przetwórz każdy pakiet odpowiedzi.
+
+        Używane przy ponownym łączeniu: pętla główna jest wtedy wstrzymana
+        (to ona wywołała ponowne łączenie), więc bez tego pakiety konfiguracji
+        — my_info, kanały, config — trafiały tylko do request_config() i nigdy
+        nie aktualizowały stanu, a wiadomości przychodzące w tym czasie ginęły.
+        """
+        start = mesh_pb2.ToRadio()
+        if minimal:
+            start.want_config_id = ClientApiConnection._CONFIG_ID_MINIMAL  # noqa: SLF001
+        else:
+            start.want_config_id = random.randint(1, 0xFFFFFFFF)  # noqa: S311
+            if start.want_config_id == ClientApiConnection._CONFIG_ID_MINIMAL:  # noqa: SLF001
+                start.want_config_id += 1
+
+        async for packet in self._connection.listen(on_start=self._connection.send_packet(start)):
+            if packet.HasField("config_complete_id") and packet.config_complete_id == start.want_config_id:
+                self._config_reply_cache_complete = True
+                return True
+            if packet.HasField("rebooted"):
+                # w trakcie ponownego łączenia i tak pobieramy konfigurację
+                continue
+            try:
+                await self._handle_from_radio(packet)
+            except Exception:  # noqa: BLE001
+                self._logger.debug("Failed to process packet during reconnect config", exc_info=True)
+        return False
+
+    def _after_reconnect_config(self, previous_reboot_count: int | None) -> None:
+        current = self._current_reboot_count()
+        if previous_reboot_count is not None and current is not None and current != previous_reboot_count:
+            self._logger.info(
+                "Radio zrestartowało się od ostatniego połączenia (licznik restartów %d -> %d) — "
+                "pobieram ponownie pełną bazę węzłów w tle",
+                previous_reboot_count,
+                current,
+            )
+            self._schedule_full_resync()
+        if current is not None:
+            self._last_reboot_count = current
+
+    def _schedule_full_resync(self) -> None:
+        if self._full_resync_task is not None and not self._full_resync_task.done():
+            return
+        self._full_resync_task = self._add_background_task(self._full_resync(), name="full-resync")
+
+    async def _full_resync(self) -> None:
+        # chwila na dojście radia do siebie po starcie
+        await asyncio.sleep(10)
+        if not self.is_running:
+            return
+        async with self._connected_node_config_lock:
+            try:
+                # Pętla główna działa, więc sama przetworzy pakiety — tu tylko
+                # czekamy na koniec. Baza w pamięci NIE jest czyszczona: dane
+                # z radia są doklejane do tego, co już wiemy.
+                await asyncio.wait_for(self._connection.request_config(minimal=False), timeout=180)
+                self._last_reboot_count = self._current_reboot_count()
+                self._logger.info("Pełna baza węzłów pobrana ponownie po restarcie radia")
+            except Exception:  # noqa: BLE001
+                self._logger.info("Ponowne pobranie bazy węzłów po restarcie radia nie powiodło się", exc_info=True)
 
     def _add_background_task(self, coro: Awaitable[None], name: str | None = None) -> asyncio.Task:
         task = asyncio.create_task(coro, name=name)
@@ -1009,6 +1163,11 @@ class MeshInterface:
         else:
             admin_message.remove_favorite_node = node_num
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        # Radio nie odsyła zmienionego wpisu węzła — bez tego panel pokazywałby
+        # starą gwiazdkę aż do następnego pełnego pobrania bazy.
+        if node is None and node_num in self._node_database:
+            self._node_database[node_num]["isFavorite"] = bool(favorite)
+            self._emit_node_changed(node_num)
 
     async def write_config_section(
         self,
@@ -1062,6 +1221,12 @@ class MeshInterface:
         else:
             admin_message.remove_ignored_node = node_num
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        if node is None and node_num in self._node_database:
+            self._node_database[node_num]["isIgnored"] = bool(ignored)
+            if ignored:
+                # firmware zdejmuje ulubienie z ignorowanego węzła
+                self._node_database[node_num]["isFavorite"] = False
+            self._emit_node_changed(node_num)
 
     async def remove_node_from_database(self, node_num_to_remove: int, node: int | None = None) -> bool:
         """Ask the connected node to drop a stale entry from its own on-device node database.
@@ -1088,6 +1253,7 @@ class MeshInterface:
             # this node forever, even though it's genuinely gone from the
             # device's own node database.
             self._node_database.pop(node_num_to_remove, None)
+            self._emit_node_changed(node_num_to_remove)
         return removed
 
     async def write_timezone_if_needed(self, node: int | None = None) -> bool:
@@ -1375,6 +1541,7 @@ class MeshInterface:
             return False
 
         self._node_database[node_id].update(**kwargs)
+        self._emit_node_changed(node_id)
         await self._notify_node_update(node_id)
         return True
 

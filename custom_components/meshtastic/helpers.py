@@ -41,6 +41,41 @@ def get_nodes(entry: MeshtasticConfigEntry) -> typing.Mapping[int, typing.Mappin
     }
 
 
+def device_by_identifier(
+    device_registry: Any, identifier: tuple[str, str], config_entry_id: str
+) -> Any | None:
+    """
+    Urządzenie tego wpisu o podanym identyfikatorze — działa na starym i nowym HA.
+
+    Nowy HA (identyfikatory nie są już unikalne między wpisami) ma
+    async_get_device_by_identifier(ident, entry_id), a stare async_get_device()
+    jest tam przestarzałe. Starsze wersje HA (min. 2024.11 wg hacs.json) mają
+    tylko async_get_device() — bez tej zgodności start kończył się
+    AttributeError. W starej ścieżce sami pilnujemy, żeby urządzenie należało
+    do tego wpisu (np. przy dwóch bramkach).
+    """
+    getter = getattr(device_registry, "async_get_device_by_identifier", None)
+    if getter is not None:
+        return getter(identifier, config_entry_id)
+    device = device_registry.async_get_device(identifiers={identifier})
+    if device is not None and config_entry_id in device.config_entries:
+        return device
+    return None
+
+
+def device_by_connection(
+    device_registry: Any, connection: tuple[str, str], config_entry_id: str
+) -> Any | None:
+    """Jak device_by_identifier(), ale po połączeniu (np. adresie MAC)."""
+    getter = getattr(device_registry, "async_get_device_by_connection", None)
+    if getter is not None:
+        return getter(connection, config_entry_id)
+    device = device_registry.async_get_device(connections={connection})
+    if device is not None and config_entry_id in device.config_entries:
+        return device
+    return None
+
+
 def node_identity_key(node_id: int, node_data: typing.Mapping[str, Any] | None) -> str:
     """
     Return a stable identity key for a node.
