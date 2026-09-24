@@ -14,7 +14,15 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_OPTION_FILTER_NODES, LOGGER
+from .const import (
+    CONF_OPTION_FEATURES,
+    CONF_OPTION_FEATURES_PANEL,
+    CONF_OPTION_FEATURES_PANEL_DEFAULT,
+    CONF_OPTION_FEATURES_STATS,
+    CONF_OPTION_FEATURES_STATS_DEFAULT,
+    CONF_OPTION_FILTER_NODES,
+    LOGGER,
+)
 
 if typing.TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -39,6 +47,24 @@ def get_nodes(entry: MeshtasticConfigEntry) -> typing.Mapping[int, typing.Mappin
         for node_num, node_info in entry.runtime_data.coordinator.data.items()
         if node_num in filter_node_nums or node_identity_key(node_num, node_info) in configured_identity_keys
     }
+
+
+def panel_enabled(entry: Any) -> bool:
+    """Czy dla tego wpisu działa panel MT_SW (aplikacja w pasku bocznym)."""
+    return bool(
+        (entry.options.get(CONF_OPTION_FEATURES) or {}).get(
+            CONF_OPTION_FEATURES_PANEL, CONF_OPTION_FEATURES_PANEL_DEFAULT
+        )
+    )
+
+
+def stats_enabled(entry: Any) -> bool:
+    """Czy dla tego wpisu działa zbieranie statystyk (koordynator, urządzenia, encje HA)."""
+    return bool(
+        (entry.options.get(CONF_OPTION_FEATURES) or {}).get(
+            CONF_OPTION_FEATURES_STATS, CONF_OPTION_FEATURES_STATS_DEFAULT
+        )
+    )
 
 
 def device_by_identifier(

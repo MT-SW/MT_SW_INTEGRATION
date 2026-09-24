@@ -116,6 +116,14 @@
           "add_another_node": "Add another Node"
         },
         "sections": {
+          "features": {
+            "name": "Integration parts",
+            "description": "The MT_SW panel and statistics collection work independently — you can enable one without the other, and a failure in one does not stop the other. The panel is the sidebar app (messages, nodes, map, radio settings, sniffer). Statistics collection creates Home Assistant devices and entities for the tracked nodes. After disabling statistics, existing entities stay in Home Assistant as unavailable — you can remove them manually.",
+            "data": {
+              "panel": "MT_SW panel (sidebar app)",
+              "stats": "Statistics collection (Home Assistant devices and entities)"
+            }
+          },
           "notify_platform": {
             "name": "Notification Platform",
             "description": "Home Assistant Notification is the recommended way to send messages to Meshtastic mesh. Configure which parts of the mesh network should be represented in Home Assistant in order to facilitate sending messages.",

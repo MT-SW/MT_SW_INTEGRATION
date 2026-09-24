@@ -116,6 +116,14 @@
           "add_another_node": "Dodaj kolejny węzeł"
         },
         "sections": {
+          "features": {
+            "name": "Części integracji",
+            "description": "Panel MT_SW i zbieranie statystyk działają niezależnie od siebie — możesz włączyć jedno bez drugiego, a błąd w jednym nie zatrzymuje drugiego. Panel to aplikacja w pasku bocznym (wiadomości, węzły, mapa, ustawienia radia, sniffer). Zbieranie statystyk tworzy urządzenia i encje Home Assistanta dla śledzonych węzłów. Po wyłączeniu statystyk istniejące encje zostają w Home Assistant jako niedostępne — możesz je usunąć ręcznie.",
+            "data": {
+              "panel": "Panel MT_SW (aplikacja w pasku bocznym)",
+              "stats": "Zbieranie statystyk (urządzenia i encje Home Assistant)"
+            }
+          },
           "notify_platform": {
             "name": "Platforma powiadomień",
             "description": "Powiadomienie Home Assistant to zalecany sposób wysyłania wiadomości do sieci Meshtastic. Skonfiguruj, które części sieci mesh mają być reprezentowane w Home Assistant, aby ułatwić wysyłanie wiadomości.",

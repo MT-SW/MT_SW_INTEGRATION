@@ -34,6 +34,8 @@ class StatsLayerState:
     zapisywany tutaj i ponawiany w tle.
     """
 
+    # False = zbieranie statystyk wyłączone w opcjach (tylko panel)
+    enabled: bool = True
     platforms_forwarded: bool = False
     gateway_entities_added: bool = False
     ready: bool = False

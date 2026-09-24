@@ -26,18 +26,24 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _DEBUG = False
+_STATIC_REGISTERED_KEY = f"{DOMAIN}_panel_static_registered"
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
     # Add to sidepanel if needed
     if DOMAIN not in hass.data.get("frontend_panels", {}):
-        await hass.http.async_register_static_paths(
-            [
-                StaticPathConfig(
-                    f"{URL_BASE}/frontend/{_INTEGRATION_VERSION}", locate_dir(), cache_headers=True
-                )
-            ]
-        )
+        # Ścieżki statycznej nie da się wyrejestrować, więc przy ponownym
+        # włączeniu panelu (opcja integracji / przeładowanie) rejestrujemy ją
+        # tylko raz na cały proces HA — sam wpis w pasku bocznym wraca normalnie.
+        if not hass.data.get(_STATIC_REGISTERED_KEY):
+            await hass.http.async_register_static_paths(
+                [
+                    StaticPathConfig(
+                        f"{URL_BASE}/frontend/{_INTEGRATION_VERSION}", locate_dir(), cache_headers=True
+                    )
+                ]
+            )
+            hass.data[_STATIC_REGISTERED_KEY] = True
 
         async_register_built_in_panel(
             hass,

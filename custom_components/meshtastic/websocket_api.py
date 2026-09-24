@@ -24,6 +24,7 @@ from homeassistant.helpers.storage import Store
 from . import nodedb_cleanup, ondemand
 from .aiomeshtastic.interface import TelemetryType
 from .const import DOMAIN
+from .helpers import panel_enabled
 from .nodedb_cleanup import NoCriteriaError
 from .ondemand import OnDemandError
 from .store import get_store
@@ -46,7 +47,10 @@ def _loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
     return [
         entry
         for entry in hass.config_entries.async_entries(DOMAIN)
-        if entry.state is ConfigEntryState.LOADED and getattr(entry, "runtime_data", None) is not None
+        if entry.state is ConfigEntryState.LOADED
+        and getattr(entry, "runtime_data", None) is not None
+        # bramka z wyłączonym panelem w opcjach nie jest pokazywana w panelu
+        and panel_enabled(entry)
     ]
 
 
@@ -154,6 +158,10 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
         "available": bool(node_id is not None and _client_connected(client)),
         "connected": _client_connected(client),
         "session": getattr(client, "session_id", None),
+        "stats_enabled": bool(getattr(getattr(data, "stats", None), "enabled", True)),
+        # klient webowy jest niezależny od panelu — przycisk na zakładce Radio
+        # pokazujemy tylko wtedy, gdy jest włączony w opcjach
+        "web_client": bool((entry.options.get("web_client") or {}).get("enable", False)),
         "stats_ok": bool(getattr(data, "stats", None) is None or data.stats.error is None),
         "stats_error": getattr(getattr(data, "stats", None), "error", None),
         "firmware_version": metadata.get("firmwareVersion"),

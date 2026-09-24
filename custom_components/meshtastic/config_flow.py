@@ -43,13 +43,15 @@ from .const import (
     CONF_OPTION_TCP_PROXY_ENABLE_DEFAULT,
     CONF_OPTION_TCP_PROXY_PORT,
     CONF_OPTION_TCP_PROXY_PORT_DEFAULT,
-    CONF_OPTION_MQTT_SNIFFER,
-    CONF_OPTION_MQTT_SNIFFER_ENABLE,
-    CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT,
     CONF_OPTION_WEB_CLIENT_ENABLE,
     CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT,
     CONF_OPTION_WEB_CLIENT_PORT,
     CONF_OPTION_WEB_CLIENT_PORT_DEFAULT,
+    CONF_OPTION_FEATURES,
+    CONF_OPTION_FEATURES_PANEL,
+    CONF_OPTION_FEATURES_PANEL_DEFAULT,
+    CONF_OPTION_FEATURES_STATS,
+    CONF_OPTION_FEATURES_STATS_DEFAULT,
     CURRENT_CONFIG_VERSION_MAJOR,
     DOMAIN,
     LOGGER,
@@ -165,6 +167,23 @@ def _build_notify_platform_schema(
     )
 
 
+def _build_features_schema(
+    options: dict[str, Any],
+) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_OPTION_FEATURES_PANEL,
+                default=options.get(CONF_OPTION_FEATURES_PANEL, CONF_OPTION_FEATURES_PANEL_DEFAULT),
+            ): cv.boolean,
+            vol.Required(
+                CONF_OPTION_FEATURES_STATS,
+                default=options.get(CONF_OPTION_FEATURES_STATS, CONF_OPTION_FEATURES_STATS_DEFAULT),
+            ): cv.boolean,
+        }
+    )
+
+
 def _build_meshtastic_web_schema(
     options: dict[str, Any],
 ) -> vol.Schema:
@@ -197,19 +216,6 @@ def _build_meshtastic_tcp_schema(
             ): cv.positive_int,
         }
     )
-
-def _build_mqtt_sniffer_schema(
-    options: dict[str, Any],
-) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_OPTION_MQTT_SNIFFER_ENABLE,
-                default=options.get(CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT),
-            ): cv.boolean,
-        }
-    )
-
 
 async def validate_web_client_port(hass: HomeAssistant, config_entry: ConfigEntry | None, data: dict[str, Any]) -> bool:
     if not data.get(CONF_OPTION_WEB_CLIENT, {}).get(CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT):
@@ -738,6 +744,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return await self.async_step_init()
             new_data[CONF_OPTION_FILTER_NODES] = updated_filter_node_option
 
+            if CONF_OPTION_FEATURES in user_input:
+                new_data[CONF_OPTION_FEATURES] = user_input[CONF_OPTION_FEATURES]
+
             if CONF_OPTION_NOTIFY_PLATFORM in user_input:
                 new_data[CONF_OPTION_NOTIFY_PLATFORM] = user_input[CONF_OPTION_NOTIFY_PLATFORM]
 
@@ -755,9 +764,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 else:
                     new_data[CONF_OPTION_TCP_PROXY] = user_input[CONF_OPTION_TCP_PROXY]
 
-            if CONF_OPTION_MQTT_SNIFFER in user_input:
-                new_data[CONF_OPTION_MQTT_SNIFFER] = user_input[CONF_OPTION_MQTT_SNIFFER]
-
             if not errors:
                 return self.async_create_entry(
                     title="",
@@ -769,6 +775,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             for node_id in already_selected_node_ids
         }
 
+        features_options = (
+            self.options[CONF_OPTION_FEATURES]
+            if CONF_OPTION_FEATURES in self.options
+            else self.config_entry.options.get(CONF_OPTION_FEATURES, {})
+        )
         notify_options = (
             self.options[CONF_OPTION_NOTIFY_PLATFORM]
             if CONF_OPTION_NOTIFY_PLATFORM in self.options
@@ -784,11 +795,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if CONF_OPTION_TCP_PROXY in self.options
             else self.config_entry.options.get(CONF_OPTION_TCP_PROXY, {})
         )
-        mqtt_sniffer_options = (
-            self.options[CONF_OPTION_MQTT_SNIFFER]
-            if CONF_OPTION_MQTT_SNIFFER in self.options
-            else self.config_entry.options.get(CONF_OPTION_MQTT_SNIFFER, {})
-        )
         options_schema = vol.Schema(
             {
                 vol.Required(CONF_OPTION_FILTER_NODES, default=list(selected_nodes.keys())): cv.multi_select(
@@ -799,6 +805,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     self.nodes,
                     node_selection_required=False,
                 ).schema,
+                vol.Required(CONF_OPTION_FEATURES): data_entry_flow.section(
+                    _build_features_schema(features_options), {"collapsed": False}
+                ),
                 vol.Required(CONF_OPTION_NOTIFY_PLATFORM): data_entry_flow.section(
                     _build_notify_platform_schema(notify_options), {"collapsed": True}
                 ),
@@ -807,9 +816,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Required(CONF_OPTION_TCP_PROXY): data_entry_flow.section(
                     _build_meshtastic_tcp_schema(tcp_proxy_options), {"collapsed": "tcp_proxy" in errors}
-                ),
-                vol.Required(CONF_OPTION_MQTT_SNIFFER): data_entry_flow.section(
-                    _build_mqtt_sniffer_schema(mqtt_sniffer_options), {"collapsed": True}
                 ),
             }
         )

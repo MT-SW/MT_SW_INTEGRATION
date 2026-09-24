@@ -384,6 +384,12 @@ class MeshMapTab extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    this._drawnSignature = null;
+    this._zooming = false;
     if (this._map) {
       this._map.remove();
       this._map = null;
@@ -420,13 +426,60 @@ class MeshMapTab extends LitElement {
     };
   }
 
+  /* Tylko poprawne współrzędne: skończone liczby w zakresie. NaN też jest
+     typu "number", a jedna taka linia topologii psuła cały rysownik Canvas
+     Leafleta (TypeError: can't access property "x" przy każdym ruchu myszą). */
   _positioned() {
     return (this.nodes || []).filter(
       (node) =>
-        typeof node.latitude === "number" &&
-        typeof node.longitude === "number" &&
+        Number.isFinite(node.latitude) &&
+        Number.isFinite(node.longitude) &&
+        Math.abs(node.latitude) <= 90 &&
+        Math.abs(node.longitude) <= 180 &&
         !(node.latitude === 0 && node.longitude === 0)
     );
+  }
+
+  /* Mapa ma sens tylko z rzeczywistym rozmiarem kontenera. fitBounds na
+     kontenerze 0×0 (zakładka jeszcze bez układu) dawało powiększenie NaN i od
+     tej chwili każda warstwa miała nieprawidłowe granice. */
+  _mapReady() {
+    if (!this._map) {
+      return false;
+    }
+    const size = this._map.getSize();
+    if (!size || size.x <= 0 || size.y <= 0) {
+      return false;
+    }
+    const center = this._map.getCenter();
+    if (!Number.isFinite(this._map.getZoom()) || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) {
+      // stan mapy już zepsuty — wracamy do widoku domyślnego i kadrujemy od nowa
+      this._map.setView([50.87, 20.63], 9, { animate: false });
+      this._fitted = false;
+    }
+    return true;
+  }
+
+  /* Podpis tego, co faktycznie widać na mapie — bez niego mapa rysowała się od
+     nowa przy każdej zmianie stanu HA (wiele razy na sekundę). */
+  _drawSignature(nodes) {
+    return JSON.stringify([
+      this.showLinks,
+      this.showLabels,
+      this.showPrecision,
+      nodes.map((node) => [
+        node.node_id,
+        node.latitude,
+        node.longitude,
+        node.long_name,
+        node.short_name,
+        node.is_gateway,
+        node.altitude,
+        node.snr,
+        node.precision_bits,
+        (node.neighbors || []).map((neighbor) => [neighbor.node_id, neighbor.snr]),
+      ]),
+    ]);
   }
 
   async _ensureMap() {
@@ -458,7 +511,26 @@ class MeshMapTab extends LitElement {
     this._precisionLayer = L.layerGroup().addTo(this._map);
     // Rozsunięcie liczone jest w pikselach, więc po każdej zmianie
     // powiększenia trzeba je przeliczyć od nowa.
-    this._map.on("zoomend", () => this._redraw());
+    // Warstw nie przebudowujemy w trakcie animacji powiększenia — dodawanie
+    // linii do rysownika Canvas w tym momencie kończyło się błędami Leafleta.
+    this._map.on("zoomstart", () => {
+      this._zooming = true;
+    });
+    this._map.on("zoomend", () => {
+      this._zooming = false;
+      this._redraw(true);
+    });
+    // Kontener zmienia rozmiar (zakładka, obrót telefonu, pasek boczny HA) —
+    // mapa musi o tym wiedzieć, a pierwsze kadrowanie czeka na prawdziwy rozmiar.
+    if (typeof ResizeObserver !== "undefined") {
+      this._resizeObserver = new ResizeObserver(() => {
+        if (this._map) {
+          this._map.invalidateSize({ animate: false });
+          this._redraw(true);
+        }
+      });
+      this._resizeObserver.observe(container);
+    }
   }
 
   /* Warstwę kafli przestawiamy tylko przy faktycznej zmianie adresu —
@@ -487,12 +559,18 @@ class MeshMapTab extends LitElement {
     this._tileSignature = spec.url;
   }
 
-  _redraw() {
-    if (!this._map || !window.L) {
+  _redraw(force = false) {
+    if (!this._map || !window.L || this._zooming || !this._mapReady()) {
       return;
     }
     const L = window.L;
     const nodes = this._positioned();
+    // rozsunięcie markerów zależy od powiększenia, więc wchodzi do podpisu
+    const signature = `${this._map.getZoom()}|${this._drawSignature(nodes)}`;
+    if (!force && signature === this._drawnSignature) {
+      return;
+    }
+    this._drawnSignature = signature;
 
     this._markerLayer.clearLayers();
     this._linkLayer.clearLayers();
@@ -506,7 +584,11 @@ class MeshMapTab extends LitElement {
       for (const node of nodes) {
         for (const neighbor of node.neighbors || []) {
           const peer = byId.get(neighbor.node_id);
-          if (!peer) {
+          if (!peer || peer === node) {
+            continue;
+          }
+          if (peer.latitude === node.latitude && peer.longitude === node.longitude) {
+            // linia zerowej długości nie ma czego pokazać
             continue;
           }
           const key = [node.node_id, neighbor.node_id].sort().join("-");
@@ -600,11 +682,15 @@ class MeshMapTab extends LitElement {
 
     // Kadrujemy tylko raz — inaczej mapa skakałaby przy każdym odświeżeniu.
     if (!this._fitted && nodes.length) {
-      this._map.fitBounds(
-        nodes.map((node) => [node.latitude, node.longitude]),
-        { padding: [40, 40], maxZoom: 13 }
-      );
       this._fitted = true;
+      if (nodes.length === 1) {
+        this._map.setView([nodes[0].latitude, nodes[0].longitude], 13);
+      } else {
+        this._map.fitBounds(
+          nodes.map((node) => [node.latitude, node.longitude]),
+          { padding: [40, 40], maxZoom: 13 }
+        );
+      }
     }
   }
 

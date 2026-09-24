@@ -96,6 +96,10 @@ class MeshRadioTab extends LitElement {
   }
 
   _renderWebClient() {
+    // Panel działa też bez klienta webowego — wtedy nie ma dokąd prowadzić.
+    if (!(this.gateways || []).some((gateway) => gateway.web_client)) {
+      return html``;
+    }
     const entities = this._gatewayEntities();
     if (!entities.length) {
       return html``;

@@ -41,6 +41,14 @@ class ConfigOptionNotifyPlatformNodes(enum.StrEnum):
 CONF_OPTION_NOTIFY_PLATFORM_CHANNELS_DEFAULT = True
 CONF_OPTION_NOTIFY_PLATFORM_NODES_DEFAULT = ConfigOptionNotifyPlatformNodes.ALL
 
+# Główne części integracji, włączane niezależnie od siebie:
+# panel MT_SW (aplikacja w pasku bocznym) i zbieranie statystyk (encje/urządzenia HA).
+CONF_OPTION_FEATURES = "features"
+CONF_OPTION_FEATURES_PANEL = "panel"
+CONF_OPTION_FEATURES_PANEL_DEFAULT = True
+CONF_OPTION_FEATURES_STATS = "stats"
+CONF_OPTION_FEATURES_STATS_DEFAULT = True
+
 CONF_OPTION_WEB_CLIENT = "web_client"
 CONF_OPTION_WEB_CLIENT_ENABLE = "enable"
 CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT = False

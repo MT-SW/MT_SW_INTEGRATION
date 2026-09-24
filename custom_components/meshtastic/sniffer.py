@@ -167,6 +167,11 @@ def build_entry(
         "to_us": local_node is not None and destination == local_node,
         "source": source,
         "mqtt_channel_name": packet.get("mqtt_channel_name"),
+        # Bramka, która ten odbiór przekazała: przy MQTT — gateway_id z koperty
+        # (np. "!a1b2c3d4"), przy radiu — nasza własna bramka. Panel grupuje po
+        # (from, id) odbiory tego samego pakietu z różnych bram i przekaźników.
+        "gateway": packet.get("mqtt_gateway_id")
+        or (f"!{local_node:08x}" if source == "radio" and isinstance(local_node, int) else None),
     }
 
 

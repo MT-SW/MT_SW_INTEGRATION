@@ -78,6 +78,8 @@ from .helpers import (
     device_by_identifier,
     fetch_meshtastic_hardware_names,
     node_identity_key,
+    panel_enabled,
+    stats_enabled,
 )
 from .image_upload import async_register_upload_view
 from .logbook import async_setup_message_logger
@@ -123,18 +125,32 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_meshtastic_web(hass: HomeAssistant) -> bool:
+    """
+    Widoki klienta webowego Meshtastic (/meshtastic/web/...).
+
+    Widoków HTTP ani ścieżek statycznych nie da się zarejestrować dwa razy
+    ani cofnąć — flaga jest ustawiana raz na cały proces HA i NIGDY czyszczona.
+    Panel MT_SW w pasku bocznym jest od tego niezależny (async_setup_panel) —
+    wcześniej pojawiał się tylko przy włączonym kliencie webowym.
+    """
     try:
-        # widoki HTTP/static paths nie da się zarejestrować dwa razy ani cofnąć —
-        # ta flaga jest ustawiana raz na cały proces HA i NIGDY czyszczona
         if not hass.data[DOMAIN].config.get("meshtastic_web_views_registered", False):
             await meshtastic_web.async_setup(hass)
             hass.data[DOMAIN].config["meshtastic_web_views_registered"] = True
+    except:  # noqa: E722
+        LOGGER.warning("Failed to setup web client views", exc_info=True)
+        return False
+    else:
+        return True
 
-        # panel we frontendzie da się dodawać/usuwać normalnie — ta flaga
-        # nadal odzwierciedla, czy jest aktualnie widoczny
-        if not hass.data[DOMAIN].config.get("meshtastic_web_loaded", False):
-            await frontend.async_register_frontend(hass)
-            hass.data[DOMAIN].config["meshtastic_web_loaded"] = True
+
+async def async_setup_panel(hass: HomeAssistant) -> bool:
+    """Panel MT_SW w pasku bocznym — da się go normalnie dodawać i usuwać."""
+    if hass.data[DOMAIN].config.get("meshtastic_web_loaded", False):
+        return True
+    try:
+        await frontend.async_register_frontend(hass)
+        hass.data[DOMAIN].config["meshtastic_web_loaded"] = True
     except:  # noqa: E722
         LOGGER.warning("Failed to setup frontend", exc_info=True)
         return False
@@ -142,7 +158,7 @@ async def async_setup_meshtastic_web(hass: HomeAssistant) -> bool:
         return True
 
 
-async def async_unload_meshtastic_web(hass: HomeAssistant) -> bool:
+async def async_unload_panel(hass: HomeAssistant) -> bool:
     if not hass.data[DOMAIN].config.get("meshtastic_web_loaded", False):
         return True
 
@@ -293,11 +309,16 @@ async def async_setup_entry(
     _last_non_filter_options[entry.entry_id] = _non_filter_options(entry)
 
     # --- 3. statystyki (nigdy nie przerywa startu) ---------------------------
-    try:
-        await _async_setup_stats_layer(hass, entry)
-    except Exception:  # noqa: BLE001
-        LOGGER.exception("Statistics layer setup failed — the panel keeps working")
-        entry.runtime_data.stats.error = entry.runtime_data.stats.error or "setup"
+    if not stats_enabled(entry):
+        # Wyłączone w opcjach: sam panel, bez koordynatora, urządzeń i encji.
+        entry.runtime_data.stats.enabled = False
+        LOGGER.info("Statistics collection is disabled for %s — running the panel only", entry.title)
+    else:
+        try:
+            await _async_setup_stats_layer(hass, entry)
+        except Exception:  # noqa: BLE001
+            LOGGER.exception("Statistics layer setup failed — the panel keeps working")
+            entry.runtime_data.stats.error = entry.runtime_data.stats.error or "setup"
 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
@@ -323,10 +344,14 @@ async def _async_setup_app_layer(hass: HomeAssistant, entry: MeshtasticConfigEnt
     ):
         await _async_run_step(entry, "tcp proxy", async_setup_tcp_proxy(hass, entry))
 
-    # Magazyn panelu (historia wiadomości, zapamiętane statystyki węzłów).
-    # Jego błąd wyłącza tylko historię w panelu — nie blokuje statystyk HA
-    # ani reszty panelu (komendy WS obsługują brak magazynu).
-    await _async_run_step(entry, "panel store", async_setup_store(hass, entry))
+    if panel_enabled(entry):
+        # Magazyn panelu (historia wiadomości, zapamiętane statystyki węzłów).
+        # Jego błąd wyłącza tylko historię w panelu — nie blokuje statystyk HA
+        # ani reszty panelu (komendy WS obsługują brak magazynu).
+        await _async_run_step(entry, "panel store", async_setup_store(hass, entry))
+        await _async_run_step(entry, "panel", async_setup_panel(hass))
+    else:
+        LOGGER.info("The MT_SW panel is disabled for %s", entry.title)
 
     await _async_run_step(entry, "services", services.async_register_gateway(hass, entry))
 
@@ -340,14 +365,14 @@ async def _async_setup_app_layer(hass: HomeAssistant, entry: MeshtasticConfigEnt
     if entry.options.get(CONF_OPTION_WEB_CLIENT, {}).get(
         CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT
     ):
-        await _async_run_step(entry, "web client", async_setup_meshtastic_web(hass))
+        await _async_run_step(entry, "web client views", async_setup_meshtastic_web(hass))
         await _async_run_step(entry, "web client proxy", meshtastic_web.async_setup_web_proxy_server(hass, entry))
 
     # Po każdym ponownym połączeniu z radiem odśwież dane koordynatora —
     # zamiast czekać do godzinnego cyklu.
     @callback
     def _on_link_state(state: str) -> None:
-        if state == "connected" and entry.state is ConfigEntryState.LOADED:
+        if state == "connected" and entry.state is ConfigEntryState.LOADED and data.stats.enabled:
             hass.async_create_background_task(
                 data.coordinator.async_request_refresh(), name=f"{DOMAIN}-refresh-after-reconnect"
             )
@@ -954,13 +979,11 @@ async def _async_teardown(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> 
         for e in hass.config_entries.async_entries(DOMAIN, include_ignore=False, include_disabled=False)
         if e.entry_id != entry.entry_id
     ]
-    any_web_client_enabled = any(
-        e.options.get(CONF_OPTION_WEB_CLIENT, {}).get(CONF_OPTION_WEB_CLIENT_ENABLE, CONF_OPTION_WEB_CLIENT_ENABLE_DEFAULT)
-        for e in active_entries
-    )
-    if not any_web_client_enabled:
+    # Panel w pasku bocznym jest wspólny dla wszystkich bramek — znika dopiero,
+    # gdy żaden inny wpis go nie używa.
+    if not any(panel_enabled(e) for e in active_entries):
         with contextlib.suppress(Exception):
-            await async_unload_meshtastic_web(hass)
+            await async_unload_panel(hass)
 
 
 _filter_lock = asyncio.Lock()
@@ -983,6 +1006,8 @@ async def _async_apply_node_filter_change(hass: HomeAssistant, entry: Meshtastic
     filter — both of those already exist as idempotent, re-runnable
     functions used at normal setup time.
     """
+    if not entry.runtime_data.stats.enabled:
+        return
     async with _filter_lock:
         coordinator = entry.runtime_data.coordinator
         await coordinator.async_request_refresh()
