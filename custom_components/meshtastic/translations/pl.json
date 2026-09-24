@@ -58,8 +58,7 @@
           "serial_port": "Ścieżka do portu szeregowego, np. /dev/ttyUSB0"
         }
       },
-      "reconfigure": {
-      },
+      "reconfigure": {},
       "node": {
         "description": "Skonfiguruj, które węzły mają zostać zaimportowane",
         "data": {
@@ -91,6 +90,16 @@
           "enable": "Włącz proxy TCP",
           "port": "Port TCP"
         }
+      },
+      "features": {
+        "title": "Tryb pracy integracji",
+        "description": "Integracja składa się z dwóch części, które działają niezależnie od siebie — możesz używać obu albo tylko jednej. Błąd w jednej części nigdy nie zatrzymuje drugiej.\n\n**Panel MT_SW** — aplikacja w pasku bocznym Home Assistanta, działająca jak aplikacja Meshtastic na telefonie: wiadomości na kanałach i prywatne, lista wszystkich węzłów z ulubionymi, mapa, sąsiedzi, ustawienia radia, sniffer i diagnostyka OnDemand. Nie tworzy żadnych encji.\n\n**Statystyki** — urządzenia i encje Home Assistanta dla wybranych węzłów: bateria, napięcie, sygnał (SNR/RSSI), obciążenie kanału, telemetria środowiskowa, pozycja na mapie HA i encje powiadomień do wysyłania wiadomości. Z nich korzystają historia, wykresy, karty na pulpitach i automatyzacje.\n\nTryb możesz później zmienić w dowolnej chwili: **Ustawienia → Urządzenia i usługi → MT_SW_INTEGRATION → Konfiguruj**.",
+        "data": {
+          "mode": "Tryb pracy"
+        },
+        "data_description": {
+          "mode": "Najczęściej wybierany jest pierwszy wariant. Wybierając „Tylko panel”, pominiesz wybór węzłów i encji powiadomień."
+        }
       }
     },
     "error": {
@@ -109,47 +118,51 @@
   "options": {
     "step": {
       "init": {
-        "description": "Skonfiguruj, które węzły mają zostać zaimportowane",
+        "title": "Opcje MT_SW_INTEGRATION",
+        "description": "Tryb sniffera (radiowy i MQTT) oraz konfigurację samego radia zmieniasz w panelu MT_SW, nie tutaj.\n\nIntegracja składa się z dwóch części, które działają niezależnie od siebie — możesz używać obu albo tylko jednej. Błąd w jednej części nigdy nie zatrzymuje drugiej.\n\n**Panel MT_SW** — aplikacja w pasku bocznym Home Assistanta, działająca jak aplikacja Meshtastic na telefonie: wiadomości na kanałach i prywatne, lista wszystkich węzłów z ulubionymi, mapa, sąsiedzi, ustawienia radia, sniffer i diagnostyka OnDemand. Nie tworzy żadnych encji.\n\n**Statystyki** — urządzenia i encje Home Assistanta dla wybranych węzłów: bateria, napięcie, sygnał (SNR/RSSI), obciążenie kanału, telemetria środowiskowa, pozycja na mapie HA i encje powiadomień do wysyłania wiadomości. Z nich korzystają historia, wykresy, karty na pulpitach i automatyzacje.",
         "data": {
-          "nodes": "Wybrane węzły",
-          "node": "Dodaj węzeł",
-          "add_another_node": "Dodaj kolejny węzeł"
+          "mode": "Tryb pracy",
+          "nodes": "Śledzone węzły"
+        },
+        "data_description": {
+          "mode": "Po wyłączeniu statystyk istniejące urządzenia i encje zostają w Home Assistant jako niedostępne — możesz je usunąć ręcznie. Po wyłączeniu panelu znika on z paska bocznego, a historia wiadomości zostaje zachowana na dysku.",
+          "nodes": "Węzły, dla których Home Assistant tworzy urządzenia i encje (czujniki, tracker, powiadomienia). Kliknij pole, żeby dodać węzeł z bazy radia; krzyżyk przy węźle przestaje go śledzić. Ma znaczenie tylko w trybie ze statystykami — panel zawsze pokazuje wszystkie węzły."
         },
         "sections": {
-          "features": {
-            "name": "Części integracji",
-            "description": "Panel MT_SW i zbieranie statystyk działają niezależnie od siebie — możesz włączyć jedno bez drugiego, a błąd w jednym nie zatrzymuje drugiego. Panel to aplikacja w pasku bocznym (wiadomości, węzły, mapa, ustawienia radia, sniffer). Zbieranie statystyk tworzy urządzenia i encje Home Assistanta dla śledzonych węzłów. Po wyłączeniu statystyk istniejące encje zostają w Home Assistant jako niedostępne — możesz je usunąć ręcznie.",
-            "data": {
-              "panel": "Panel MT_SW (aplikacja w pasku bocznym)",
-              "stats": "Zbieranie statystyk (urządzenia i encje Home Assistant)"
-            }
-          },
           "notify_platform": {
-            "name": "Platforma powiadomień",
-            "description": "Powiadomienie Home Assistant to zalecany sposób wysyłania wiadomości do sieci Meshtastic. Skonfiguruj, które części sieci mesh mają być reprezentowane w Home Assistant, aby ułatwić wysyłanie wiadomości.",
+            "name": "Powiadomienia",
+            "description": "Encje powiadomień (notify) służą do wysyłania wiadomości do sieci z automatyzacji i skryptów Home Assistanta.",
             "data": {
-              "channels": "Utwórz cele powiadomień dla wszystkich kanałów",
-              "nodes": "Utwórz cele powiadomień wiadomości bezpośrednich dla"
+              "channels": "Encja powiadomień dla każdego kanału",
+              "nodes": "Encje wiadomości prywatnych"
             },
             "data_description": {
-              "channels": "Utwórz cel/encję dla każdego kanału",
-              "nodes": "Uwaga: wybranie wszystkich węzłów może utworzyć dziesiątki lub setki encji w Home Assistant, w zależności od wielkości sieci Meshtastic"
+              "channels": "Tworzy osobną encję powiadomień dla każdego aktywnego kanału radia.",
+              "nodes": "Dla których węzłów tworzyć encje wiadomości prywatnych. „Wszystkie” przy dużej sieci może dać dziesiątki lub setki encji."
             }
           },
           "web_client": {
-            "name": "Klient webowy MT_SW",
-            "description": "Eksperymentalne: możesz włączyć klienta webowego MT_SW, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient webowy połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. Klienta webowego możesz otworzyć z paska bocznego MT_SW_INTEGRATION.",
+            "name": "Klient webowy Meshtastic",
+            "description": "Oficjalny klient webowy Meshtastic uruchamiany przez Home Assistanta — łączy się z integracją zamiast bezpośrednio z radiem (radio przyjmuje tylko jedno połączenie). UWAGA: protokół Meshtastic nie ma uwierzytelniania — każdy, kto ma dostęp do Twojego Home Assistanta, może wtedy sterować bramką.",
             "data": {
               "enable": "Włącz klienta webowego",
               "port": "Port klienta webowego"
+            },
+            "data_description": {
+              "enable": "Po włączeniu klienta otworzysz z zakładki Radio w panelu MT_SW.",
+              "port": "Port, na którym klient webowy łączy się z integracją. Domyślnie 4408."
             }
           },
           "tcp_proxy": {
-            "name": "Proxy TCP MT_SW",
-            "description": "Eksperymentalne: możesz włączyć proxy TCP MT_SW, jeśli chcesz też ręcznie wchodzić w interakcję z bramą. WAŻNA UWAGA BEZPIECZEŃSTWA: protokół Meshtastic jest nieuwierzytelniony — włączenie tej opcji daje kontrolę nad Twoją bramą każdemu, kto ma dostęp do Twojej instalacji Home Assistant. Pamiętaj, że urządzenia Meshtastic pozwalają tylko na jedno połączenie, więc ta integracja będzie udawać urządzenie Meshtastic, a klient TCP połączy się z Home Assistant zamiast bezpośrednio z urządzeniem. Bezpośrednie połączenie z urządzeniem Meshtastic przerwie połączenie Home Assistant. W kliencie CLI Pythona użyj 'meshtastic --host homeassistant:port'",
+            "name": "Proxy TCP",
+            "description": "Udostępnia radio innym programom (aplikacja, Meshtastic CLI) przez Home Assistanta, bez zrywania połączenia integracji — radio przyjmuje tylko jedno połączenie. UWAGA: protokół Meshtastic nie ma uwierzytelniania — każdy w Twojej sieci, kto dotrze do tego portu, może sterować bramką.",
             "data": {
               "enable": "Włącz proxy TCP",
-              "port": "Port TCP"
+              "port": "Port proxy TCP"
+            },
+            "data_description": {
+              "enable": "Program łączy się wtedy z adresem Home Assistanta, np. meshtastic --host homeassistant:4403.",
+              "port": "Port, na którym Home Assistant przyjmuje połączenia. Domyślnie 4403."
             }
           }
         }
@@ -324,82 +337,226 @@
       "battery_level": {
         "name": "Poziom baterii"
       },
-      "environment_temperature": { "name": "Temperatura" },
-      "environment_relative_humidity": { "name": "Wilgotność względna" },
-      "environment_barometric_pressure": { "name": "Ciśnienie atmosferyczne" },
-      "environment_gas_resistance": { "name": "Opór gazu" },
-      "environment_iaq": { "name": "Jakość powietrza w pomieszczeniu" },
-      "environment_distance": { "name": "Odległość" },
-      "environment_lux": { "name": "Natężenie oświetlenia" },
-      "environment_white_lux": { "name": "Światło białe" },
-      "environment_ir_lux": { "name": "Światło podczerwone" },
-      "environment_uv_lux": { "name": "Światło ultrafioletowe" },
-      "environment_wind_direction": { "name": "Kierunek wiatru" },
-      "environment_wind_speed": { "name": "Prędkość wiatru" },
-      "environment_wind_gust": { "name": "Poryw wiatru" },
-      "environment_wind_lull": { "name": "Cisza wiatrowa" },
-      "environment_voltage": { "name": "Napięcie" },
-      "environment_current": { "name": "Prąd" },
-      "environment_rainfall1h": { "name": "Opady (1h)" },
-      "environment_rainfall24h": { "name": "Opady (24h)" },
-      "environment_soil_moisture": { "name": "Wilgotność gleby" },
-      "environment_soil_temperature": { "name": "Temperatura gleby" },
-      "environment_radiation": { "name": "Radiacja" },
-      "airquality_pm10_standard": { "name": "PM1.0 (standardowy)" },
-      "airquality_pm25_standard": { "name": "PM2.5 (standardowy)" },
-      "airquality_pm100_standard": { "name": "PM10 (standardowy)" },
-      "airquality_pm10_environmental": { "name": "PM1.0 (środowiskowy)" },
-      "airquality_pm25_environmental": { "name": "PM2.5 (środowiskowy)" },
-      "airquality_pm100_environmental": { "name": "PM10 (środowiskowy)" },
-      "airquality_particles03um": { "name": "Cząstki >0,3µm" },
-      "airquality_particles05um": { "name": "Cząstki >0,5µm" },
-      "airquality_particles10um": { "name": "Cząstki >1,0µm" },
-      "airquality_particles25um": { "name": "Cząstki >2,5µm" },
-      "airquality_particles50um": { "name": "Cząstki >5,0µm" },
-      "airquality_particles100um": { "name": "Cząstki >10µm" },
-      "node_last_heard": { "name": "Ostatnio widziany" },
-      "node_snr": { "name": "SNR" },
-      "node_hops_away": { "name": "Liczba skoków" },
-      "node_role": { "name": "Rola urządzenia" },
-      "node_short_name": { "name": "Krótka nazwa" },
-      "node_long_name": { "name": "Długa nazwa" },
-      "device_uptime": { "name": "Czas pracy" },
-      "device_battery_level": { "name": "Poziom baterii" },
-      "device_voltage": { "name": "Napięcie" },
-      "device_channel_utilization": { "name": "Wykorzystanie kanału" },
-      "device_airtime": { "name": "Czas nadawania" },
-      "stats_packets_tx": { "name": "Wysłane pakiety" },
-      "stats_packets_rx": { "name": "Odebrane pakiety" },
-      "stats_packets_rx_bad": { "name": "Odebrane błędne pakiety" },
-      "stats_packets_rx_duplicate": { "name": "Odebrane duplikaty pakietów" },
-      "stats_packets_tx_relayed": { "name": "Przekazane pakiety" },
-      "stats_packets_tx_relay_cancelled": { "name": "Anulowane przekazania pakietów" },
-      "stats_nodes_online": { "name": "Węzły online" },
-      "stats_nodes_total": { "name": "Węzły łącznie" },
-      "stats_heap_total_bytes": { "name": "Pamięć heap (łącznie)" },
-      "stats_heap_free_bytes": { "name": "Pamięć heap (wolna)" },
-      "stats_noise_floor": { "name": "Szum tła" },
-      "stats_ext_cpu_usage": { "name": "Obciążenie CPU" },
-      "stats_ext_flash_used": { "name": "Pamięć flash (zajęta)" },
-      "stats_ext_flash_total": { "name": "Pamięć flash (łącznie)" },
-      "stats_ext_psram_free": { "name": "PSRAM (wolna)" },
-      "stats_ext_psram_total": { "name": "PSRAM (łącznie)" },
-      "power_channel_voltage": { "name": "Napięcie – kanał {channel}" },
-      "power_channel_current": { "name": "Prąd – kanał {channel}" },
-      "host_uptime_seconds": { "name": "Czas pracy" },
-      "host_freemem_bytes": { "name": "Wolna pamięć" },
-      "host_diskfree1_bytes": { "name": "Wolne miejsce na dysku" },
-      "host_diskfree2_bytes": { "name": "Wolne miejsce na dysku 2" },
-      "host_diskfree3_bytes": { "name": "Wolne miejsce na dysku 3" },
-      "host_load1": { "name": "Obciążenie (1 min)" },
-      "host_load5": { "name": "Obciążenie (5 min)" },
-      "host_load15": { "name": "Obciążenie (15 min)" },
-      "host_user_string": { "name": "Tekst użytkownika" },
-      "node_neighbor_count": { "name": "Liczba sąsiadów" }
+      "environment_temperature": {
+        "name": "Temperatura"
+      },
+      "environment_relative_humidity": {
+        "name": "Wilgotność względna"
+      },
+      "environment_barometric_pressure": {
+        "name": "Ciśnienie atmosferyczne"
+      },
+      "environment_gas_resistance": {
+        "name": "Opór gazu"
+      },
+      "environment_iaq": {
+        "name": "Jakość powietrza w pomieszczeniu"
+      },
+      "environment_distance": {
+        "name": "Odległość"
+      },
+      "environment_lux": {
+        "name": "Natężenie oświetlenia"
+      },
+      "environment_white_lux": {
+        "name": "Światło białe"
+      },
+      "environment_ir_lux": {
+        "name": "Światło podczerwone"
+      },
+      "environment_uv_lux": {
+        "name": "Światło ultrafioletowe"
+      },
+      "environment_wind_direction": {
+        "name": "Kierunek wiatru"
+      },
+      "environment_wind_speed": {
+        "name": "Prędkość wiatru"
+      },
+      "environment_wind_gust": {
+        "name": "Poryw wiatru"
+      },
+      "environment_wind_lull": {
+        "name": "Cisza wiatrowa"
+      },
+      "environment_voltage": {
+        "name": "Napięcie"
+      },
+      "environment_current": {
+        "name": "Prąd"
+      },
+      "environment_rainfall1h": {
+        "name": "Opady (1h)"
+      },
+      "environment_rainfall24h": {
+        "name": "Opady (24h)"
+      },
+      "environment_soil_moisture": {
+        "name": "Wilgotność gleby"
+      },
+      "environment_soil_temperature": {
+        "name": "Temperatura gleby"
+      },
+      "environment_radiation": {
+        "name": "Radiacja"
+      },
+      "airquality_pm10_standard": {
+        "name": "PM1.0 (standardowy)"
+      },
+      "airquality_pm25_standard": {
+        "name": "PM2.5 (standardowy)"
+      },
+      "airquality_pm100_standard": {
+        "name": "PM10 (standardowy)"
+      },
+      "airquality_pm10_environmental": {
+        "name": "PM1.0 (środowiskowy)"
+      },
+      "airquality_pm25_environmental": {
+        "name": "PM2.5 (środowiskowy)"
+      },
+      "airquality_pm100_environmental": {
+        "name": "PM10 (środowiskowy)"
+      },
+      "airquality_particles03um": {
+        "name": "Cząstki >0,3µm"
+      },
+      "airquality_particles05um": {
+        "name": "Cząstki >0,5µm"
+      },
+      "airquality_particles10um": {
+        "name": "Cząstki >1,0µm"
+      },
+      "airquality_particles25um": {
+        "name": "Cząstki >2,5µm"
+      },
+      "airquality_particles50um": {
+        "name": "Cząstki >5,0µm"
+      },
+      "airquality_particles100um": {
+        "name": "Cząstki >10µm"
+      },
+      "node_last_heard": {
+        "name": "Ostatnio widziany"
+      },
+      "node_snr": {
+        "name": "SNR"
+      },
+      "node_hops_away": {
+        "name": "Liczba skoków"
+      },
+      "node_role": {
+        "name": "Rola urządzenia"
+      },
+      "node_short_name": {
+        "name": "Krótka nazwa"
+      },
+      "node_long_name": {
+        "name": "Długa nazwa"
+      },
+      "device_uptime": {
+        "name": "Czas pracy"
+      },
+      "device_battery_level": {
+        "name": "Poziom baterii"
+      },
+      "device_voltage": {
+        "name": "Napięcie"
+      },
+      "device_channel_utilization": {
+        "name": "Wykorzystanie kanału"
+      },
+      "device_airtime": {
+        "name": "Czas nadawania"
+      },
+      "stats_packets_tx": {
+        "name": "Wysłane pakiety"
+      },
+      "stats_packets_rx": {
+        "name": "Odebrane pakiety"
+      },
+      "stats_packets_rx_bad": {
+        "name": "Odebrane błędne pakiety"
+      },
+      "stats_packets_rx_duplicate": {
+        "name": "Odebrane duplikaty pakietów"
+      },
+      "stats_packets_tx_relayed": {
+        "name": "Przekazane pakiety"
+      },
+      "stats_packets_tx_relay_cancelled": {
+        "name": "Anulowane przekazania pakietów"
+      },
+      "stats_nodes_online": {
+        "name": "Węzły online"
+      },
+      "stats_nodes_total": {
+        "name": "Węzły łącznie"
+      },
+      "stats_heap_total_bytes": {
+        "name": "Pamięć heap (łącznie)"
+      },
+      "stats_heap_free_bytes": {
+        "name": "Pamięć heap (wolna)"
+      },
+      "stats_noise_floor": {
+        "name": "Szum tła"
+      },
+      "stats_ext_cpu_usage": {
+        "name": "Obciążenie CPU"
+      },
+      "stats_ext_flash_used": {
+        "name": "Pamięć flash (zajęta)"
+      },
+      "stats_ext_flash_total": {
+        "name": "Pamięć flash (łącznie)"
+      },
+      "stats_ext_psram_free": {
+        "name": "PSRAM (wolna)"
+      },
+      "stats_ext_psram_total": {
+        "name": "PSRAM (łącznie)"
+      },
+      "power_channel_voltage": {
+        "name": "Napięcie – kanał {channel}"
+      },
+      "power_channel_current": {
+        "name": "Prąd – kanał {channel}"
+      },
+      "host_uptime_seconds": {
+        "name": "Czas pracy"
+      },
+      "host_freemem_bytes": {
+        "name": "Wolna pamięć"
+      },
+      "host_diskfree1_bytes": {
+        "name": "Wolne miejsce na dysku"
+      },
+      "host_diskfree2_bytes": {
+        "name": "Wolne miejsce na dysku 2"
+      },
+      "host_diskfree3_bytes": {
+        "name": "Wolne miejsce na dysku 3"
+      },
+      "host_load1": {
+        "name": "Obciążenie (1 min)"
+      },
+      "host_load5": {
+        "name": "Obciążenie (5 min)"
+      },
+      "host_load15": {
+        "name": "Obciążenie (15 min)"
+      },
+      "host_user_string": {
+        "name": "Tekst użytkownika"
+      },
+      "node_neighbor_count": {
+        "name": "Liczba sąsiadów"
+      }
     },
     "meshtastic": {
       "channel": {
-                "name": "Kanał",
+        "name": "Kanał",
         "state": {
           "logging": "Rejestrowanie",
           "logbook_missing": "Brak dziennika zdarzeń"
@@ -426,14 +583,26 @@
       }
     },
     "binary_sensor": {
-      "device_powered": { "name": "Zasilanie" },
-      "node_is_muted": { "name": "Wyciszony" },
-      "node_has_xeddsa_signed": { "name": "Podpisuje pakiety (XEdDSA)" },
-      "node_heard_on_current_lora": { "name": "Słyszany w bieżącej konfiguracji LoRa" }
+      "device_powered": {
+        "name": "Zasilanie"
+      },
+      "node_is_muted": {
+        "name": "Wyciszony"
+      },
+      "node_has_xeddsa_signed": {
+        "name": "Podpisuje pakiety (XEdDSA)"
+      },
+      "node_heard_on_current_lora": {
+        "name": "Słyszany w bieżącej konfiguracji LoRa"
+      }
     },
     "button": {
-      "reboot": { "name": "Uruchom ponownie" },
-      "request_neighbors": { "name": "Pobierz sąsiadów" }
+      "reboot": {
+        "name": "Uruchom ponownie"
+      },
+      "request_neighbors": {
+        "name": "Pobierz sąsiadów"
+      }
     }
   },
   "selector": {
@@ -450,6 +619,13 @@
         "none": "Żaden z węzłów",
         "all": "Wszystkie znane i nowo odkryte węzły",
         "selected": "Tylko wybrane węzły"
+      }
+    },
+    "option_features_mode_selector": {
+      "options": {
+        "panel_and_stats": "Panel i statystyki (zalecane)",
+        "panel_only": "Tylko panel — bez urządzeń i encji w Home Assistant",
+        "stats_only": "Tylko statystyki — bez panelu w pasku bocznym"
       }
     }
   },

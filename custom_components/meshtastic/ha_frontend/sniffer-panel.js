@@ -28,7 +28,7 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { PL } from "./pl-settings.js";
 import { settingsStyles, badgeStyles } from "./styles.js";
 import "./components.js";
-import { portLabel } from "./port-names.js";
+import { portLabel, routingErrorLabel } from "./port-names.js";
 import { MIN_FW_PLUS_VERSION } from "./firmware.js";
 
 const POLL_MS = 2000;
@@ -83,6 +83,7 @@ const PORT_COLORS = {
   MAP_REPORT_APP: "#8bc34a",
   WAYPOINT_APP: "#cddc39",
   ENCRYPTED: "#9e9e9e",
+  PKI: "#9e9e9e",
 };
 
 const pad = (value) => String(value).padStart(2, "0");
@@ -112,12 +113,58 @@ function gatewayNum(gateway) {
   return Number.isFinite(value) ? value >>> 0 : null;
 }
 
+/* etykiety pól treści pakietu (klucze z backendu, jak w protobufach) */
+const FIELD_LABELS = {
+  text: "Text",
+  latitude: "Latitude",
+  longitude: "Longitude",
+  altitude: "Altitude",
+  sats_in_view: "Satellites",
+  precision_bits: "Precision (bits)",
+  ground_speed: "Speed",
+  ground_track: "Heading",
+  PDOP: "PDOP",
+  time: "Time",
+  id: "Node ID",
+  longName: "Long name",
+  shortName: "Short name",
+  hwModel: "Hardware",
+  role: "Role",
+  publicKey: "Public key",
+  isLicensed: "Licensed",
+  variant: "Type",
+  batteryLevel: "Battery",
+  voltage: "Voltage",
+  channelUtilization: "Channel utilization",
+  airUtilTx: "Air util TX",
+  uptimeSeconds: "Uptime",
+  temperature: "Temperature",
+  relativeHumidity: "Humidity",
+  barometricPressure: "Pressure",
+  errorReason: "Result",
+  route: "Route",
+  routeBack: "Route back",
+  snrTowards: "SNR towards (dB)",
+  snrBack: "SNR back (dB)",
+  nodeId: "Node",
+  neighbors: "Neighbors",
+  broadcastInterval: "Broadcast interval",
+  name: "Name",
+  description: "Description",
+  expire: "Expires",
+  request: "Request",
+  response: "Response",
+};
+
 /* lepszy wpis do pokazania na karcie: odczytany wygrywa z zaszyfrowanym */
 function betterEntry(current, candidate) {
   if (!current) {
     return candidate;
   }
   if (current.encrypted && !candidate.encrypted) {
+    return candidate;
+  }
+  if (!(current.fields || []).length && (candidate.fields || []).length && !candidate.encrypted) {
     return candidate;
   }
   if (!current.info && candidate.info && current.encrypted === candidate.encrypted) {
@@ -426,7 +473,90 @@ class MeshSettingsSniffer extends LitElement {
   }
 
   _portText(entry) {
-    return entry.port === "ENCRYPTED" ? PL("Encrypted") : portLabel("pl", entry.port);
+    if (entry.port === "ENCRYPTED") {
+      return PL("Encrypted");
+    }
+    if (entry.port === "PKI") {
+      return PL("Private message (PKI)");
+    }
+    return portLabel("pl", entry.port);
+  }
+
+  /* Co widać w pakiecie, którego nie da się odczytać — zamiast pustego wiersza. */
+  _undecodedInfo(entry) {
+    if (entry.pki) {
+      return PL("Private message encrypted with the recipient's key — cannot be read without it ({n} B).").replace(
+        "{n}",
+        entry.payload_size
+      );
+    }
+    if (entry.encrypted) {
+      const hash = typeof entry.channel === "number" ? `0x${entry.channel.toString(16).padStart(2, "0")}` : "?";
+      const matches = entry.channel_hash_matches || [];
+      const base = PL("Unknown channel key (channel hash {h}), {n} B").replace("{h}", hash).replace("{n}", entry.payload_size);
+      return matches.length ? `${base} · ${PL("same hash as")}: ${matches.join(", ")} (${PL("different key")})` : base;
+    }
+    if (entry.payload_ascii) {
+      return entry.payload_ascii;
+    }
+    return "";
+  }
+
+  _nodeList(ids) {
+    return (ids || []).map((id) => this._label(id)).join(" → ");
+  }
+
+  _fieldValue(field) {
+    const value = field.v;
+    if (field.t === "nodes") {
+      return value && value.length ? this._nodeList(value) : "—";
+    }
+    if (field.t === "node") {
+      return this._label(value);
+    }
+    if (field.t === "neighbors") {
+      return (value || []).length
+        ? value.map((n) => `${this._label(n.node)} (SNR ${n.snr} dB)`).join(", ")
+        : "—";
+    }
+    if (field.t === "time") {
+      return value ? new Date(value * 1000).toLocaleString() : "—";
+    }
+    if (field.t === "routing_error") {
+      return routingErrorLabel("pl", value);
+    }
+    if (field.k === "batteryLevel") {
+      return `${value}%`;
+    }
+    if (field.k === "voltage") {
+      return `${value} V`;
+    }
+    if (field.k === "uptimeSeconds") {
+      const hours = Math.floor(value / 3600);
+      return hours >= 24 ? `${Math.floor(hours / 24)} d ${hours % 24} h` : `${hours} h ${Math.floor((value % 3600) / 60)} min`;
+    }
+    if (Array.isArray(value)) {
+      return value.join(", ");
+    }
+    if (typeof value === "boolean") {
+      return value ? "✓" : "—";
+    }
+    return value === null || value === undefined || value === "" ? "—" : String(value);
+  }
+
+  _renderFields(entry) {
+    const fields = entry.fields || [];
+    if (!fields.length) {
+      return "";
+    }
+    return html`
+      <div class="section-title">${PL("Content")}</div>
+      ${fields.map(
+        (field) => html`<div class="kv ${field.k === "text" ? "text" : ""}">
+          <span class="k">${PL(FIELD_LABELS[field.k] || field.k)}</span><span>${this._fieldValue(field)}</span>
+        </div>`
+      )}
+    `;
   }
 
   _time(ts) {
@@ -461,6 +591,7 @@ class MeshSettingsSniffer extends LitElement {
       entry.port,
       this._portText(entry),
       entry.info,
+      (entry.fields || []).map((field) => (typeof field.v === "object" ? JSON.stringify(field.v) : field.v)).join(" "),
       entry.gateway,
       entry.mqtt_channel_name,
       entry.id,
@@ -744,13 +875,27 @@ class MeshSettingsSniffer extends LitElement {
     return html`
       <div class="details" @click=${(e) => e.stopPropagation()}>
         ${this._renderReceptions(group)}
+        ${this._renderFields(entry)}
         <div class="section-title">${PL("Packet")}</div>
+        ${entry.decrypted_with
+          ? html`<div class="kv"><span class="k">${PL("Decrypted with")}</span><span>${
+              entry.decrypted_with.source === "public"
+                ? PL("public default channel {c}").replace("{c}", entry.decrypted_with.name)
+                : PL("gateway channel {c}").replace("{c}", entry.decrypted_with.name)
+            }</span></div>`
+          : ""}
+        ${!entry.fields || !entry.fields.length
+          ? html`<div class="kv"><span class="k">${PL("What is visible")}</span><span>${this._undecodedInfo(entry) || "—"}</span></div>`
+          : ""}
         <div class="kv"><span class="k">${PL("Packet ID")}</span><span>${entry.id ?? "—"}</span></div>
-        <div class="kv"><span class="k">${PL("Channel")}</span><span>${entry.mqtt_channel_name || entry.channel || "—"}</span></div>
+        <div class="kv"><span class="k">${PL("Channel")}</span><span>${entry.mqtt_channel_name || (entry.decrypted_with && entry.decrypted_with.name) || entry.channel || "—"}</span></div>
         <div class="kv"><span class="k">${PL("Hop limit / start")}</span><span>${hops}</span></div>
         <div class="kv"><span class="k">${PL("Flags")}</span><span>${flags.length ? flags.join(", ") : "—"}</span></div>
         <div class="kv"><span class="k">${PL("Payload size")}</span><span>${entry.payload_size} B</span></div>
         <div class="kv hex"><span class="k">${PL("Payload (hex)")}</span><span>${entry.payload_hex || "—"}</span></div>
+        ${entry.payload_ascii
+          ? html`<div class="kv hex"><span class="k">${PL("Payload (ASCII)")}</span><span>${entry.payload_ascii}</span></div>`
+          : ""}
         <div class="buttons">
           <button class="btn" @click=${() => this._copyGroup(group)}>
             <ha-icon icon=${this._copied === group.key ? "mdi:check" : "mdi:content-copy"}></ha-icon>
@@ -765,9 +910,10 @@ class MeshSettingsSniffer extends LitElement {
     const entry = group.main;
     const color = PORT_COLORS[entry.port] || "var(--primary-color)";
     const expanded = this._expanded === group.key;
-    const info = entry.info || (entry.encrypted ? PL("Encrypted content") : "");
+    const info = entry.info || this._undecodedInfo(entry);
     const hops = this._hops(entry);
     const signal = this._signal(entry);
+    const muted = !entry.info && (entry.encrypted || entry.pki || Boolean(entry.payload_ascii));
     return html`
       <div
         class="card ${entry.from_us ? "own" : ""} ${expanded ? "open" : ""}"
@@ -783,7 +929,7 @@ class MeshSettingsSniffer extends LitElement {
           <ha-icon icon="mdi:arrow-right"></ha-icon>
           <span class="node ${entry.to >>> 0 === BROADCAST ? "broadcast" : ""}">${this._label(entry.to)}</span>
         </div>
-        ${info ? html`<div class="info ${entry.encrypted ? "muted" : ""}">${info}</div>` : ""}
+        ${info ? html`<div class="info ${muted ? "muted" : ""}">${info}</div>` : ""}
         <div class="meta">
           ${this._renderChips(group)}
           ${hops !== null ? html`<span class="chip">${PL("Hops")} ${hops}</span>` : ""}
@@ -1264,6 +1410,11 @@ class MeshSettingsSniffer extends LitElement {
         .kv .k {
           flex: 0 0 140px;
           color: var(--secondary-text-color);
+        }
+
+        .kv.text span:last-child {
+          white-space: pre-wrap;
+          word-break: break-word;
         }
 
         .kv.hex span:last-child {

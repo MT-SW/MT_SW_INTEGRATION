@@ -48,6 +48,13 @@ CONF_OPTION_FEATURES_PANEL = "panel"
 CONF_OPTION_FEATURES_PANEL_DEFAULT = True
 CONF_OPTION_FEATURES_STATS = "stats"
 CONF_OPTION_FEATURES_STATS_DEFAULT = True
+# Jak te dwie części są wybierane w formularzach: jedno pole „Tryb pracy”
+# z trzema wariantami (oba wyłączone nie ma sensu, więc go nie ma).
+CONF_OPTION_FEATURES_MODE = "mode"
+FEATURES_MODE_PANEL_AND_STATS = "panel_and_stats"
+FEATURES_MODE_PANEL_ONLY = "panel_only"
+FEATURES_MODE_STATS_ONLY = "stats_only"
+FEATURES_MODES = (FEATURES_MODE_PANEL_AND_STATS, FEATURES_MODE_PANEL_ONLY, FEATURES_MODE_STATS_ONLY)
 
 CONF_OPTION_WEB_CLIENT = "web_client"
 CONF_OPTION_WEB_CLIENT_ENABLE = "enable"

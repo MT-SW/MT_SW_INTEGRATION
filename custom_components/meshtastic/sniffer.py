@@ -22,7 +22,8 @@ import binascii
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
-from .aiomeshtastic.protobuf import admin_pb2, mesh_pb2, ondemand_pb2, portnums_pb2, telemetry_pb2
+from .aiomeshtastic.protobuf import portnums_pb2
+from .sniffer_decode import ChannelKeys, decode_payload, hash_matches, printable_preview, try_decrypt
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -63,81 +64,67 @@ def _decode_b64(value: Any) -> bytes:
         return b""
 
 
-def describe_payload(port: int | None, payload: bytes) -> str:  # noqa: PLR0911, PLR0912
-    """Krótki opis zawartości pakietu; pusty, gdy nie umiemy go odczytać."""
-    if port is None or not payload:
-        return ""
-    try:
-        if port == portnums_pb2.PortNum.TEXT_MESSAGE_APP:
-            return payload.decode("utf-8", errors="replace")[:MAX_INFO_LENGTH]
-        if port == portnums_pb2.PortNum.POSITION_APP:
-            position = mesh_pb2.Position()
-            position.ParseFromString(payload)
-            text = f"{position.latitude_i * 1e-7:.5f}, {position.longitude_i * 1e-7:.5f}"
-            return f"{text} ({position.altitude} m)" if position.altitude else text
-        if port == portnums_pb2.PortNum.NODEINFO_APP:
-            user = mesh_pb2.User()
-            user.ParseFromString(payload)
-            return f"{user.long_name} ({user.short_name})" if user.long_name else user.id
-        if port == portnums_pb2.PortNum.TELEMETRY_APP:
-            telemetry = telemetry_pb2.Telemetry()
-            telemetry.ParseFromString(payload)
-            return telemetry.WhichOneof("variant") or ""
-        if port == portnums_pb2.PortNum.ROUTING_APP:
-            routing = mesh_pb2.Routing()
-            routing.ParseFromString(payload)
-            variant = routing.WhichOneof("variant")
-            if variant == "error_reason":
-                return mesh_pb2.Routing.Error.Name(routing.error_reason)
-            return variant or ""
-        if port == portnums_pb2.PortNum.TRACEROUTE_APP:
-            route = mesh_pb2.RouteDiscovery()
-            route.ParseFromString(payload)
-            return f"route {len(route.route)} / back {len(route.route_back)}"
-        if port == portnums_pb2.PortNum.NEIGHBORINFO_APP:
-            neighbors = mesh_pb2.NeighborInfo()
-            neighbors.ParseFromString(payload)
-            return f"{len(neighbors.neighbors)} neighbors"
-        if port == portnums_pb2.PortNum.ADMIN_APP:
-            admin = admin_pb2.AdminMessage()
-            admin.ParseFromString(payload)
-            return admin.WhichOneof("payload_variant") or ""
-        if port == ON_DEMAND_PORT:
-            message = ondemand_pb2.OnDemand()
-            message.ParseFromString(payload)
-            variant = message.WhichOneof("variant")
-            if variant == "request":
-                return ondemand_pb2.OnDemandType.Name(message.request.request_type)
-            if variant == "response":
-                return ondemand_pb2.OnDemandType.Name(message.response.response_type)
-    except Exception:  # noqa: BLE001 - uszkodzony albo obcy pakiet nie może zepsuć logu
-        return ""
-    return ""
+def describe_payload(port: int | None, payload: bytes) -> str:
+    """Krótki opis zawartości pakietu (zgodność wstecz — pełne dekodowanie w sniffer_decode)."""
+    return decode_payload(port, payload)[0]
 
 
-def build_entry(
-    packet: Mapping[str, Any], seq: int, now_ms: int, local_node: int | None, *, source: str = "radio"
+def build_entry(  # noqa: PLR0913, PLR0915
+    packet: Mapping[str, Any],
+    seq: int,
+    now_ms: int,
+    local_node: int | None,
+    *,
+    source: str = "radio",
+    keys: list[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Zamień pakiet (MessageToDict z API) na wpis logu.
+    """Zamień pakiet (MessageToDict z API albo z MQTT) na wpis logu.
 
     Wpis ma tylko proste typy, więc idzie wprost do JSON-a w panelu i do
-    eksportu. Zawartość pakietów zaszyfrowanych nie jest odczytywana — trafia
-    do logu jako surowy zapis szesnastkowy.
+    eksportu. Pakiet zaszyfrowany próbujemy odszyfrować znanymi kluczami
+    (kanały bramki + publiczne kanały domyślne, dopasowanie po hashu kanału
+    — jak w firmware). Gdy się nie da, wpis mówi, co wiadomo: do jakich
+    znanych nazw kanałów pasuje hash, czy to PKI, oraz niesie surowe bajty
+    z podglądem ASCII.
     """
     decoded = packet.get("decoded") or {}
     port = decoded.get("portnum")
     port_number = _port_number(port)
-
     payload = _decode_b64(decoded.get("payload"))
     encrypted = _decode_b64(packet.get("encrypted"))
+
+    sender = packet.get("from")
+    destination = packet.get("to")
+    channel = packet.get("channel", 0)
+    pki = bool(packet.get("pkiEncrypted"))
+
+    decrypted_with = None
+    hash_names: list[str] = []
+    if encrypted and not decoded and not pki and keys:
+        data, key = try_decrypt(
+            encrypted,
+            packet.get("id"),
+            sender,
+            channel if isinstance(channel, int) else None,
+            keys,
+            name_hint=packet.get("mqtt_channel_name"),
+        )
+        if data is not None:
+            port_number = int(data.portnum)
+            port = portnums_pb2.PortNum.Name(port_number) if port_number in portnums_pb2.PortNum.values() else port_number
+            payload = bytes(data.payload)
+            decoded = {"portnum": port}
+            decrypted_with = {"name": key["name"], "source": key["source"]}
+        else:
+            hash_names = hash_matches(channel if isinstance(channel, int) else None, keys)
+
+    info, fields = decode_payload(port_number, payload) if decoded else ("", [])
     raw = payload or encrypted
+    still_encrypted = bool(encrypted) and not decoded
 
     hop_start = packet.get("hopStart")
     hop_limit = packet.get("hopLimit")
     hops_away = hop_start - hop_limit if isinstance(hop_start, int) and hop_start > 0 and isinstance(hop_limit, int) else None
-
-    sender = packet.get("from")
-    destination = packet.get("to")
 
     return {
         "seq": seq,
@@ -145,12 +132,19 @@ def build_entry(
         "from": sender,
         "to": destination,
         "id": packet.get("id"),
-        "channel": packet.get("channel", 0),
-        "port": _port_label(port, port_number) if decoded else "ENCRYPTED",
+        "channel": channel,
+        "port": _port_label(port, port_number) if decoded else ("PKI" if pki else "ENCRYPTED"),
         "port_num": port_number,
-        "info": describe_payload(port_number, payload),
-        "encrypted": bool(encrypted) and not decoded,
+        "info": info,
+        # pełna treść do rozwinięcia w panelu: [{"k": nazwa, "v": wartość, "t": typ}]
+        "fields": fields,
+        "encrypted": still_encrypted,
+        # czym udało się odszyfrować (kanał bramki albo publiczny kanał domyślny)
+        "decrypted_with": decrypted_with,
+        # przy nieudanym odszyfrowaniu: znane nazwy kanałów o tym samym hashu
+        "channel_hash_matches": hash_names,
         "payload_hex": raw[:MAX_PAYLOAD_BYTES].hex(),
+        "payload_ascii": printable_preview(raw) if (still_encrypted or not fields) and raw else "",
         "payload_size": len(raw),
         "rx_snr": packet.get("rxSnr"),
         "rx_rssi": packet.get("rxRssi"),
@@ -161,7 +155,7 @@ def build_entry(
         "want_ack": bool(packet.get("wantAck")),
         "via_mqtt": bool(packet.get("viaMqtt")),
         "signed": bool(packet.get("xeddsaSigned")),
-        "pki": bool(packet.get("pkiEncrypted")),
+        "pki": pki,
         "broadcast": destination == BROADCAST,
         "from_us": local_node is not None and sender == local_node,
         "to_us": local_node is not None and destination == local_node,
@@ -190,6 +184,11 @@ class SnifferLog:
         self._entries: deque[dict[str, Any]] = deque(maxlen=capacity)
         self._seq = 0
         self.mqtt_enabled = False
+        # klucze do odszyfrowania pakietów z obcych kanałów (ustawiane przez magazyn)
+        self.channel_keys: ChannelKeys | None = None
+
+    def _keys(self) -> list[Mapping[str, Any]] | None:
+        return self.channel_keys.keys() if self.channel_keys is not None else None
 
     @property
     def last_seq(self) -> int:
@@ -203,13 +202,13 @@ class SnifferLog:
         if not self.enabled:
             return
         self._seq += 1
-        self._entries.append(build_entry(packet, self._seq, now_ms, local_node))
+        self._entries.append(build_entry(packet, self._seq, now_ms, local_node, keys=self._keys()))
 
     def add_mqtt_packet(self, packet: Mapping[str, Any], now_ms: int, local_node: int | None) -> None:
         if not self.mqtt_enabled:
             return
         self._seq += 1
-        self._entries.append(build_entry(packet, self._seq, now_ms, local_node, source="mqtt"))
+        self._entries.append(build_entry(packet, self._seq, now_ms, local_node, source="mqtt", keys=self._keys()))
 
     def entries_since(self, seq: int = 0, limit: int = MAX_ENTRIES) -> list[dict[str, Any]]:
         """Wpisy nowsze niż seq (od najstarszego); przy nadmiarze — najnowsze limit wpisów."""

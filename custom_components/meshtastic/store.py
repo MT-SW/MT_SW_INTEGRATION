@@ -43,6 +43,7 @@ from .aiomeshtastic.protobuf import mesh_pb2
 from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER, CONF_OPTION_MQTT_SNIFFER, CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
 from .nodedb_cleanup import DAY_SECONDS, CleanupJob, normalize_auto, select_candidates
 from .sniffer import SnifferLog
+from .sniffer_decode import ChannelKeys
 from .mqtt_sniffer import MqttSniffer
 
 if TYPE_CHECKING:
@@ -182,6 +183,11 @@ class PanelStore:
         self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
+        # klucze kanałów bramki + publiczne kanały domyślne — do odszyfrowania
+        # pakietów z obcych kanałów w logu sniffera
+        self.sniffer.channel_keys = ChannelKeys(
+            lambda: getattr(getattr(getattr(entry, "runtime_data", None), "client", None), "interface", None)
+        )
         self._mqtt_sniffer = MqttSniffer(hass, lambda: getattr(entry.runtime_data, "client", None))
         self._mqtt_sniffer_stored: bool | None = None
         # czyszczenie bazy węzłów radia: stan bieżącego zadania (tylko w pamięci) i ustawienia

@@ -17,6 +17,7 @@ from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
+    SelectSelectorMode,
 )
 
 from . import CONF_OPTION_WEB_CLIENT, CURRENT_CONFIG_VERSION_MINOR
@@ -52,6 +53,11 @@ from .const import (
     CONF_OPTION_FEATURES_PANEL_DEFAULT,
     CONF_OPTION_FEATURES_STATS,
     CONF_OPTION_FEATURES_STATS_DEFAULT,
+    CONF_OPTION_FEATURES_MODE,
+    FEATURES_MODE_PANEL_AND_STATS,
+    FEATURES_MODE_PANEL_ONLY,
+    FEATURES_MODE_STATS_ONLY,
+    FEATURES_MODES,
     CURRENT_CONFIG_VERSION_MAJOR,
     DOMAIN,
     LOGGER,
@@ -143,6 +149,59 @@ def _build_add_node_schema(
     )
 
 
+def _tracked_nodes_selector(
+    nodes: Mapping[int, Any],
+    tracked: list[Mapping[str, Any]],
+    language: str,
+) -> SelectSelector:
+    """
+    Jedna lista wielokrotnego wyboru z wszystkimi węzłami z bazy radia.
+
+    Zastępuje dawny układ: osobna lista „Wybrane węzły" (same długie nazwy),
+    osobne pole „Dodaj węzeł" i przełącznik „Dodaj kolejny węzeł", który
+    przeładowywał formularz przy każdym dodawanym węźle. Etykieta zawiera
+    długą i krótką nazwę oraz identyfikator, a kolejność to: śledzone,
+    ulubione, reszta alfabetycznie.
+    """
+    polish = (language or "").lower().startswith("pl")
+    missing_note = "nie ma go teraz w bazie radia" if polish else "not in the radio's node database right now"
+    tracked_ids = {el["id"] for el in tracked}
+
+    def label(node_id: int, node: Mapping[str, Any]) -> str:
+        user = node.get("user", {}) or {}
+        long_name = user.get("longName") or ""
+        short_name = user.get("shortName") or ""
+        node_hex = user.get("id") or f"!{node_id:08x}"
+        details = ", ".join(part for part in (short_name, node_hex) if part)
+        return f"{long_name} ({details})" if long_name else details
+
+    entries = []
+    for node_id, node in nodes.items():
+        entries.append(
+            (
+                0 if node_id in tracked_ids else 1 if node.get("isFavorite") else 2,
+                label(node_id, node).lower(),
+                SelectOptionDict(value=str(node_id), label=label(node_id, node)),
+            )
+        )
+    for el in tracked:
+        if el["id"] not in nodes:
+            name = el.get("name") or ""
+            node_hex = f"!{el['id']:08x}"
+            text = f"{name} ({node_hex}) — {missing_note}" if name else f"{node_hex} — {missing_note}"
+            entries.append((0, text.lower(), SelectOptionDict(value=str(el["id"]), label=text)))
+    entries.sort(key=lambda item: (item[0], item[1]))
+
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[item[2] for item in entries],
+            multiple=True,
+            mode=SelectSelectorMode.DROPDOWN,
+            sort=False,
+        )
+    )
+
+
 def _build_notify_platform_schema(
     options: dict[str, Any],
 ) -> vol.Schema:
@@ -167,20 +226,41 @@ def _build_notify_platform_schema(
     )
 
 
-def _build_features_schema(
-    options: dict[str, Any],
-) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_OPTION_FEATURES_PANEL,
-                default=options.get(CONF_OPTION_FEATURES_PANEL, CONF_OPTION_FEATURES_PANEL_DEFAULT),
-            ): cv.boolean,
-            vol.Required(
-                CONF_OPTION_FEATURES_STATS,
-                default=options.get(CONF_OPTION_FEATURES_STATS, CONF_OPTION_FEATURES_STATS_DEFAULT),
-            ): cv.boolean,
-        }
+def _features_to_mode(features: Mapping[str, Any] | None) -> str:
+    """Zapisane opcje (panel/stats) → wariant „Trybu pracy” pokazywany w formularzu."""
+    features = features or {}
+    panel = features.get(CONF_OPTION_FEATURES_PANEL, CONF_OPTION_FEATURES_PANEL_DEFAULT)
+    stats = features.get(CONF_OPTION_FEATURES_STATS, CONF_OPTION_FEATURES_STATS_DEFAULT)
+    if panel and not stats:
+        return FEATURES_MODE_PANEL_ONLY
+    if stats and not panel:
+        return FEATURES_MODE_STATS_ONLY
+    return FEATURES_MODE_PANEL_AND_STATS
+
+
+def _mode_to_features(mode: str) -> dict[str, bool]:
+    """Wariant „Trybu pracy” → zapisywane opcje panel/stats."""
+    return {
+        CONF_OPTION_FEATURES_PANEL: mode != FEATURES_MODE_STATS_ONLY,
+        CONF_OPTION_FEATURES_STATS: mode != FEATURES_MODE_PANEL_ONLY,
+    }
+
+
+def _features_mode_selector() -> SelectSelector:
+    """
+    Wybór trybu jako lista opcji z opisami (przyciski radiowe).
+
+    Wcześniej były to dwa gołe przełączniki bez wyjaśnienia, co każda część
+    robi. Etykiety wariantów i szczegółowe opisy są w tłumaczeniach
+    (selector.option_features_mode_selector oraz opis kroku).
+    """
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=list(FEATURES_MODES),
+            mode=SelectSelectorMode.LIST,
+            translation_key="option_features_mode_selector",
+            sort=False,
+        )
     )
 
 
@@ -330,6 +410,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.options = {}
 
         self._load_nodes_task: asyncio.Task | None = None
+        # czy krok wyboru węzłów ma dociągnąć pełną bazę (połączenie bez węzłów)
+        self._load_nodes_on_node_step = False
 
     async def _handle_connection_user_input(
         self, errors: dict[str, str], user_input: dict[str, Any] | None = None, *, no_full_load: bool = False
@@ -352,9 +434,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.nodes = nodes
             self.data.update(user_input)
             self.options = {CONF_OPTION_FILTER_NODES: []}
+            self._load_nodes_on_node_step = no_full_load
 
-            # Now call the second step but set user_input to None for the first time to force data entry in step 2
-            return await self.async_step_node(user_input=None, load_nodes=no_full_load)
+            # Najpierw tryb pracy — od niego zależy, czy wybór węzłów ma sens.
+            return await self.async_step_features()
 
         return None
 
@@ -576,6 +659,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders=self.context["title_placeholders"],
         )
 
+    async def async_step_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Tryb pracy: panel i/lub statystyki — z opisem, co każda część daje."""
+        if user_input is not None:
+            mode = user_input.get(CONF_OPTION_FEATURES_MODE, FEATURES_MODE_PANEL_AND_STATS)
+            features = _mode_to_features(mode)
+            self.options[CONF_OPTION_FEATURES] = features
+            if features[CONF_OPTION_FEATURES_STATS]:
+                return await self.async_step_node(
+                    user_input=None, load_nodes=self._load_nodes_on_node_step
+                )
+            # bez statystyk nie ma encji, więc wybór węzłów i encji powiadomień odpada
+            return await self.async_step_web_client()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_OPTION_FEATURES_MODE, default=FEATURES_MODE_PANEL_AND_STATS
+                ): _features_mode_selector(),
+            }
+        )
+        return self.async_show_form(step_id="features", data_schema=schema)
+
     async def async_step_node(
         self, user_input: dict[str, Any] | None = None, *, load_nodes: bool = False
     ) -> FlowResult:
@@ -703,20 +808,27 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if CONF_OPTION_FILTER_NODES in self.options
             else self.config_entry.options[CONF_OPTION_FILTER_NODES]
         )
-        all_nodes = {str(k): v["user"]["longName"] for k, v in self.nodes.items()}
         already_selected_node_ids = [el["id"] for el in current_filter_node_option]
 
         if user_input is not None:
             new_data = {}
-            updated_filter_node_option = deepcopy(current_filter_node_option)
-
-            removed_node_ids = [
-                node_id
-                for node_id in already_selected_node_ids
-                if str(node_id) not in user_input[CONF_OPTION_FILTER_NODES]
+            selected_ids = {int(value) for value in user_input.get(CONF_OPTION_FILTER_NODES, [])}
+            # kolejność i zapisane dane (identity_key) istniejących wpisów zostają
+            updated_filter_node_option = [
+                deepcopy(el) for el in current_filter_node_option if el["id"] in selected_ids
             ]
-            for node_id in removed_node_ids:
-                updated_filter_node_option = [e for e in updated_filter_node_option if e["id"] != node_id]
+            removed_node_ids = [node_id for node_id in already_selected_node_ids if node_id not in selected_ids]
+            for new_node_id in sorted(selected_ids - set(already_selected_node_ids)):
+                node_info = self.nodes.get(new_node_id)
+                if node_info is None:
+                    continue
+                updated_filter_node_option.append(
+                    {
+                        "id": new_node_id,
+                        "name": node_info.get("user", {}).get("longName") or f"!{new_node_id:08x}",
+                        "identity_key": node_identity_key(new_node_id, node_info),
+                    }
+                )
 
             if (
                 removed_node_ids
@@ -728,24 +840,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 for node_id in removed_node_ids:
                     self.hass.async_create_task(coordinator.async_request_node_removal(node_id))
 
-            if user_input.get(CONF_OPTION_NODE):
-                # Add the new node
-                new_node_id = int(user_input[CONF_OPTION_NODE])
-                updated_filter_node_option.append(
-                    {
-                        "id": new_node_id,
-                        "name": self.nodes[new_node_id]["user"]["longName"],
-                        "identity_key": node_identity_key(new_node_id, self.nodes[new_node_id]),
-                    }
-                )
-
-            if user_input.get(CONF_OPTION_ADD_ANOTHER_NODE, False):
-                self.options[CONF_OPTION_FILTER_NODES] = updated_filter_node_option
-                return await self.async_step_init()
             new_data[CONF_OPTION_FILTER_NODES] = updated_filter_node_option
 
-            if CONF_OPTION_FEATURES in user_input:
-                new_data[CONF_OPTION_FEATURES] = user_input[CONF_OPTION_FEATURES]
+            if CONF_OPTION_FEATURES_MODE in user_input:
+                new_data[CONF_OPTION_FEATURES] = _mode_to_features(user_input[CONF_OPTION_FEATURES_MODE])
 
             if CONF_OPTION_NOTIFY_PLATFORM in user_input:
                 new_data[CONF_OPTION_NOTIFY_PLATFORM] = user_input[CONF_OPTION_NOTIFY_PLATFORM]
@@ -770,11 +868,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     data=new_data,
                 )
 
-        selected_nodes = {
-            str(node_id): all_nodes.get(str(node_id), f"Unknown (id: {node_id})")
-            for node_id in already_selected_node_ids
-        }
-
         features_options = (
             self.options[CONF_OPTION_FEATURES]
             if CONF_OPTION_FEATURES in self.options
@@ -797,25 +890,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         )
         options_schema = vol.Schema(
             {
-                vol.Required(CONF_OPTION_FILTER_NODES, default=list(selected_nodes.keys())): cv.multi_select(
-                    selected_nodes
-                ),
-                **_build_add_node_schema(
-                    self.options if CONF_OPTION_FILTER_NODES in self.options else self.config_entry.options,
-                    self.nodes,
-                    node_selection_required=False,
-                ).schema,
-                vol.Required(CONF_OPTION_FEATURES): data_entry_flow.section(
-                    _build_features_schema(features_options), {"collapsed": False}
-                ),
+                # najpierw co w ogóle działa, potem które węzły śledzić
+                vol.Required(
+                    CONF_OPTION_FEATURES_MODE, default=_features_to_mode(features_options)
+                ): _features_mode_selector(),
+                vol.Optional(
+                    CONF_OPTION_FILTER_NODES,
+                    default=[str(node_id) for node_id in already_selected_node_ids],
+                ): _tracked_nodes_selector(self.nodes, current_filter_node_option, self.hass.config.language),
                 vol.Required(CONF_OPTION_NOTIFY_PLATFORM): data_entry_flow.section(
                     _build_notify_platform_schema(notify_options), {"collapsed": True}
                 ),
                 vol.Required(CONF_OPTION_WEB_CLIENT): data_entry_flow.section(
-                    _build_meshtastic_web_schema(webclient_options), {"collapsed": True}
+                    _build_meshtastic_web_schema(webclient_options), {"collapsed": "web_client" not in errors}
                 ),
                 vol.Required(CONF_OPTION_TCP_PROXY): data_entry_flow.section(
-                    _build_meshtastic_tcp_schema(tcp_proxy_options), {"collapsed": "tcp_proxy" in errors}
+                    # rozwinięta tylko wtedy, gdy jest w niej błąd do poprawienia
+                    _build_meshtastic_tcp_schema(tcp_proxy_options), {"collapsed": "tcp_proxy" not in errors}
                 ),
             }
         )
