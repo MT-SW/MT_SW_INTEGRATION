@@ -473,6 +473,9 @@ class MeshSettingsSniffer extends LitElement {
   }
 
   _portText(entry) {
+    if (entry.port === "ENCRYPTED" && entry.pki_likely) {
+      return PL("Private message (PKI)");
+    }
     if (entry.port === "ENCRYPTED") {
       return PL("Encrypted");
     }
@@ -486,6 +489,12 @@ class MeshSettingsSniffer extends LitElement {
   _undecodedInfo(entry) {
     if (entry.pki) {
       return PL("Private message encrypted with the recipient's key — cannot be read without it ({n} B).").replace(
+        "{n}",
+        entry.payload_size
+      );
+    }
+    if (entry.pki_likely) {
+      return PL("Most likely a private message (PKI) to another node — only the recipient can read it ({n} B).").replace(
         "{n}",
         entry.payload_size
       );

@@ -11,14 +11,13 @@ aiomeshtastic/interface.py — `_init_mqtt_client`/`_maintain_mqtt_connection`),
 i subskrybuje WSZYSTKO na `{root}/2/e/#`, czyli cały ruch protobuf innych
 bram publikujących na ten sam broker/temat — nie tylko własne radio.
 
-Pakiety w MQTT są zaszyfrowane per-kanał (ServiceEnvelope.packet.encrypted).
-Odszyfrowanie (mesh_crypto.py) wymaga PSK kanału, którego nazwa jest w
-ServiceEnvelope.channel_id. Dopasowanie do lokalnie skonfigurowanego kanału:
-  1. kanał z taką samą, jawnie ustawioną nazwą (settings.name) — pewne,
-  2. jeśli żaden nie pasuje, a dokładnie jeden lokalny kanał nie ma ustawionej
-     własnej nazwy (typowy pojedynczy kanał domyślny) — przyjmujemy, że to on.
-Gdy dopasowanie się nie uda, wpis i tak trafia do logu — jako nieodczytany
-("encrypted": True), tak samo jak dziś każdy nieznany pakiet w sniffer.py.
+Pakiety w MQTT są albo zaszyfrowane per-kanał (ServiceEnvelope.packet.encrypted),
+albo — gdy brama ma wyłączone szyfrowanie MQTT — już odczytane (packet.decoded).
+Oba warianty trafiają do logu. Odszyfrowywanie robi wspólnie z radiem
+sniffer.build_entry (sniffer_decode.py): klucz dopasowany po hashu kanału albo
+po nazwie z ServiceEnvelope.channel_id, kanały bez szyfrowania, publiczne
+kanały domyślne — zawsze z walidacją wyniku. Pakiet, którego nie da się
+odczytać, i tak trafia do logu, z tym, co da się o nim powiedzieć.
 
 Włącz/wyłącz tego sniffera jest w pełni po stronie integracji (nie firmware),
 więc stan — w przeciwieństwie do sniffera radiowego — jest zwykłą opcją
@@ -32,10 +31,10 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import DecodeError
 
-from .aiomeshtastic import mesh_crypto
-from .aiomeshtastic.protobuf import mesh_pb2, mqtt_pb2, portnums_pb2
+from .aiomeshtastic.protobuf import mesh_pb2, mqtt_pb2
 from .const import LOGGER
 
 try:
@@ -71,8 +70,6 @@ class MqttSniffer:
         self._task: asyncio.Task | None = None
         self._client: aiomqtt.Client | None = None
         self._connected = False
-        self._channels_cache: list[dict[str, Any]] = []
-        self._channels_cache_at = 0.0
         self.last_error: str | None = None
 
     @property
@@ -164,49 +161,6 @@ class MqttSniffer:
             },
         }
 
-    async def _channels(self) -> list[dict[str, Any]]:
-        """Kanały lokalnej bramki (nazwa + PSK) — odświeżane co minutę, nie przy każdym pakiecie."""
-        import time  # noqa: PLC0415
-
-        now = time.monotonic()
-        if now - self._channels_cache_at < 60 and self._channels_cache:
-            return self._channels_cache
-        client = self._get_client()
-        if client is None:
-            return self._channels_cache
-        try:
-            raw_channels = await client.async_get_channels()
-        except Exception as err:  # noqa: BLE001 - brak kanałów nie może zabić sniffera
-            LOGGER.debug("MQTT sniffer: nie udało się pobrać kanałów: %s", err)
-            return self._channels_cache
-        self._channels_cache = list(raw_channels or [])
-        self._channels_cache_at = now
-        return self._channels_cache
-
-    def _resolve_psk(self, channel_id: str, channels: list[dict[str, Any]]) -> bytes | None:
-        import base64  # noqa: PLC0415
-
-        unnamed_psks = []
-        for channel in channels:
-            settings = channel.get("settings", {}) or {}
-            name = settings.get("name") or ""
-            psk_b64 = settings.get("psk") or ""
-            if not psk_b64:
-                continue
-            try:
-                psk = base64.b64decode(psk_b64)
-            except (ValueError, TypeError):
-                continue
-            if name == channel_id:
-                return psk
-            if not name:
-                unnamed_psks.append(psk)
-        # Jedyny kanał bez własnej nazwy w konfiguracji — najczęstszy przypadek
-        # (domyślny kanał podstawowy, którego nazwa MQTT to nazwa presetu).
-        if len(unnamed_psks) == 1:
-            return unnamed_psks[0]
-        return None
-
     def _handle_message(self, message: Any, on_entry: Callable[[dict[str, Any]], None]) -> None:
         try:
             envelope = mqtt_pb2.ServiceEnvelope()
@@ -221,28 +175,17 @@ class MqttSniffer:
         )
 
     async def _decode_and_emit(self, envelope: Any, on_entry: Callable[[dict[str, Any]], None]) -> None:
-        packet = envelope.packet
-        entry_packet = self._packet_to_dict(packet, envelope.channel_id, envelope.gateway_id)
+        """
+        Przekaż pakiet do logu sniffera.
 
-        if packet.HasField("encrypted") and len(packet.encrypted) > 0:
-            channels = await self._channels()
-            psk = self._resolve_psk(envelope.channel_id, channels)
-            if psk is not None:
-                try:
-                    raw = mesh_crypto.decrypt_payload(
-                        bytes(packet.encrypted), psk, packet.id, getattr(packet, "from")
-                    )
-                    data = mesh_pb2.Data()
-                    data.ParseFromString(raw)
-                except (ValueError, DecodeError):
-                    pass
-                else:
-                    entry_packet["decoded"] = {
-                        "portnum": portnums_pb2.PortNum.Name(data.portnum),
-                        "payload": _base64_bytes(data.payload),
-                    }
-
-        on_entry(entry_packet)
+        Odszyfrowywanie robi wspólnie dla radia i MQTT sniffer.build_entry
+        (klucz dopasowany po hashu kanału albo nazwie z MQTT, z walidacją
+        wyniku). Wcześniej robiliśmy to tutaj osobno: tylko po nazwie kanału,
+        bez sprawdzenia, czy wynik ma sens — zły klucz dawał „odczytane” śmieci,
+        a nieznany numer portu wywracał zadanie, więc pakiet w ogóle nie
+        trafiał do logu.
+        """
+        on_entry(self._packet_to_dict(envelope.packet, envelope.channel_id, envelope.gateway_id))
 
     @staticmethod
     def _packet_to_dict(packet: mesh_pb2.MeshPacket, channel_id: str, gateway_id: str) -> dict[str, Any]:
@@ -252,6 +195,14 @@ class MqttSniffer:
             "id": packet.id,
             "channel": packet.channel,
             "encrypted": _base64_bytes(packet.encrypted) if packet.encrypted else "",
+            # Bramy z wyłączonym szyfrowaniem MQTT wysyłają pakiet już odczytany
+            # (pole decoded) — wcześniej było ono gubione i taki pakiet
+            # wyglądał w logu jak „zaszyfrowany” bez żadnych danych.
+            **(
+                {"decoded": MessageToDict(packet.decoded)}
+                if packet.WhichOneof("payload_variant") == "decoded"
+                else {}
+            ),
             "rxSnr": packet.rx_snr or None,
             "rxRssi": packet.rx_rssi or None,
             "hopLimit": packet.hop_limit,

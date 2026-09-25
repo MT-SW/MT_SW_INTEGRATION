@@ -696,6 +696,7 @@ const PL_STRINGS = {
   "Private message encrypted with the recipient's key — cannot be read without it ({n} B).": "Wiadomość prywatna zaszyfrowana kluczem odbiorcy — bez niego nie da się jej odczytać ({n} B).",
   "Unknown channel key (channel hash {h}), {n} B": "Nieznany klucz kanału (hash kanału {h}), {n} B",
   "same hash as": "ten sam hash co",
+  "Most likely a private message (PKI) to another node — only the recipient can read it ({n} B).": "Najpewniej wiadomość prywatna (PKI) do innego węzła — odczyta ją tylko odbiorca ({n} B).",
   "different key": "inny klucz",
   "Text": "Tekst",
   "Altitude": "Wysokość",

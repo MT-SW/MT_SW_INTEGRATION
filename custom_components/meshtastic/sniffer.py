@@ -143,6 +143,16 @@ def build_entry(  # noqa: PLR0913, PLR0915
         "decrypted_with": decrypted_with,
         # przy nieudanym odszyfrowaniu: znane nazwy kanałów o tym samym hashu
         "channel_hash_matches": hash_names,
+        # Wiadomość prywatna do innego węzła: firmware szyfruje ją kluczem PKI
+        # odbiorcy i wysyła z numerem kanału 0 — bez klucza prywatnego odbiorcy
+        # nikt jej nie odczyta (aplikacja na telefonie też nie).
+        "pki_likely": bool(
+            still_encrypted
+            and not pki
+            and channel == 0
+            and destination not in (None, BROADCAST)
+            and not hash_names
+        ),
         "payload_hex": raw[:MAX_PAYLOAD_BYTES].hex(),
         "payload_ascii": printable_preview(raw) if (still_encrypted or not fields) and raw else "",
         "payload_size": len(raw),
