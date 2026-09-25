@@ -142,8 +142,8 @@
             }
           },
           "web_client": {
-            "name": "Klient webowy Meshtastic",
-            "description": "Oficjalny klient webowy Meshtastic uruchamiany przez Home Assistanta — łączy się z integracją zamiast bezpośrednio z radiem (radio przyjmuje tylko jedno połączenie). UWAGA: protokół Meshtastic nie ma uwierzytelniania — każdy, kto ma dostęp do Twojego Home Assistanta, może wtedy sterować bramką.",
+            "name": "Klient webowy MT_SW",
+            "description": "Klient webowy MT_SW (zbudowany na oficjalnym kliencie Meshtastic) uruchamiany przez Home Assistanta — łączy się z integracją zamiast bezpośrednio z radiem (radio przyjmuje tylko jedno połączenie). UWAGA: protokół Meshtastic nie ma uwierzytelniania — każdy, kto ma dostęp do Twojego Home Assistanta, może wtedy sterować bramką.",
             "data": {
               "enable": "Włącz klienta webowego",
               "port": "Port klienta webowego"

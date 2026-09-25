@@ -502,6 +502,19 @@ class MeshSettingsSniffer extends LitElement {
     return "";
   }
 
+  _decryptedWith(info) {
+    if (info.source === "plaintext") {
+      return PL("unencrypted channel (no key), name unknown");
+    }
+    if (info.source === "public") {
+      return PL("public default channel {c}").replace("{c}", info.name);
+    }
+    if (info.plain) {
+      return PL("gateway channel {c} (unencrypted)").replace("{c}", info.name);
+    }
+    return PL("gateway channel {c}").replace("{c}", info.name);
+  }
+
   _nodeList(ids) {
     return (ids || []).map((id) => this._label(id)).join(" → ");
   }
@@ -878,11 +891,7 @@ class MeshSettingsSniffer extends LitElement {
         ${this._renderFields(entry)}
         <div class="section-title">${PL("Packet")}</div>
         ${entry.decrypted_with
-          ? html`<div class="kv"><span class="k">${PL("Decrypted with")}</span><span>${
-              entry.decrypted_with.source === "public"
-                ? PL("public default channel {c}").replace("{c}", entry.decrypted_with.name)
-                : PL("gateway channel {c}").replace("{c}", entry.decrypted_with.name)
-            }</span></div>`
+          ? html`<div class="kv"><span class="k">${PL("Decrypted with")}</span><span>${this._decryptedWith(entry.decrypted_with)}</span></div>`
           : ""}
         ${!entry.fields || !entry.fields.length
           ? html`<div class="kv"><span class="k">${PL("What is visible")}</span><span>${this._undecodedInfo(entry) || "—"}</span></div>`

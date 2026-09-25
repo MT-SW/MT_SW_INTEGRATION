@@ -100,13 +100,13 @@ def build_entry(  # noqa: PLR0913, PLR0915
 
     decrypted_with = None
     hash_names: list[str] = []
-    if encrypted and not decoded and not pki and keys:
+    if encrypted and not decoded and not pki:
         data, key = try_decrypt(
             encrypted,
             packet.get("id"),
             sender,
             channel if isinstance(channel, int) else None,
-            keys,
+            keys or [],
             name_hint=packet.get("mqtt_channel_name"),
         )
         if data is not None:
@@ -114,9 +114,9 @@ def build_entry(  # noqa: PLR0913, PLR0915
             port = portnums_pb2.PortNum.Name(port_number) if port_number in portnums_pb2.PortNum.values() else port_number
             payload = bytes(data.payload)
             decoded = {"portnum": port}
-            decrypted_with = {"name": key["name"], "source": key["source"]}
+            decrypted_with = {"name": key["name"], "source": key["source"], "plain": bool(key.get("plain"))}
         else:
-            hash_names = hash_matches(channel if isinstance(channel, int) else None, keys)
+            hash_names = hash_matches(channel if isinstance(channel, int) else None, keys or [])
 
     info, fields = decode_payload(port_number, payload) if decoded else ("", [])
     raw = payload or encrypted

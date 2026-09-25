@@ -1,0 +1,94 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Kolorystyka MT_SW nałożona na klienta webowego (zbudowany bundle
+ * meshtastic/web). Zamiast przebudowywać bundle, podmieniamy zmienne
+ * kolorów Tailwinda: zieleń Meshtastic (przełączniki, aktywne pozycje menu,
+ * przyciski „sukces”, wyróżnienia) staje się złotem MT_SW (#F5C839), a
+ * najciemniejsze odcienie — granatem z logo (#2C2D3C).
+ *
+ * Reguły poniżej nie są w żadnej warstwie (@layer), więc zawsze wygrywają z
+ * warstwami Tailwinda — nie potrzeba !important.
+ */
+
+:root,
+:host {
+  --mtsw-gold: #f5c839;
+  --mtsw-gold-dark: #c99b14;
+  --mtsw-navy: #2c2d3c;
+
+  --color-green-400: #f8d56a;
+  --color-green-500: #f5c839;
+  --color-green-600: #e6b82a;
+  --color-green-700: #c99b14;
+  --color-green-800: #2c2d3c;
+  --color-green-900: #1f2029;
+}
+
+/* Na złotym tle biały napis jest nieczytelny — ciemny granat z logo. */
+.bg-green-500,
+.bg-green-600,
+.hover\:bg-green-600:hover,
+.hover\:bg-green-700:hover,
+.data-\[state\=checked\]\:bg-green-500[data-state="checked"],
+.dark\:bg-green-600:where([data-theme="dark"], [data-theme="dark"] *),
+.dark\:bg-green-700:where([data-theme="dark"], [data-theme="dark"] *),
+.dark\:hover\:bg-green-600:where([data-theme="dark"], [data-theme="dark"] *):hover,
+.dark\:hover\:bg-green-700:where([data-theme="dark"], [data-theme="dark"] *):hover {
+  color: var(--mtsw-navy);
+}
+
+/* Najciemniejsze odcienie są granatowe — napis jasny. */
+.bg-green-800,
+.active\:bg-green-800:active,
+.dark\:hover\:bg-green-800:where([data-theme="dark"], [data-theme="dark"] *):hover,
+.dark\:active\:bg-green-800:where([data-theme="dark"], [data-theme="dark"] *):active,
+.dark\:active\:bg-green-900:where([data-theme="dark"], [data-theme="dark"] *):active {
+  color: #ffffff;
+}
+
+/*
+ * Zielony tekst niesie znaczenie (dobry sygnał, udany test połączenia,
+ * skopiowano) — zostaje zielony, nie złoty, żeby nie mylił się z żółtym
+ * „średnim” poziomem sygnału.
+ */
+.text-green-500 {
+  color: #22c55e;
+}
+
+.text-green-600 {
+  color: #16a34a;
+}
+
+.dark\:text-green-400:where([data-theme="dark"], [data-theme="dark"] *) {
+  color: #4ade80;
+}
+
+.dark\:text-green-500:where([data-theme="dark"], [data-theme="dark"] *) {
+  color: #22c55e;
+}
+
+/* Logo w pasku bocznym i na ekranie połączeń — złota ramka jak w panelu MT_SW. */
+img[src$="/meshtastic/web/logo.svg"] {
+  box-shadow: 0 0 0 1px rgba(44, 45, 60, 0.15);
+}
+
+/* Linki w barwach marki: ciemne złoto na jasnym tle, złoto na ciemnym. */
+[data-theme="light"] {
+  --link: #9a740e;
+}
+
+[data-theme="dark"] {
+  --link: #f5c839;
+}
+
+/* Zaznaczenie tekstu i pasek przewijania też w kolorach MT_SW. */
+::selection {
+  background: rgba(245, 200, 57, 0.45);
+}
+
+* {
+  scrollbar-color: rgba(201, 155, 20, 0.6) transparent;
+}

@@ -142,8 +142,8 @@
             }
           },
           "web_client": {
-            "name": "Meshtastic web client",
-            "description": "The official Meshtastic web client served through Home Assistant — it connects to the integration instead of the radio directly (the radio accepts only one connection). WARNING: the Meshtastic protocol has no authentication — anyone with access to your Home Assistant can then control the gateway.",
+            "name": "MT_SW web client",
+            "description": "The MT_SW web client (built on the official Meshtastic web client) served through Home Assistant — it connects to the integration instead of the radio directly (the radio accepts only one connection). WARNING: the Meshtastic protocol has no authentication — anyone with access to your Home Assistant can then control the gateway.",
             "data": {
               "enable": "Enable web client",
               "port": "Web client port"

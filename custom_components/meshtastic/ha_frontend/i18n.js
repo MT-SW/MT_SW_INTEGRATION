@@ -38,9 +38,9 @@ const STRINGS = {
     "radio.no_gateways": "Nie znaleziono żadnej załadowanej bramki.",
     "radio.status.available": "Połączona",
     "radio.status.unavailable": "Brak połączenia",
-    "radio.web_client": "Klient WWW",
-    "radio.web_client.open": "Otwórz klient WWW",
-    "radio.web_client.unavailable": "Klient WWW niedostępny",
+    "radio.web_client": "Klient webowy MT_SW",
+    "radio.web_client.open": "Otwórz klienta webowego",
+    "radio.web_client.unavailable": "Klient webowy niedostępny",
 
     "radio.section.device": "Urządzenie",
     "radio.hw_model": "Model sprzętu",
@@ -439,7 +439,7 @@ const STRINGS = {
     "radio.no_gateways": "No loaded gateway found.",
     "radio.status.available": "Connected",
     "radio.status.unavailable": "Disconnected",
-    "radio.web_client": "Web client",
+    "radio.web_client": "MT_SW web client",
     "radio.web_client.open": "Open web client",
     "radio.web_client.unavailable": "Web client unavailable",
 

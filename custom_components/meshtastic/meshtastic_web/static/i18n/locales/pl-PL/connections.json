@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "Connect to a Meshtastic device",
+    "title": "Połącz z urządzeniem MT_SW",
     "description": "Add a device connection via HTTP, Bluetooth, or Serial. Your saved connections will be saved in your browser."
   },
   "connectionType_ble": "BLE",

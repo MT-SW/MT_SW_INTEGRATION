@@ -65,14 +65,18 @@ def expand_psk(psk: bytes) -> bytes | None:
         index = psk[0]
         if index == 0:
             return None
-        if index == 1:
-            return _DEFAULT_PSK
-        # warianty 2..10: domyślny klucz z ostatnim bajtem = (index - 1)
-        return _DEFAULT_PSK[:-1] + bytes([index - 1])
+        # Jak w firmware (Channels::getKey): ostatni bajt domyślnego klucza
+        # (0x01) podbity o (index - 1), czyli równy numerowi wariantu. Wcześniej
+        # było tu (index - 1), przez co kanały z PSK 2..10 nigdy się nie
+        # odszyfrowywały.
+        return _DEFAULT_PSK[:-1] + bytes([(_DEFAULT_PSK[-1] + index - 1) & 0xFF])
     if len(psk) in (16, 32):
         return psk
-    # Długość spoza specyfikacji (klucz uszkodzony/nieprawidłowy w configu) —
-    # nie ma sensu próbować, wywołujący zgłosi pakiet jako nieodczytany.
+    # Firmware dopełnia krótkie klucze zerami do 16 B, a 17..31 B do 32 B.
+    if len(psk) < 16:
+        return psk + bytes(16 - len(psk))
+    if len(psk) < 32:
+        return psk + bytes(32 - len(psk))
     return None
 
 

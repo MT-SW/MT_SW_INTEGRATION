@@ -122,12 +122,21 @@ class ChannelKeys:
                 if channel.role == 0:  # DISABLED
                     continue
                 name = channel.settings.name or preset_name
-                key = mesh_crypto.expand_psk(bytes(channel.settings.psk))
-                if key is None or (name, key) in seen:
+                # Kanał bez szyfrowania (PSK pusty albo AA==): klucz pusty, hash to
+                # sam XOR nazwy, a "zaszyfrowane" bajty są wprost protobufem Data.
+                key = mesh_crypto.expand_psk(bytes(channel.settings.psk)) or b""
+                if (name, key) in seen:
                     continue
                 seen.add((name, key))
                 keys.append(
-                    {"name": name, "key": key, "hash": channel_hash(name, key), "source": "gateway", "index": channel.index}
+                    {
+                        "name": name,
+                        "key": key,
+                        "hash": channel_hash(name, key),
+                        "source": "gateway",
+                        "index": channel.index,
+                        "plain": not key,
+                    }
                 )
         for public in self._public_keys():
             if (public["name"], public["key"]) not in seen:
@@ -139,23 +148,41 @@ class ChannelKeys:
     def _public_keys() -> list[dict[str, Any]]:
         key = mesh_crypto.expand_psk(_DEFAULT_KEY_PSK)
         return [
-            {"name": name, "key": key, "hash": channel_hash(name, key), "source": "public", "index": None}
+            {"name": name, "key": key, "hash": channel_hash(name, key), "source": "public", "index": None, "plain": False}
             for name in _PUBLIC_CHANNEL_NAMES
         ]
 
 
-def _valid_data(raw: bytes) -> mesh_pb2.Data | None:
-    """Odszyfrowany bufor jest wiarygodny tylko, gdy to poprawne Data ze znanym portem."""
+def _valid_data(raw: bytes, *, strict: bool) -> mesh_pb2.Data | None:
+    """
+    Czy bufor to wiarygodny protobuf Data.
+
+    Przy kluczu dopasowanym po hashu wystarczy poprawny Data z sensownym
+    numerem portu (nowsze firmware mają porty, których nasze protobufy mogą
+    jeszcze nie znać). Przy próbie „na ślepo” (bez klucza, nieznany hash)
+    wymagamy znanego portu i treści, którą da się zdekodować — inaczej
+    przypadkowe bajty szyfrogramu mogłyby udawać pakiet.
+    """
+    if not raw or raw[0] != 0x08:  # Data zawsze zaczyna się od pola 1 (portnum, varint)
+        return None
     data = mesh_pb2.Data()
     try:
         data.ParseFromString(raw)
     except (DecodeError, ValueError):
         return None
-    port = data.portnum
-    if port == 0:
+    port = int(data.portnum)
+    if port <= 0 or port >= 1024:
         return None
+    if not strict:
+        return data
     if port != ON_DEMAND_PORT and port not in portnums_pb2.PortNum.values():
         return None
+    decoder = _DECODERS.get(port)
+    if decoder is not None and data.payload:
+        try:
+            decoder(bytes(data.payload))
+        except Exception:  # noqa: BLE001
+            return None
     return data
 
 
@@ -168,8 +195,16 @@ def try_decrypt(
     *,
     name_hint: str | None = None,
 ) -> tuple[mesh_pb2.Data | None, Mapping[str, Any] | None]:
-    """Spróbuj odszyfrować pakiet kluczami pasującymi do hasha kanału (albo nazwy z MQTT)."""
-    if not encrypted or packet_id is None or sender is None:
+    """
+    Spróbuj odczytać pakiet:
+
+    1. kluczami, których hash pasuje do numeru kanału (albo nazwą z MQTT) —
+       dokładnie jak firmware; kanał bez szyfrowania to po prostu jawny Data,
+    2. a gdy żaden nie pasuje — jako jawny Data „na ślepo”: sieci na kanałach
+       bez szyfrowania (AA==) o nazwach, których bramka nie zna, nadają
+       otwartym tekstem, a aplikacja na telefonie też je pokazuje.
+    """
+    if not encrypted:
         return None, None
     candidates = [
         key
@@ -177,14 +212,22 @@ def try_decrypt(
         if (channel is not None and key["hash"] == channel) or (name_hint and key["name"] == name_hint)
     ]
     for key in candidates:
-        try:
-            # klucz jest już rozwinięty (16/32 B), więc decrypt_payload użyje go wprost
-            raw = mesh_crypto.decrypt_payload(encrypted, key["key"], packet_id, sender)
-        except ValueError:
+        if not key["key"]:
+            data = _valid_data(encrypted, strict=False)
+        elif packet_id is None or sender is None:
             continue
-        data = _valid_data(raw)
+        else:
+            try:
+                # klucz jest już rozwinięty (16/32 B), więc decrypt_payload użyje go wprost
+                raw = mesh_crypto.decrypt_payload(encrypted, key["key"], packet_id, sender)
+            except ValueError:
+                continue
+            data = _valid_data(raw, strict=False)
         if data is not None:
             return data, key
+    data = _valid_data(encrypted, strict=True)
+    if data is not None:
+        return data, {"name": None, "source": "plaintext", "plain": True}
     return None, None
 
 
