@@ -1,51 +1,51 @@
 {
-  "emptyState": "No results found.",
+  "emptyState": "Brak wyników.",
   "page": {
-    "title": "Command Menu"
+    "title": "Menu poleceń"
   },
   "pinGroup": {
-    "label": "Pin command group"
+    "label": "Przypnij grupę poleceń"
   },
   "unpinGroup": {
-    "label": "Unpin command group"
+    "label": "Odepnij grupę poleceń"
   },
   "goto": {
-    "label": "Goto",
+    "label": "Przejdź do",
     "command": {
       "messages": "Wiadomości",
       "map": "Mapa",
-      "config": "Config",
-      "nodes": "Nodes"
+      "config": "Konfiguracja",
+      "nodes": "Węzły"
     }
   },
   "manage": {
-    "label": "Manage",
+    "label": "Zarządzaj",
     "command": {
-      "switchNode": "Switch Node",
-      "connectNewNode": "Connect New Node"
+      "switchNode": "Przełącz węzeł",
+      "connectNewNode": "Połącz nowy węzeł"
     }
   },
   "contextual": {
-    "label": "Contextual",
+    "label": "Kontekstowe",
     "command": {
-      "qrCode": "QR Code",
+      "qrCode": "Kod QR",
       "qrGenerator": "Generator",
       "qrImport": "Import",
-      "scheduleShutdown": "Schedule Shutdown",
-      "scheduleReboot": "Reboot Device",
-      "resetNodeDb": "Reset Node DB",
+      "scheduleShutdown": "Zaplanuj wyłączenie",
+      "scheduleReboot": "Uruchom ponownie urządzenie",
+      "resetNodeDb": "Wyczyść bazę węzłów",
       "dfuMode": "Wejdź w tryb DFU",
-      "factoryResetDevice": "Factory Reset Device",
-      "factoryResetConfig": "Factory Reset Config",
+      "factoryResetDevice": "Przywróć urządzenie do ustawień fabrycznych",
+      "factoryResetConfig": "Przywróć konfigurację fabryczną",
       "disconnect": "Rozłącz"
     }
   },
   "debug": {
-    "label": "Debug",
+    "label": "Debugowanie",
     "command": {
-      "reconfigure": "Reconfigure",
+      "reconfigure": "Skonfiguruj ponownie",
       "clearAllStoredMessages": "Clear All Stored Message",
-      "clearAllStores": "Clear All Local Storage"
+      "clearAllStores": "Wyczyść cały lokalny magazyn"
     }
   }
 }

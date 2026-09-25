@@ -21,6 +21,10 @@ const POLL_MS = 10000;
 
 /* Nazwy akcji urządzenia z przeniesionego panelu ustawień -> nazwy w naszym
    backendzie (websocket_api.ws_device_action). */
+/* sekcje zapisywane bez restartu radia — po pozostałych integracja restartuje radio,
+   żeby zmiana na pewno weszła (patrz _REBOOT_AFTER_CONFIG w interface.py) */
+const SECTIONS_WITHOUT_REBOOT = new Set(["device_ui", "statusmessage", "mesh_beacon", "traffic_management"]);
+
 const DEVICE_ACTIONS = {
   reset_nodedb: "nodedb_reset",
   factory_reset_config: "factory_reset",
@@ -498,6 +502,11 @@ class MeshtasticPanel extends LitElement {
             values,
           });
           this._configEntryId = null;
+          this._toast(
+            !SECTIONS_WITHOUT_REBOOT.has(data.section)
+              ? t(this.hass, "settings.saved_reboot")
+              : t(this.hass, "settings.saved")
+          );
           return { success: true };
         }
         case "set_owner":
@@ -519,6 +528,7 @@ class MeshtasticPanel extends LitElement {
             entry_id: entryId,
             channel: data.channel || data,
           });
+          this._toast(t(this.hass, "settings.channel_saved"));
           return { success: true };
         case "device_action":
           await this.hass.callWS({
@@ -590,8 +600,17 @@ class MeshtasticPanel extends LitElement {
       }
     } catch (err) {
       console.error("MT_SW: polecenie ustawień nie powiodło się", name, err);
-      return null;
+      // Wcześniej błąd znikał po cichu — przycisk „Zapisz” po prostu przestawał
+      // się kręcić i nie było wiadomo, że radio niczego nie przyjęło.
+      if (name.startsWith("set_") || name === "device_action") {
+        this._toast(`${t(this.hass, "settings.save_failed")}: ${(err && err.message) || err}`);
+      }
+      return { success: false, error: (err && err.message) || String(err) };
     }
+  }
+
+  _toast(message) {
+    this.dispatchEvent(new CustomEvent("hass-notification", { detail: { message }, bubbles: true, composed: true }));
   }
 
   _selectTab(tab) {

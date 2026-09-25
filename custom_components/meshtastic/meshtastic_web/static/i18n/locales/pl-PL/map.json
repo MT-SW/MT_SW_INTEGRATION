@@ -1,38 +1,40 @@
 {
   "maplibre": {
-    "GeolocateControl.FindMyLocation": "Find my location",
-    "NavigationControl.ZoomIn": "Zoom in",
-    "NavigationControl.ZoomOut": "Zoom out",
-    "CooperativeGesturesHandler.WindowsHelpText": "Use Ctrl + scroll to zoom the map",
-    "CooperativeGesturesHandler.MacHelpText": "Use ⌘ + scroll to zoom the map",
-    "CooperativeGesturesHandler.MobileHelpText": "Use two fingers to move the map"
+    "GeolocateControl.FindMyLocation": "Znajdź moją lokalizację",
+    "NavigationControl.ZoomIn": "Przybliż",
+    "NavigationControl.ZoomOut": "Oddal",
+    "CooperativeGesturesHandler.WindowsHelpText": "Użyj Ctrl + kółko, żeby przybliżyć mapę",
+    "CooperativeGesturesHandler.MacHelpText": "Użyj ⌘ + kółko, żeby przybliżyć mapę",
+    "CooperativeGesturesHandler.MobileHelpText": "Przesuwaj mapę dwoma palcami"
   },
   "layerTool": {
-    "nodeMarkers": "Show nodes",
-    "directNeighbors": "Show direct connections",
-    "remoteNeighbors": "Show remote connections",
-    "positionPrecision": "Show position precision",
-    "traceroutes": "Show traceroutes",
-    "waypoints": "Show waypoints"
+    "nodeMarkers": "Pokaż węzły",
+    "directNeighbors": "Pokaż połączenia bezpośrednie",
+    "remoteNeighbors": "Pokaż połączenia zdalne",
+    "positionPrecision": "Pokaż precyzję pozycji",
+    "traceroutes": "Pokaż traceroute",
+    "waypoints": "Pokaż punkty",
+    "heatmap": "Pokaż mapę cieplną",
+    "density": "Gęstość"
   },
   "mapMenu": {
-    "locateAria": "Locate my node",
-    "layersAria": "Change map style"
+    "locateAria": "Pokaż mój węzeł",
+    "layersAria": "Zmień styl mapy"
   },
   "waypointDetail": {
     "edit": "Edytuj",
-    "description": "Description:",
-    "createdBy": "Edited by:",
-    "createdDate": "Created:",
-    "updated": "Updated:",
-    "expires": "Expires:",
-    "distance": "Distance:",
-    "bearing": "Absolute bearing:",
-    "lockedTo": "Locked by:",
-    "latitude": "Latitude:",
-    "longitude": "Longitude:"
+    "description": "Opis:",
+    "createdBy": "Edytowany przez:",
+    "createdDate": "Utworzono:",
+    "updated": "Zaktualizowano:",
+    "expires": "Wygasa:",
+    "distance": "Odległość:",
+    "bearing": "Azymut:",
+    "lockedTo": "Zablokowany przez:",
+    "latitude": "Szerokość:",
+    "longitude": "Długość:"
   },
   "myNode": {
-    "tooltip": "This device"
+    "tooltip": "To urządzenie"
   }
 }

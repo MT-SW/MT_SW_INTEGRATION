@@ -46,6 +46,7 @@ from .protobuf import (
     channel_pb2,
     config_pb2,
     connection_status_pb2,
+    device_ui_pb2,
     localonly_pb2,
     mesh_pb2,
     module_config_pb2,
@@ -167,6 +168,10 @@ class MeshInterface:
         self._connected_node_queue_status: mesh_pb2.QueueStatus | None = None
         self._connected_node_local_config = localonly_pb2.LocalConfig()
         self._connected_node_module_config = localonly_pb2.LocalModuleConfig()
+        # ustawienia ekranu dotykowego (DeviceUIConfig) — przychodzą osobno, nie w LocalConfig
+        self._connected_node_device_ui: device_ui_pb2.DeviceUIConfig | None = None
+        # gotowe wiadomości (moduł Canned Message) — trzymane w radiu poza configiem
+        self._canned_messages: str | None = None
 
         self._connected_node_ready = asyncio.Event()
 
@@ -209,6 +214,10 @@ class MeshInterface:
         self._node_change_listeners: list[Callable[[int | None], None]] = []
         self._connection_state_listeners: list[Callable[[str], None]] = []
         self._link_up = False
+        # od kiedy łącze jest zerwane i kiedy strażnik ostatnio je „kopnął”
+        self._link_down_since = time.monotonic()
+        self._last_watchdog_kick = 0.0
+        self._last_reconnect_attempt = 0.0
         self._last_reboot_count: int | None = None
         self._full_resync_task: asyncio.Task | None = None
         # Strażnik martwego połączenia włącza się dopiero, gdy radio
@@ -274,7 +283,10 @@ class MeshInterface:
                 self._logger.debug("Node change listener failed", exc_info=True)
 
     def _set_link_state(self, state: str) -> None:
+        was_up = self._link_up
         self._link_up = state == "connected"
+        if was_up and not self._link_up:
+            self._link_down_since = time.monotonic()
         for callback in list(self._connection_state_listeners):
             try:
                 callback(state)
@@ -317,6 +329,34 @@ class MeshInterface:
         if not self._connected_node_ready.is_set():
             return None
         return self._connected_node_local_config
+
+    def connected_node_device_ui(self) -> device_ui_pb2.DeviceUIConfig | None:
+        return self._connected_node_device_ui
+
+    def connected_node_fixed_position(self) -> dict[str, float] | None:
+        """Pozycja własnego węzła (dla formularza stałej pozycji) albo None."""
+        with contextlib.suppress(Exception):
+            node = self._node_database.get(self._connected_node_info.my_node_num) or {}
+            position = node.get("position") or {}
+            if "latitudeI" in position or "longitudeI" in position:
+                return {
+                    "latitude": round(position.get("latitudeI", 0) * 1e-7, 7),
+                    "longitude": round(position.get("longitudeI", 0) * 1e-7, 7),
+                    "altitude": position.get("altitude", 0),
+                }
+        return None
+
+    async def get_canned_messages(self, node: int | None = None) -> str:
+        """Gotowe wiadomości z radia (jedna odpowiedź admin, wynik zapamiętywany)."""
+        if node is None and self._canned_messages is not None:
+            return self._canned_messages
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.get_canned_message_module_messages_request = True
+        response = await self.send_admin_message_await_response(node=node, message=admin_message, timeout=10)
+        text = response.app_payload.get_canned_message_module_messages_response
+        if node is None:
+            self._canned_messages = text
+        return text
 
     def connected_node_module_config(self) -> localonly_pb2.LocalModuleConfig | None:
         if not self._connected_node_ready.is_set():
@@ -594,12 +634,43 @@ class MeshInterface:
     # Po tylu sekundach bez JAKIEGOKOLWIEK bajtu z radia (mimo heartbeatów,
     # na które radio odpowiada QueueStatus) uznajemy łącze za martwe.
     _DEAD_LINK_SECONDS = 150
+    # Radio, które nie odpowiada na heartbeat (starsze firmware), nie daje
+    # pewnego sygnału życia — wtedy za martwe uznajemy łącze dopiero po tak
+    # długiej ciszy (w działającej sieci zawsze coś przychodzi częściej).
+    _SILENT_LINK_SECONDS = 900
+    # Tak długo może trwać zerwane łącze bez postępu, zanim strażnik uzna, że
+    # ponowne łączenie utknęło, i wymusi je od nowa.
+    _STALLED_RECONNECT_SECONDS = 180
+    # Najkrótszy odstęp między kolejnymi interwencjami strażnika.
+    _WATCHDOG_KICK_INTERVAL = 120
+
+    async def _watchdog_kick(self, reason: str) -> None:
+        now = time.monotonic()
+        if now - self._last_watchdog_kick < self._WATCHDOG_KICK_INTERVAL:
+            return
+        self._last_watchdog_kick = now
+        self._logger.warning("%s — wymuszam ponowne połączenie z radiem", reason)
+        await self._connection.force_close()
 
     @process_while_running
     async def _heartbeat_loop(self) -> None:
         while True:
             await asyncio.sleep(self._heartbeat_interval_s)
-            if self._reconnect_lock.locked() or not self._link_up:
+            if not self._link_up:
+                # Łącze zerwane. Zwykle trwa właśnie ponowne łączenie — ale gdyby
+                # cokolwiek utknęło (brak postępu przez kilka minut), strażnik
+                # zamyka gniazdo i budzi pętlę główną, żeby zaczęła od nowa.
+                now = time.monotonic()
+                down_for = now - self._link_down_since
+                # postęp = ostatnia próba ponownego łączenia; zwykłe ponawianie
+                # przy wyłączonym radiu (próba co najwyżej co ~2 min) to nie zawieszenie
+                no_progress_for = now - max(self._link_down_since, self._last_reconnect_attempt)
+                if no_progress_for > self._STALLED_RECONNECT_SECONDS:
+                    await self._watchdog_kick(
+                        f"Brak połączenia z radiem od {down_for:.0f} s i brak prób ponownego łączenia"
+                    )
+                continue
+            if self._reconnect_lock.locked():
                 self._logger.debug("Skipping heartbeat — reconnect in progress")
                 continue
             sent_at = time.monotonic()
@@ -620,15 +691,17 @@ class MeshInterface:
                 if self._connection.last_queue_status_monotonic >= sent_at:
                     self._logger.debug("Radio odpowiada na heartbeat — strażnik łącza aktywny")
                     self._heartbeat_replies_confirmed = True
+                    continue
+                # Radio (jeszcze) nie potwierdziło heartbeatu — tylko bardzo długa
+                # cisza oznacza martwe łącze.
+                idle = time.monotonic() - self._connection.last_rx_monotonic
+                if idle > self._SILENT_LINK_SECONDS:
+                    await self._watchdog_kick(f"Brak jakichkolwiek danych z radia od {idle:.0f} s")
                 continue
 
             idle = time.monotonic() - self._connection.last_rx_monotonic
             if idle > max(self._DEAD_LINK_SECONDS, 2.5 * self._heartbeat_interval_s):
-                self._logger.warning(
-                    "Brak danych z radia od %.0f s mimo heartbeatów — łącze uznane za martwe, łączę ponownie",
-                    idle,
-                )
-                await self._connection.force_close()
+                await self._watchdog_kick(f"Brak danych z radia od {idle:.0f} s mimo heartbeatów — łącze uznane za martwe")
 
     async def _process_connected_node_packets(self, packet: mesh_pb2.FromRadio) -> None:
         if packet.HasField("rebooted") and packet.rebooted:
@@ -651,6 +724,8 @@ class MeshInterface:
                 channels[packet.channel.index] = packet.channel
             else:
                 channels.append(packet.channel)
+        elif packet.HasField("deviceuiConfig"):
+            self._connected_node_device_ui = packet.deviceuiConfig
         elif packet.HasField("queueStatus"):
             self._connected_node_queue_status = packet.queueStatus
         elif packet.HasField("log_record"):
@@ -905,8 +980,16 @@ class MeshInterface:
                         self._set_link_state("disconnected")
                     await self._reconnect_while_running()
 
+    def _connection_label(self) -> str:
+        for attrs in (("_host", "_port"), ("_hostname", "_port"), ("_device",), ("_address",)):
+            values = [getattr(self._connection, a, None) for a in attrs]
+            if all(v is not None for v in values):
+                return ":".join(str(v) for v in values)
+        return type(self._connection).__name__
+
     async def _reconnect_while_running(self, *, force: bool = False) -> None:  # noqa: PLR0915
         force_reconnect = force
+        attempt = 0
         reconnect_counter_max = 6
         reconnect_counter = -1
         now = datetime.datetime.now(tz=datetime.UTC)
@@ -919,6 +1002,7 @@ class MeshInterface:
             force_reconnect = True
 
         while self.is_running:
+            self._last_reconnect_attempt = time.monotonic()
             if reconnect_counter < reconnect_counter_max:
                 reconnect_counter += 1
             # 2, 4, 8, 16, 20, 20... s (+ do 25% losowo) — radio po restarcie
@@ -936,7 +1020,12 @@ class MeshInterface:
 
                 async with self._reconnect_lock:
                     self._reconnect_done.clear()
-                    self._logger.debug("Starting to reconnect")
+                    attempt += 1
+                    self._last_reconnect_attempt = time.monotonic()
+                    # Na poziomie INFO, żeby w zwykłym logu było widać, że integracja
+                    # próbuje (pierwsza próba i potem co piąta).
+                    log = self._logger.info if attempt == 1 or attempt % 5 == 0 else self._logger.debug
+                    log("Łączę ponownie z radiem (%s), próba %d", self._connection_label(), attempt)
                     try:
                         await asyncio.wait_for(self._connection.reconnect(force=force_reconnect), timeout=30)
                     except TimeoutError:
@@ -957,7 +1046,12 @@ class MeshInterface:
                         # device to generate, and matters a lot more now that reconnects
                         # can happen frequently.
                         previous_reboot_count = self._last_reboot_count
-                        await asyncio.wait_for(self._request_config_inline(minimal=True), timeout=60)
+                        if not await asyncio.wait_for(self._request_config_inline(minimal=True), timeout=60):
+                            # Strumień skończył się przed końcem konfiguracji (gniazdo
+                            # znowu padło) — to nie jest udane połączenie, choć
+                            # wcześniej było tak traktowane.
+                            msg = "Connection lost while requesting config"
+                            raise TimeoutError(msg)  # noqa: TRY301
                         self._after_reconnect_config(previous_reboot_count)
                         if not self._connected_node_ready.is_set():
                             self._logger.debug("Completed first request config as part of reconnect")
@@ -972,7 +1066,7 @@ class MeshInterface:
                         continue
                     else:
                         force_reconnect = False
-                        self._logger.debug("Reconnect finished")
+                        self._logger.info("Połączono ponownie z radiem (%s) po %d próbach", self._connection_label(), attempt)
                         self._reconnect_done.set()
                         self._set_link_state("connected")
                         return
@@ -1110,7 +1204,47 @@ class MeshInterface:
         # optional w protobufie: bez tej gałęzi radio zostawia dotychczasową wartość
         if is_unmessagable is not None:
             admin_message.set_owner.is_unmessagable = is_unmessagable
+        await self._write_in_edit_transaction(node, admin_message)
+
+    # Po zapisie w transakcji edycji firmware NIE restartuje radia sam, a starsze
+    # wersje (np. oparte na 2.7) stosują część zmian dopiero po restarcie —
+    # także LoRa. Restart po zatwierdzeniu daje pewność, że zmiana weszła na
+    # każdej wersji firmware, i przywraca Bluetooth, który zatwierdzenie
+    # transakcji wyłącza. Kanały, właściciel i ekran dotykowy działają od razu.
+    _REBOOT_AFTER_CONFIG = frozenset({"device", "position", "power", "network", "display", "lora", "bluetooth", "security"})
+    _NO_REBOOT_MODULES = frozenset({"statusmessage", "mesh_beacon", "traffic_management"})
+
+    async def _send_admin_simple(self, node: int | None, **fields: Any) -> None:
+        admin_message = admin_pb2.AdminMessage()
+        for name, value in fields.items():
+            setattr(admin_message, name, value)
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+
+    async def _write_in_edit_transaction(self, node: int | None, *admin_messages: admin_pb2.AdminMessage) -> None:
+        """
+        Zapis w transakcji edycji: begin_edit_settings → zapis → commit_edit_settings.
+
+        Jeśli inny klient (aplikacja, klient webowy) otworzył transakcję i jej
+        nie zamknął — np. zerwało mu połączenie w trakcie edycji — firmware
+        stosował nasze zmiany tylko w pamięci i NIGDY ich nie zapisywał, a
+        zmiany wymagające restartu w ogóle nie wchodziły. Wyglądało to tak,
+        jakby ustawienia z integracji się nie przestawiały. Własne zatwierdzenie
+        zamyka każdą wiszącą transakcję i zapisuje wszystko na dysk radia.
+        """
+        await self._send_admin_simple(node, begin_edit_settings=True)
+        try:
+            for admin_message in admin_messages:
+                await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        finally:
+            await self._send_admin_simple(node, commit_edit_settings=True)
+
+    async def _reboot_if_needed(self, node: int | None, *, section: str, is_module: bool) -> None:
+        needs = section not in self._NO_REBOOT_MODULES if is_module else section in self._REBOOT_AFTER_CONFIG
+        if not needs:
+            return
+        self._logger.info("Sekcja %s wymaga restartu radia — restart za 5 s", section)
+        with contextlib.suppress(Exception):
+            await self._send_admin_simple(node, reboot_seconds=5)
 
     async def set_channel(self, channel: Mapping[str, Any], node: int | None = None) -> None:
         """Zapisz kanał na radiu.
@@ -1131,7 +1265,8 @@ class MeshInterface:
 
         admin_message = admin_pb2.AdminMessage()
         admin_message.set_channel.CopyFrom(channel_message)
-        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        self._logger.info("Zapisuję kanał %d na radiu", index)
+        await self._write_in_edit_transaction(node, admin_message)
         if cached is not None and 0 <= index < len(cached):
             cached[index] = channel_message
 
@@ -1169,49 +1304,170 @@ class MeshInterface:
             self._node_database[node_num]["isFavorite"] = bool(favorite)
             self._emit_node_changed(node_num)
 
+    @staticmethod
+    def _clean_values_for(message: google.protobuf.message.Message, values: Mapping[str, Any]) -> dict[str, Any]:
+        """
+        Przygotuj wartości z panelu do nałożenia na wiadomość protobuf.
+
+        - klucze w camelCase albo snake_case — oba rozpoznawane,
+        - None pomijamy (formularz nie ma tej wartości, zostaje bieżąca),
+        - enum podany jako liczba w tekście („3”) zamieniamy na liczbę,
+        - pola powtarzalne czyścimy przed nałożeniem, bo ParseDict dokleja je
+          do istniejących (lista ignorowanych węzłów rosłaby przy każdym zapisie).
+        """
+        descriptor = message.DESCRIPTOR
+        cleaned: dict[str, Any] = {}
+        for key, value in values.items():
+            if value is None:
+                continue
+            field = descriptor.fields_by_camelcase_name.get(key) or descriptor.fields_by_name.get(key)
+            if field is None:
+                continue
+            # nowe protobuf (7+) ma is_repeated, starsze tylko label
+            repeated = getattr(field, "is_repeated", None)
+            if repeated is None:
+                repeated = field.label == field.LABEL_REPEATED
+            if repeated:
+                message.ClearField(field.name)
+            if field.enum_type is not None and isinstance(value, str) and value.lstrip("-").isdigit():
+                value = int(value)
+            cleaned[field.name] = value
+        return cleaned
+
+    def _resolve_config_section(self, section: str, *, is_module: bool | None) -> tuple[bool, Any]:
+        """Znajdź sekcję: najpierw w grupie wskazanej przez panel, potem w drugiej."""
+        order = [is_module] if is_module is not None else []
+        order += [flag for flag in (False, True) if flag not in order]
+        for module in order:
+            container = module_config_pb2.ModuleConfig() if module else config_pb2.Config()
+            descriptor = container.DESCRIPTOR
+            field = descriptor.fields_by_camelcase_name.get(section) or descriptor.fields_by_name.get(section)
+            if field is not None:
+                return module, field
+        msg = f"Unknown config section: {section}"
+        raise ValueError(msg)
+
     async def write_config_section(
         self,
         section: str,
         values: Mapping[str, Any],
         *,
-        is_module: bool = False,
+        is_module: bool | None = None,
         node: int | None = None,
     ) -> None:
         """Zapisz jedną sekcję konfiguracji urządzenia.
 
-        Nazwa sekcji przychodzi z panelu w postaci camelCase (tak zwraca ją
-        radio), więc rozwiązujemy ją przez deskryptor zamiast zgadywać
-        odpowiednik w snake_case.
+        Firmware NIE scala sekcji — set_config podmienia całą sekcję (np. całe
+        config.lora) tym, co przyszło. Dlatego dla własnej bramki zaczynamy od
+        bieżącej sekcji z lokalnej kopii i dopiero na nią nakładamy wartości z
+        panelu. Wcześniej wysyłaliśmy same pola z formularza, więc wszystko,
+        czego formularz nie pokazywał, radio zerowało: zapis sekcji
+        Bezpieczeństwo kasował klucze PKI i klucze administratora, a zapis
+        niepełnej sekcji LoRa mógł wyzerować region i nadawanie.
+
+        Grupę (config / moduleConfig) rozpoznajemy po nazwie sekcji — panel
+        zgadywał ją po tym, czy sekcja jest w pobranej konfiguracji, a sekcja
+        z samymi wartościami domyślnymi w ogóle się tam nie pojawia.
         """
         from google.protobuf.json_format import ParseDict  # noqa: PLC0415
 
-        container = module_config_pb2.ModuleConfig() if is_module else config_pb2.Config()
-        descriptor = container.DESCRIPTOR
-        field = descriptor.fields_by_camelcase_name.get(section) or descriptor.fields_by_name.get(section)
-        if field is None:
-            msg = f"Unknown config section: {section}"
-            raise ValueError(msg)
+        module, field = self._resolve_config_section(section, is_module=is_module)
+        values = dict(values)
 
+        if not module and field.name == "device_ui":
+            # Ekran dotykowy: firmware ignoruje set_config.device_ui — zapis
+            # idzie przez store_ui_config, na bazie bieżących ustawień ekranu.
+            await self._write_device_ui(values, node=node)
+            return
+
+        # Pola formularza, których nie ma w samej sekcji — mają własne
+        # wiadomości administracyjne. Wcześniej były po cichu pomijane.
+        extra_messages: list[admin_pb2.AdminMessage] = []
+        fixed = {k: values.pop(k) for k in ("fixedLat", "fixedLng", "fixedAltitude", "fixed_lat", "fixed_lng", "fixed_altitude") if k in values}
+        canned = values.pop("messages", None) if module and field.name == "canned_message" else None
+        mqtt_port = values.pop("port", None) if module and field.name == "mqtt" else None
+
+        container = module_config_pb2.ModuleConfig() if module else config_pb2.Config()
         target = getattr(container, field.name)
-        ParseDict(dict(values), target, ignore_unknown_fields=True)
+
+        previous = None
+        if node is None:
+            current_all = self._connected_node_module_config if module else self._connected_node_local_config
+            with contextlib.suppress(ValueError):  # sekcja, której lokalna kopia nie zna
+                if current_all is not None and current_all.HasField(field.name):
+                    previous = getattr(current_all, field.name)
+                    target.CopyFrom(previous)
+
+        ParseDict(self._clean_values_for(target, values), target, ignore_unknown_fields=True)
         # Sekcje siedzą w oneof — bez tego zapis samych wartości domyślnych
         # (np. wyłączenie przełącznika) nie oznaczyłby wariantu jako obecnego.
         target.SetInParent()
 
+        if mqtt_port is not None:
+            # Radio trzyma port w adresie („host:port”); 1883 to domyślny i go nie dopisujemy.
+            host = (target.address or "").rsplit(":", 1)[0] if ":" in (target.address or "") else (target.address or "")
+            with contextlib.suppress(TypeError, ValueError):
+                port = int(mqtt_port)
+                target.address = host if not host or port in (0, 1883) else f"{host}:{port}"
+
+        if not module and field.name == "position" and (fixed or previous is not None):
+            was_fixed = bool(previous is not None and previous.fixed_position)
+            if target.fixed_position:
+                lat = fixed.get("fixedLat", fixed.get("fixed_lat"))
+                lng = fixed.get("fixedLng", fixed.get("fixed_lng"))
+                if lat not in (None, "") and lng not in (None, "") and (float(lat) or float(lng)):
+                    position = mesh_pb2.Position()
+                    position.latitude_i = round(float(lat) * 1e7)
+                    position.longitude_i = round(float(lng) * 1e7)
+                    alt = fixed.get("fixedAltitude", fixed.get("fixed_altitude"))
+                    position.altitude = round(float(alt or 0))
+                    position.time = int(time.time())
+                    position.location_source = mesh_pb2.Position.LocSource.LOC_MANUAL
+                    fixed_message = admin_pb2.AdminMessage()
+                    fixed_message.set_fixed_position.CopyFrom(position)
+                    extra_messages.append(fixed_message)
+            elif was_fixed:
+                remove_message = admin_pb2.AdminMessage()
+                remove_message.remove_fixed_position = True
+                extra_messages.append(remove_message)
+
+        if canned is not None:
+            canned_message = admin_pb2.AdminMessage()
+            canned_message.set_canned_message_module_messages = str(canned)
+            extra_messages.append(canned_message)
+
         admin_message = admin_pb2.AdminMessage()
-        if is_module:
+        if module:
             admin_message.set_module_config.CopyFrom(container)
         else:
             admin_message.set_config.CopyFrom(container)
 
-        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        self._logger.info("Zapisuję sekcję konfiguracji %s na radiu", field.name)
+        await self._write_in_edit_transaction(node, admin_message, *extra_messages)
         # Radio nie odsyła zmienionej konfiguracji, a panel czyta lokalną kopię —
         # bez tego po zapisie i odświeżeniu widać byłoby jeszcze stare wartości.
         if node is None:
-            if is_module:
+            if module:
                 self._process_connected_node_module_config(container)
             else:
                 self._process_connected_node_config(container)
+            if canned is not None:
+                self._canned_messages = str(canned)
+        await self._reboot_if_needed(node, section=field.name, is_module=module)
+
+    async def _write_device_ui(self, values: Mapping[str, Any], *, node: int | None) -> None:
+        from google.protobuf.json_format import ParseDict  # noqa: PLC0415
+
+        ui = device_ui_pb2.DeviceUIConfig()
+        if node is None and self._connected_node_device_ui is not None:
+            ui.CopyFrom(self._connected_node_device_ui)
+        ParseDict(self._clean_values_for(ui, values), ui, ignore_unknown_fields=True)
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.store_ui_config.CopyFrom(ui)
+        self._logger.info("Zapisuję ustawienia ekranu (device UI) na radiu")
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        if node is None:
+            self._connected_node_device_ui = ui
 
     async def set_node_ignored(self, node_num: int, ignored: bool, node: int | None = None) -> None:
         """Oznacz węzeł jako ignorowany na urządzeniu (albo zdejmij oznaczenie)."""

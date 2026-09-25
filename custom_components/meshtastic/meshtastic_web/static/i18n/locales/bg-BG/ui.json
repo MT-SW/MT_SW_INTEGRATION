@@ -13,7 +13,7 @@
   },
   "app": {
     "title": "MT_SW",
-    "logo": "Лого на Meshtastic"
+    "logo": "Лого на MT_SW"
   },
   "sidebar": {
     "collapseToggle": {
@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "Задвижвано от <0>▲ Vercel</0> | Meshtastic® е регистрирана търговска марка на Meshtastic LLC. | <1>Правна информация</1>",
+    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic® е регистрирана търговска марка на Meshtastic LLC. | <1>Правна информация</1>",
     "commitSha": "Commit SHA: {{sha}}"
   }
 }

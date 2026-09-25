@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "Anslut till en Meshtastic-enhet",
+    "title": "Anslut till en MT_SW-enhet",
     "description": "Lägg till en enhetsanslutning via HTTP, Bluetooth eller seriell kommunikation. Dina sparade anslutningar sparas i din webbläsare."
   },
   "connectionType_ble": "BLE",

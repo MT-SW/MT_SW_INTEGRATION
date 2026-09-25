@@ -45,8 +45,11 @@
     },
     "connectionStatus": {
       "direct": "Bezpośrednio",
-      "away": "away",
+      "away": "dalej",
       "viaMqtt": ", przez MQTT"
+    },
+    "lastHeardStatus": {
+      "never": "Nigdy"
     }
   },
   "actions": {

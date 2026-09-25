@@ -3,6 +3,7 @@
     "apply": "Apply",
     "addConnection": "Add Connection",
     "saveConnection": "Save connection",
+    "saveChanges": "Save changes",
     "backupKey": "Backup Key",
     "cancel": "Cancel",
     "connect": "Connect",
@@ -55,28 +56,62 @@
     "megahertz": "MHz",
     "kilohertz": "kHz",
     "raw": "raw",
-    "meter": { "one": "Meter", "plural": "Meters", "suffix": "m" },
-    "kilometer": { "one": "Kilometer", "plural": "Kilometers", "suffix": "km" },
-    "minute": { "one": "Minute", "plural": "Minutes" },
-    "hour": { "one": "Hour", "plural": "Hours" },
+    "meter": {
+      "one": "Meter",
+      "plural": "Meters",
+      "suffix": "m"
+    },
+    "kilometer": {
+      "one": "Kilometer",
+      "plural": "Kilometers",
+      "suffix": "km"
+    },
+    "minute": {
+      "one": "Minute",
+      "plural": "Minutes"
+    },
+    "hour": {
+      "one": "Hour",
+      "plural": "Hours"
+    },
     "millisecond": {
       "one": "Millisecond",
       "plural": "Milliseconds",
       "suffix": "ms"
     },
-    "second": { "one": "Second", "plural": "Seconds" },
+    "second": {
+      "one": "Second",
+      "plural": "Seconds"
+    },
     "day": {
       "one": "Day",
       "plural": "Days",
       "today": "Today",
       "yesterday": "Yesterday"
     },
-    "month": { "one": "Month", "plural": "Months" },
-    "year": { "one": "Year", "plural": "Years" },
+    "month": {
+      "one": "Month",
+      "plural": "Months"
+    },
+    "year": {
+      "one": "Year",
+      "plural": "Years"
+    },
     "snr": "SNR",
-    "volt": { "one": "Volt", "plural": "Volts", "suffix": "V" },
-    "record": { "one": "Records", "plural": "Records" },
-    "degree": { "one": "Degree", "plural": "Degrees", "suffix": "°" }
+    "volt": {
+      "one": "Volt",
+      "plural": "Volts",
+      "suffix": "V"
+    },
+    "record": {
+      "one": "Records",
+      "plural": "Records"
+    },
+    "degree": {
+      "one": "Degree",
+      "plural": "Degrees",
+      "suffix": "°"
+    }
   },
   "security": {
     "0bit": "Empty",

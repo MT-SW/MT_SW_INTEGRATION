@@ -184,6 +184,7 @@ class MeshSettingsSniffer extends LitElement {
       _mqttBusy: { type: Boolean, state: true },
       _error: { type: String, state: true },
       _confirmOpen: { type: Boolean, state: true },
+      _clearConfirmOpen: { type: Boolean, state: true },
       _entries: { type: Array, state: true },
       _meta: { type: Object, state: true },
       _paused: { type: Boolean, state: true },
@@ -207,6 +208,7 @@ class MeshSettingsSniffer extends LitElement {
     this._mqttBusy = false;
     this._error = "";
     this._confirmOpen = false;
+    this._clearConfirmOpen = false;
     this._entries = [];
     this._meta = null;
     this._paused = false;
@@ -995,6 +997,15 @@ class MeshSettingsSniffer extends LitElement {
         </span>
         <span class="spacer"></span>
         ${this._renderLiveButton(newCount)}
+        <button
+          class="icon-btn danger"
+          title=${PL("Clear log")}
+          aria-label=${PL("Clear log")}
+          ?disabled=${!this._entries.length}
+          @click=${() => { this._clearConfirmOpen = true; }}
+        >
+          <ha-icon icon="mdi:trash-can-outline"></ha-icon>
+        </button>
       </div>
 
       <div class="toolbar">
@@ -1040,7 +1051,9 @@ class MeshSettingsSniffer extends LitElement {
       <div class="toolbar bottom">
         <button class="btn" ?disabled=${!this._entries.length} @click=${() => this._exportJson()}>${PL("Export JSON")}</button>
         <button class="btn" ?disabled=${!this._entries.length} @click=${() => this._exportCsv()}>${PL("Export CSV")}</button>
-        <button class="btn danger" ?disabled=${!this._entries.length} @click=${() => this._clearLog()}>${PL("Clear log")}</button>
+        <button class="btn danger" ?disabled=${!this._entries.length} @click=${() => { this._clearConfirmOpen = true; }}>
+          <ha-icon icon="mdi:trash-can-outline"></ha-icon>${PL("Clear log")}
+        </button>
       </div>
     `;
   }
@@ -1066,6 +1079,16 @@ class MeshSettingsSniffer extends LitElement {
         .danger=${false}
         @confirm=${() => { this._confirmOpen = false; this._setSniffer(true); }}
         @cancel=${() => { this._confirmOpen = false; }}
+      ></mesh-confirm-dialog>
+
+      <mesh-confirm-dialog
+        .open=${this._clearConfirmOpen}
+        .title=${PL("Clear the sniffer log?")}
+        .message=${PL("All captured packets will be removed from the list. The sniffer keeps collecting new ones.")}
+        .confirmLabel=${PL("Clear log")}
+        .danger=${true}
+        @confirm=${() => { this._clearConfirmOpen = false; this._clearLog(); }}
+        @cancel=${() => { this._clearConfirmOpen = false; }}
       ></mesh-confirm-dialog>
     `;
   }
@@ -1213,6 +1236,24 @@ class MeshSettingsSniffer extends LitElement {
           border-color: var(--primary-color);
           background: var(--primary-color);
         }
+
+        .icon-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          border-radius: 50%;
+          border: 1px solid var(--divider-color);
+          background: var(--card-background-color);
+          color: var(--secondary-text-color);
+          cursor: pointer;
+        }
+
+        .icon-btn ha-icon { --mdc-icon-size: 18px; }
+        .icon-btn.danger:hover:not([disabled]) { color: var(--error-color, #db4437); border-color: var(--error-color, #db4437); }
+        .icon-btn[disabled] { opacity: 0.4; cursor: default; }
 
         .live .dot {
           width: 8px;

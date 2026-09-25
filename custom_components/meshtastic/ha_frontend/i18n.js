@@ -39,6 +39,10 @@ const STRINGS = {
     "radio.status.available": "Połączona",
     "radio.status.unavailable": "Brak połączenia",
     "radio.web_client": "Klient webowy MT_SW",
+    "settings.saved": "Zapisano na radiu.",
+    "settings.saved_reboot": "Zapisano na radiu. Radio uruchomi się ponownie, żeby zastosować zmianę.",
+    "settings.channel_saved": "Kanał zapisany na radiu.",
+    "settings.save_failed": "Zapis na radiu nie powiódł się",
     "radio.web_client.open": "Otwórz klienta webowego",
     "radio.web_client.unavailable": "Klient webowy niedostępny",
 
@@ -440,6 +444,10 @@ const STRINGS = {
     "radio.status.available": "Connected",
     "radio.status.unavailable": "Disconnected",
     "radio.web_client": "MT_SW web client",
+    "settings.saved": "Saved to the radio.",
+    "settings.saved_reboot": "Saved to the radio. The radio restarts to apply the change.",
+    "settings.channel_saved": "Channel saved to the radio.",
+    "settings.save_failed": "Saving to the radio failed",
     "radio.web_client.open": "Open web client",
     "radio.web_client.unavailable": "Web client unavailable",
 

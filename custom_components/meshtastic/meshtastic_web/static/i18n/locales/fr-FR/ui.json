@@ -13,7 +13,7 @@
   },
   "app": {
     "title": "MT_SW",
-    "logo": "Logo Meshtastic"
+    "logo": "Logo MT_SW"
   },
   "sidebar": {
     "collapseToggle": {
@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "Propulsé par <0>▲ Vercel</0> | Meshtastic® est une marque déposée de Meshtastic LLC. | <1>Informations légales</1>",
+    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic® est une marque déposée de Meshtastic LLC. | <1>Informations légales</1>",
     "commitSha": "SHA : {{sha}}"
   }
 }

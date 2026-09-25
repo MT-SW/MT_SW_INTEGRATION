@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "Yhdistä Meshtastic-laitteeseen",
+    "title": "Yhdistä MT_SW-laitteeseen",
     "description": "Lisää laiteyhteys HTTP:n, Bluetoothin tai sarjaportin kautta. Tallennetut yhteydet tallennetaan selaimeesi."
   },
   "connectionType_ble": "BLE",

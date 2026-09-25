@@ -1,37 +1,37 @@
 {
   "deleteMessages": {
-    "description": "This action will clear all message history. This cannot be undone. Are you sure you want to continue?",
-    "title": "Clear All Messages"
+    "description": "To usunie całą historię wiadomości. Tej operacji nie można cofnąć. Czy na pewno kontynuować?",
+    "title": "Wyczyść wszystkie wiadomości"
   },
   "import": {
     "description": "The current LoRa configuration will be overridden.",
     "error": {
-      "invalidUrl": "Invalid Meshtastic URL"
+      "invalidUrl": "Nieprawidłowy adres Meshtastic"
     },
     "channelPrefix": "Channel: ",
-    "primary": "Primary ",
-    "doNotImport": "No not import",
+    "primary": "Główny ",
+    "doNotImport": "Nie importuj",
     "channelName": "Nazwa",
-    "channelSlot": "Slot",
-    "channelSetUrl": "Channel Set/QR Code URL",
-    "useLoraConfig": "Import LoRa Config",
-    "presetDescription": "The current LoRa Config will be replaced.",
+    "channelSlot": "Miejsce",
+    "channelSetUrl": "Adres zestawu kanałów / kodu QR",
+    "useLoraConfig": "Importuj konfigurację LoRa",
+    "presetDescription": "Bieżąca konfiguracja LoRa zostanie zastąpiona.",
     "title": "Import Channel Set"
   },
   "locationResponse": {
-    "title": "Location: {{identifier}}",
-    "altitude": "Altitude: ",
-    "coordinates": "Coordinates: ",
+    "title": "Pozycja: {{identifier}}",
+    "altitude": "Wysokość: ",
+    "coordinates": "Współrzędne: ",
     "noCoordinates": "Brak współrzędnych"
   },
   "pkiRegenerateDialog": {
-    "title": "Regenerate Pre-Shared Key?",
-    "description": "Are you sure you want to regenerate the pre-shared key?",
-    "regenerate": "Regenerate"
+    "title": "Wygenerować ponownie klucz PSK?",
+    "description": "Czy na pewno wygenerować ponownie klucz współdzielony (PSK)?",
+    "regenerate": "Wygeneruj ponownie"
   },
   "addConnection": {
-    "title": "Add connection",
-    "description": "Choose a connection type and fill in the details",
+    "title": "Dodaj połączenie",
+    "description": "Wybierz rodzaj połączenia i uzupełnij dane",
     "validation": {
       "requiresWebBluetooth": "Ten typ połączenia wymaga <0>Web Bluetooth</0>. Użyj obsługiwanej przeglądarki, takiej jak Chrome lub Edge.",
       "requiresWebSerial": "Ten typ połączenia wymaga <0>Web Serial</0>. Użyj obsługiwanej przeglądarki, takiej jak Chrome lub Edge.",
@@ -39,65 +39,65 @@
       "additionallyRequiresSecureContext": "Dodatkowo, wymaga to <0>bezpiecznego kontekstu</0>. Połącz się używając HTTPS lub localhost."
     },
     "bluetoothConnection": {
-      "namePlaceholder": "My Bluetooth Node",
+      "namePlaceholder": "Mój węzeł Bluetooth",
       "supported": {
-        "title": "Web Bluetooth supported"
+        "title": "Web Bluetooth jest obsługiwany"
       },
       "notSupported": {
-        "title": "Web Bluetooth not supported",
-        "description": "Your browser or device does not support Web Bluetooth"
+        "title": "Web Bluetooth nie jest obsługiwany",
+        "description": "Ta przeglądarka lub to urządzenie nie obsługuje Web Bluetooth"
       },
       "short": "BT: {{deviceName}}",
-      "long": "Bluetooth Device",
+      "long": "Urządzenie Bluetooth",
       "device": "Urządzenie",
-      "selectDevice": "Select device",
-      "selected": "Bluetooth device selected",
-      "notSelected": "No device selected",
-      "helperText": "Uses the Meshtastic Bluetooth service for discovery."
+      "selectDevice": "Wybierz urządzenie",
+      "selected": "Wybrano urządzenie Bluetooth",
+      "notSelected": "Nie wybrano urządzenia",
+      "helperText": "Wyszukuje urządzenia przez usługę Bluetooth Meshtastic."
     },
     "serialConnection": {
-      "namePlaceholder": "My Serial Node",
-      "helperText": "Selecting a port grants permission so the app can open it to connect.",
+      "namePlaceholder": "Mój węzeł szeregowy",
+      "helperText": "Wybranie portu daje aplikacji zgodę na jego otwarcie i połączenie.",
       "supported": {
-        "title": "Web Serial supported"
+        "title": "Web Serial jest obsługiwany"
       },
       "notSupported": {
-        "title": "Web Serial not supported",
-        "description": "Your browser or device does not support Web Serial"
+        "title": "Web Serial nie jest obsługiwany",
+        "description": "Ta przeglądarka lub to urządzenie nie obsługuje Web Serial"
       },
       "portSelected": {
-        "title": "Serial port selected",
-        "description": "Port permissions granted."
+        "title": "Wybrano port szeregowy",
+        "description": "Przyznano dostęp do portu."
       },
       "port": "Port",
-      "selectPort": "Select port",
+      "selectPort": "Wybierz port",
       "deviceName": "USB {{vendorId}}:{{productId}}",
-      "notSelected": "No port selected"
+      "notSelected": "Nie wybrano portu"
     },
     "httpConnection": {
-      "namePlaceholder": "My HTTP Node",
-      "inputPlaceholder": "192.168.1.10 or meshtastic.local",
-      "heading": "URL or IP",
-      "useHttps": "Use HTTPS",
+      "namePlaceholder": "Mój węzeł HTTP",
+      "inputPlaceholder": "192.168.1.10 albo homeassistant.local:4408",
+      "heading": "Adres URL lub IP",
+      "useHttps": "Użyj HTTPS",
       "invalidUrl": {
-        "title": "Invalid URL",
-        "description": "Please enter a valid HTTP or HTTPS URL."
+        "title": "Nieprawidłowy adres",
+        "description": "Wpisz poprawny adres HTTP lub HTTPS."
       },
       "connectionTest": {
         "description": "Test the connetion before saving to verify the device is reachable.",
         "button": {
-          "loading": "Testing...",
-          "label": "Test connection"
+          "loading": "Sprawdzanie...",
+          "label": "Sprawdź połączenie"
         },
-        "reachable": "Reachable",
-        "notReachable": "Not reachable",
+        "reachable": "Osiągalne",
+        "notReachable": "Nieosiągalne",
         "success": {
-          "title": "Connection test successful",
-          "description": "The device appears to be reachable."
+          "title": "Test połączenia udany",
+          "description": "Urządzenie wygląda na osiągalne."
         },
         "failure": {
-          "title": "Connection test failed",
-          "description": "Could not reach the device. Check the URL and try again."
+          "title": "Test połączenia nieudany",
+          "description": "Nie udało się połączyć z urządzeniem. Sprawdź adres i spróbuj ponownie."
         }
       }
     }
@@ -105,134 +105,160 @@
   "nodeDetails": {
     "message": "Wiadomość",
     "requestPosition": "Poproś o pozycję",
-    "traceRoute": "Trace Route",
-    "airTxUtilization": "Air TX utilization",
-    "allRawMetrics": "All Raw Metrics:",
-    "batteryLevel": "Battery level",
-    "channelUtilization": "Channel utilization",
-    "details": "Details:",
-    "deviceMetrics": "Device Metrics:",
-    "hardware": "Hardware: ",
-    "lastHeard": "Last Heard: ",
-    "nodeHexPrefix": "Node Hex: ",
-    "nodeNumber": "Node Number: ",
-    "position": "Position:",
-    "role": "Role: ",
-    "uptime": "Uptime: ",
+    "traceRoute": "Śledź trasę",
+    "airTxUtilization": "Czas nadawania (TX)",
+    "allRawMetrics": "Wszystkie surowe dane:",
+    "batteryLevel": "Poziom baterii",
+    "channelUtilization": "Obciążenie kanału",
+    "details": "Szczegóły:",
+    "deviceMetrics": "Dane urządzenia:",
+    "hardware": "Sprzęt: ",
+    "lastHeard": "Ostatnio słyszany: ",
+    "nodeHexPrefix": "Węzeł (hex): ",
+    "nodeNumber": "Numer węzła: ",
+    "position": "Pozycja:",
+    "role": "Rola: ",
+    "uptime": "Czas pracy: ",
     "voltage": "Napięcie",
-    "title": "Node Details for {{identifier}}",
-    "ignoreNode": "Ignore node",
-    "removeNode": "Remove node",
-    "unignoreNode": "Unignore node",
-    "security": "Security:",
-    "publicKey": "Public Key: ",
-    "messageable": "Messageable: ",
-    "KeyManuallyVerifiedTrue": "Public Key has been manually verified",
-    "KeyManuallyVerifiedFalse": "Public Key is not manually verified"
+    "title": "Szczegóły węzła {{identifier}}",
+    "ignoreNode": "Ignoruj węzeł",
+    "removeNode": "Usuń węzeł",
+    "unignoreNode": "Przestań ignorować",
+    "security": "Bezpieczeństwo:",
+    "publicKey": "Klucz publiczny: ",
+    "messageable": "Można pisać: ",
+    "KeyManuallyVerifiedTrue": "Klucz publiczny został ręcznie zweryfikowany",
+    "KeyManuallyVerifiedFalse": "Klucz publiczny nie jest ręcznie zweryfikowany",
+    "verifyKey": "Zweryfikuj klucz"
   },
   "pkiBackup": {
-    "loseKeysWarning": "If you lose your keys, you will need to reset your device.",
-    "secureBackup": "Its important to backup your public and private keys and store your backup securely!",
-    "footer": "=== END OF KEYS ===",
-    "header": "=== MESHTASTIC KEYS FOR {{longName}} ({{shortName}}) ===",
-    "privateKey": "Private Key:",
-    "publicKey": "Public Key:",
+    "loseKeysWarning": "Jeśli stracisz klucze, trzeba będzie zresetować urządzenie.",
+    "secureBackup": "Zrób kopię klucza publicznego i prywatnego i przechowuj ją w bezpiecznym miejscu!",
+    "footer": "=== KONIEC KLUCZY ===",
+    "header": "=== KLUCZE MESHTASTIC DLA {{longName}} ({{shortName}}) ===",
+    "privateKey": "Klucz prywatny:",
+    "publicKey": "Klucz publiczny:",
     "fileName": "meshtastic_keys_{{longName}}_{{shortName}}.txt",
-    "title": "Backup Keys"
+    "title": "Kopia kluczy"
   },
   "pkiBackupReminder": {
-    "description": "We recommend backing up your key data regularly. Would you like to back up now?",
-    "title": "Backup Reminder",
-    "remindLaterPrefix": "Remind me in",
-    "remindNever": "Never remind me",
-    "backupNow": "Back up now"
+    "description": "Zalecamy regularne robienie kopii kluczy. Zrobić kopię teraz?",
+    "title": "Przypomnienie o kopii",
+    "remindLaterPrefix": "Przypomnij za",
+    "remindNever": "Nie przypominaj",
+    "backupNow": "Zrób kopię teraz"
   },
   "pkiRegenerate": {
-    "description": "Are you sure you want to regenerate key pair?",
-    "title": "Regenerate Key Pair"
+    "description": "Czy na pewno wygenerować ponownie parę kluczy?",
+    "title": "Wygeneruj ponownie parę kluczy"
   },
   "qr": {
-    "addChannels": "Add Channels",
-    "replaceChannels": "Replace Channels",
-    "description": "The current LoRa configuration will also be shared.",
-    "sharableUrl": "Sharable URL",
+    "addChannels": "Dodaj kanały",
+    "replaceChannels": "Zastąp kanały",
+    "description": "Udostępniona zostanie też bieżąca konfiguracja LoRa.",
+    "sharableUrl": "Adres do udostępnienia",
     "title": "Generuj Kod QR"
   },
   "reboot": {
-    "title": "Reboot device",
-    "description": "Reboot now or schedule a reboot of the connected node. Optionally, you can choose to reboot into OTA (Over-the-Air) mode.",
-    "ota": "Reboot into OTA mode",
-    "enterDelay": "Enter delay",
-    "scheduled": "Reboot has been scheduled",
-    "schedule": "Schedule reboot",
-    "now": "Reboot now",
-    "cancel": "Cancel scheduled reboot"
+    "title": "Uruchom urządzenie ponownie",
+    "description": "Uruchom ponownie połączony węzeł teraz albo zaplanuj restart. Możesz też uruchomić go w trybie OTA (aktualizacja przez radio).",
+    "ota": "Uruchom w trybie OTA",
+    "enterDelay": "Podaj opóźnienie",
+    "scheduled": "Zaplanowano restart",
+    "schedule": "Zaplanuj restart",
+    "now": "Uruchom ponownie teraz",
+    "cancel": "Anuluj zaplanowany restart"
   },
   "refreshKeys": {
     "description": {
-      "acceptNewKeys": "This will remove the node from device and request new keys.",
-      "keyMismatchReasonSuffix": ". This is due to the remote node's current public key does not match the previously stored key for this node.",
-      "unableToSendDmPrefix": "Your node is unable to send a direct message to node: "
+      "acceptNewKeys": "To usunie węzeł z urządzenia i poprosi o nowe klucze.",
+      "keyMismatchReasonSuffix": ". Obecny klucz publiczny zdalnego węzła nie zgadza się z kluczem zapisanym wcześniej dla tego węzła.",
+      "unableToSendDmPrefix": "Twój węzeł nie może wysłać wiadomości prywatnej do węzła: "
     },
-    "acceptNewKeys": "Accept New Keys",
-    "title": "Keys Mismatch - {{identifier}}"
+    "acceptNewKeys": "Zaakceptuj nowe klucze",
+    "title": "Niezgodne klucze — {{identifier}}"
   },
   "removeNode": {
-    "description": "Are you sure you want to remove this Node?",
-    "title": "Remove Node?"
+    "description": "Czy na pewno usunąć ten węzeł?",
+    "title": "Usunąć węzeł?"
   },
   "shutdown": {
-    "title": "Schedule Shutdown",
-    "description": "Turn off the connected node after x minutes."
+    "title": "Zaplanuj wyłączenie",
+    "description": "Wyłącz połączony węzeł po podanej liczbie minut."
   },
   "traceRoute": {
-    "routeToDestination": "Route to destination:",
-    "routeBack": "Route back:"
+    "routeToDestination": "Trasa do celu:",
+    "routeBack": "Trasa powrotna:"
   },
   "tracerouteResponse": {
     "title": "Traceroute: {{identifier}}"
   },
   "unsafeRoles": {
-    "confirmUnderstanding": "Yes, I know what I'm doing",
-    "conjunction": " and the blog post about ",
-    "postamble": " and understand the implications of changing the role.",
-    "preamble": "I have read the ",
+    "confirmUnderstanding": "Tak, wiem, co robię",
+    "conjunction": " oraz wpis na blogu ",
+    "postamble": " i rozumiem skutki zmiany roli.",
+    "preamble": "Przeczytałem ",
     "choosingRightDeviceRole": "Choosing The Right Device Role",
-    "deviceRoleDocumentation": "Device Role Documentation",
+    "deviceRoleDocumentation": "dokumentację ról urządzenia",
     "title": "Jesteś pewny?"
   },
   "managedMode": {
-    "confirmUnderstanding": "Yes, I know what I'm doing",
+    "confirmUnderstanding": "Tak, wiem, co robię",
     "title": "Jesteś pewny?",
-    "description": "Enabling Managed Mode blocks client applications (including the web client) from writing configurations to a radio. Once enabled, radio configurations can only be changed through Remote Admin messages. This setting is not required for remote node administration."
+    "description": "Tryb zarządzany blokuje aplikacjom (także klientowi webowemu) zapisywanie konfiguracji w radiu. Po włączeniu konfigurację można zmieniać tylko zdalnymi wiadomościami administracyjnymi. Do zdalnej administracji węzłem to ustawienie nie jest potrzebne."
   },
   "clientNotification": {
-    "title": "Client Notification",
-    "TraceRoute can only be sent once every 30 seconds": "TraceRoute can only be sent once every 30 seconds",
-    "Compromised keys were detected and regenerated.": "Compromised keys were detected and regenerated."
+    "title": "Powiadomienie",
+    "TraceRoute can only be sent once every 30 seconds": "Traceroute można wysyłać najwyżej raz na 30 sekund",
+    "Compromised keys were detected and regenerated.": "Wykryto skompromitowane klucze i wygenerowano nowe."
   },
   "resetNodeDb": {
-    "title": "Reset Node Database",
-    "description": "This will clear all nodes from the connected device's node database and clear all message history in the client. This cannot be undone. Are you sure you want to continue?",
-    "confirm": "Reset Node Database",
-    "failedTitle": "There was an error resetting the Node DB. Please try again."
+    "title": "Wyczyść bazę węzłów",
+    "description": "To usunie wszystkie węzły z bazy połączonego urządzenia i całą historię wiadomości w kliencie. Tej operacji nie można cofnąć. Czy na pewno kontynuować?",
+    "confirm": "Wyczyść bazę węzłów",
+    "failedTitle": "Nie udało się wyczyścić bazy węzłów. Spróbuj ponownie."
   },
   "clearAllStores": {
-    "title": "Clear All Local Storage",
-    "description": "This will clear all locally stored data, including message history and node databases for all previously connected devices. This will require you to reconnect to your node once complete and cannot be undone. Are you sure you want to continue?",
-    "confirm": "Clear all local storage",
-    "failedTitle": "There was an error clearing local storage. Please try again."
+    "title": "Wyczyść cały lokalny magazyn",
+    "description": "To usunie wszystkie dane zapisane w przeglądarce, w tym historię wiadomości i bazy węzłów wszystkich wcześniej połączonych urządzeń. Potem trzeba będzie połączyć się z węzłem od nowa. Tej operacji nie można cofnąć. Czy na pewno kontynuować?",
+    "confirm": "Wyczyść cały lokalny magazyn",
+    "failedTitle": "Nie udało się wyczyścić lokalnego magazynu. Spróbuj ponownie."
   },
   "factoryResetDevice": {
     "title": "Zresetuj urządzenie do ustawień fabrycznych",
-    "description": "This will factory reset the connected device, erasing all configurations and data on the device as well as all nodes and messages saved in the client. This cannot be undone. Are you sure you want to continue?",
+    "description": "To przywróci urządzenie do ustawień fabrycznych — usunie całą konfigurację i dane w urządzeniu oraz wszystkie węzły i wiadomości zapisane w kliencie. Tej operacji nie można cofnąć. Czy na pewno kontynuować?",
     "confirm": "Zresetuj urządzenie do ustawień fabrycznych",
-    "failedTitle": "There was an error performing the factory reset. Please try again."
+    "failedTitle": "Nie udało się przywrócić ustawień fabrycznych. Spróbuj ponownie."
   },
   "factoryResetConfig": {
     "title": "Zresetuj ustawienia do ustawień fabrycznych",
-    "description": "This will factory reset the configuration on the connected device, erasing all configurations on the device. This cannot be undone. Are you sure you want to continue?",
+    "description": "To przywróci fabryczną konfigurację połączonego urządzenia i usunie całą jego konfigurację. Tej operacji nie można cofnąć. Czy na pewno kontynuować?",
     "confirm": "Zresetuj ustawienia do ustawień fabrycznych",
-    "failedTitle": "There was an error performing the factory reset. Please try again."
+    "failedTitle": "Nie udało się przywrócić ustawień fabrycznych. Spróbuj ponownie."
+  },
+  "regionSetup": {
+    "title": "Ustaw region",
+    "description": "To urządzenie nie ma ustawionego regionu LoRa i nie będzie nadawać, dopóki go nie wybierzesz.",
+    "cta": "Ustaw region"
+  },
+  "keyVerification": {
+    "continue": "Dalej",
+    "cancel": "Anuluj",
+    "inform": {
+      "title": "Weryfikacja klucza",
+      "description": "Przekaż ten numer bezpieczeństwa użytkownikowi {{name}}, żeby wpisał go na swoim urządzeniu:"
+    },
+    "request": {
+      "title": "Weryfikacja klucza",
+      "description": "Wpisz numer bezpieczeństwa widoczny na urządzeniu {{name}}:",
+      "placeholder": "Numer bezpieczeństwa",
+      "submit": "Wyślij"
+    },
+    "final": {
+      "title": "Zweryfikuj klucz",
+      "description": "Sprawdź, czy te znaki zgadzają się z widocznymi na urządzeniu {{name}}:",
+      "verify": "Zweryfikuj",
+      "reject": "Nie weryfikuj"
+    }
   }
 }

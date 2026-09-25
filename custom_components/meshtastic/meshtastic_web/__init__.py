@@ -225,6 +225,20 @@ function selectAndCopyFallback(el) {{
 """
 
 
+# Klient webowy (meshtastic/web 2.7+) trzyma bazę węzłów i wiadomości w SQLite
+# na OPFS (sqlocal). To wymaga izolacji cross-origin — nagłówków COOP/COEP na
+# stronie i na skryptach workerów. Wszystkie pliki klienta leżą płasko w
+# static/, więc idą przez ten widok i dostają nagłówki tutaj. „credentialless”
+# zamiast „require-corp”, żeby kafelki mapy z zewnętrznych serwerów nadal się
+# ładowały. Bez izolacji (np. Safari) klient działa dalej, tylko bez trwałej
+# bazy — sam przechodzi na pamięć.
+_STATIC_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "credentialless",
+}
+
+
 class MeshtasticWebConfigEntryView(HomeAssistantView):
     url = URL_BASE + "/web/{entity_id}"
     name = "meshtastic:web_api_index"
@@ -242,7 +256,10 @@ class MeshtasticWebConfigEntryView(HomeAssistantView):
         entity_id: str,
     ) -> web.Response:
         if not entity_id.startswith("gateway_"):
-            return web.FileResponse(Path(__file__).parent / "static" / entity_id, headers={"Cache-Control": "no-cache"})
+            path = Path(__file__).parent / "static" / entity_id
+            if not path.is_file():
+                return web.HTTPNotFound()
+            return web.FileResponse(path, headers=_STATIC_HEADERS)
 
         entity_registry = er.async_get(self._hass)
         entity_id = f"{DOMAIN}.{entity_id}"

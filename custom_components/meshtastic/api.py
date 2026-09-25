@@ -558,7 +558,7 @@ class MeshtasticApiClient:
             raise MeshtasticApiClientError(str(e)) from e
 
     async def async_set_config(
-        self, section: str, values: Mapping[str, Any], *, is_module: bool = False
+        self, section: str, values: Mapping[str, Any], *, is_module: bool | None = None
     ) -> None:
         try:
             await self._interface.write_config_section(section, values, is_module=is_module)
@@ -634,9 +634,9 @@ class MeshtasticApiClient:
         admin_message.set_fixed_position.CopyFrom(position)
 
         try:
-            await self._interface.send_admin_message_await_response(
-                node=None, message=admin_message, expect_response=False
-            )
+            # w transakcji edycji — inaczej przy wiszącej transakcji innego
+            # klienta radio przyjmowało pozycję, ale jej nie zapisywało
+            await self._interface._write_in_edit_transaction(None, admin_message)  # noqa: SLF001
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 

@@ -75,9 +75,22 @@ class ClientApiConnection:
         return self._last_queue_status_monotonic
 
     async def force_close(self) -> None:
-        """Zamknij gniazdo bez sprzątania słuchaczy — odczyt dostanie EOF i ruszy zwykła ścieżka ponownego łączenia."""
+        """
+        Zamknij gniazdo i obudź wszystkich czekających na pakiety.
+
+        Samo zamknięcie gniazda wystarcza tylko wtedy, gdy ktoś akurat z niego
+        czyta — odczyt dostaje wtedy EOF i rusza zwykła ścieżka ponownego
+        łączenia. Gdy procesor strumienia nie działał (np. po nieudanym
+        ponownym łączeniu w złym momencie), pętla główna czekała na pakiety w
+        nieskończoność i integracja już nigdy nie wracała do radia. Dlatego
+        słuchacze dostają tu błąd od razu.
+        """
         with contextlib.suppress(Exception):
             await self._disconnect()
+        with contextlib.suppress(Exception):
+            await self._notify_packet_stream_listeners_error(
+                ClientApiConnectionInterruptedError("Connection closed by link watchdog")
+            )
 
     async def disconnect(self) -> None:
         for listener in self._packet_stream_listeners:

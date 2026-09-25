@@ -53,6 +53,24 @@
     "role": {
       "description": "Jaką rolę pełni urządzenie w sieci",
       "label": "Rola"
+    },
+    "options": {
+      "label": "Opcje",
+      "description": "Rola urządzenia, tryb przekazywania i częstotliwość rozgłaszania informacji o węźle"
+    },
+    "hardware": {
+      "label": "Sprzęt",
+      "description": "Ustawienia sprzętowe"
+    },
+    "timeZone": {
+      "label": "Strefa czasowa",
+      "description": "Strefa czasowa POSIX dla dat na ekranie urządzenia i w logach"
+    },
+    "gpio": {
+      "description": "Przypisania pinów GPIO"
+    },
+    "useBrowserTimeZone": {
+      "label": "Użyj strefy czasowej przeglądarki"
     }
   },
   "bluetooth": {
@@ -70,6 +88,10 @@
     "pin": {
       "description": "Pin do użycia podczas łączenia",
       "label": "Pin"
+    },
+    "bluetoothConfig": {
+      "label": "Konfiguracja Bluetooth",
+      "description": "Konfiguracja Bluetooth"
     }
   },
   "display": {
@@ -118,6 +140,22 @@
     "wakeOnTapOrMotion": {
       "description": "Obudź urządzenie przy dotknięciu lub ruchu",
       "label": "Wybudź przy dotknięciu lub ruchu"
+    },
+    "enableMessageBubbles": {
+      "label": "Dymki wiadomości",
+      "description": "Pokazuj przychodzące wiadomości jako dymki na ekranie urządzenia"
+    },
+    "deviceDisplay": {
+      "label": "Ekran urządzenia",
+      "description": "Orientacja ekranu i zegar"
+    },
+    "advanced": {
+      "label": "Zaawansowane",
+      "description": "Zaawansowane ustawienia ekranu"
+    },
+    "compassOrientation": {
+      "label": "Orientacja kompasu",
+      "description": "Orientacja kompasu względem ekranu"
     }
   },
   "lora": {
@@ -198,6 +236,22 @@
     "radioSettings": {
       "label": "Ustawienia radia",
       "description": "Ustawienia dla radia LoRa"
+    },
+    "femLnaMode": {
+      "label": "Tryb FEM/LNA",
+      "description": "Sterowanie zewnętrznym modułem RF / wzmacniaczem niskoszumowym (tylko na płytkach, które go mają)"
+    },
+    "serialHalOnly": {
+      "label": "Tylko szeregowy HAL",
+      "description": "Komunikacja z radiem wyłącznie przez szeregową warstwę abstrakcji sprzętu"
+    },
+    "optionsCard": {
+      "label": "Opcje",
+      "description": "Podstawowe opcje LoRa"
+    },
+    "advancedCard": {
+      "label": "Zaawansowane",
+      "description": "Zaawansowane parametry LoRa"
     }
   },
   "network": {
@@ -241,7 +295,8 @@
       "label": "Włączony"
     },
     "meshViaUdp": {
-      "label": "Mesh przez UDP"
+      "label": "Mesh przez UDP",
+      "description": "Przekazuj pakiety sieci mesh przez UDP"
     },
     "ntpServer": {
       "label": "Serwer NTP"
@@ -268,6 +323,18 @@
     "udpConfigSettings": {
       "description": "Konfiguracja UDP przez mesh ",
       "label": "Ustawienia UDP"
+    },
+    "wifiOptions": {
+      "label": "Opcje WiFi",
+      "description": "Konfiguracja WiFi"
+    },
+    "ethernetOptionsCard": {
+      "label": "Opcje Ethernet",
+      "description": "Konfiguracja Ethernet"
+    },
+    "advancedCard": {
+      "label": "Zaawansowane",
+      "description": "NTP, rsyslog, tryb IPv4 i ręczne adresy"
     }
   },
   "position": {
@@ -283,7 +350,19 @@
     },
     "fixedPosition": {
       "description": "Nie zgłaszaj położenia GPS, tylko ręcznie określoną.",
-      "label": "Położenie stałe"
+      "label": "Położenie stałe",
+      "latitude": {
+        "label": "Szerokość geograficzna",
+        "description": "Stopnie dziesiętne od -90 do 90 (np. 50.8661)"
+      },
+      "longitude": {
+        "label": "Długość geograficzna",
+        "description": "Stopnie dziesiętne od -180 do 180 (np. 20.6286)"
+      },
+      "altitude": {
+        "label": "Wysokość",
+        "description": "Opcjonalnie — wysokość w {{unit}} nad poziomem morza (np. 100). Zostaw puste, jeśli nieznana, albo dolicz wysokość anteny lub masztu."
+      }
     },
     "gpsMode": {
       "description": "Skonfiguruj czy urządzenie GPS jest włączone, wyłączone, czy nie jest obecne",
@@ -334,6 +413,23 @@
       "unset": "Nieustawiony",
       "vehicleHeading": "Kurs pojazdu",
       "vehicleSpeed": "Prędkość pojazdu"
+    },
+    "positionPacket": {
+      "label": "Pakiet pozycji",
+      "description": "Konfiguracja rozgłaszania pozycji"
+    },
+    "deviceGps": {
+      "label": "GPS urządzenia",
+      "description": "Konfiguracja GPS urządzenia"
+    },
+    "advancedDeviceGps": {
+      "label": "Zaawansowany GPS urządzenia",
+      "description": "Przypisania pinów GPIO dla modułu GPS"
+    },
+    "useBrowserLocation": {
+      "label": "Użyj lokalizacji przeglądarki",
+      "busy": "Odczytywanie lokalizacji…",
+      "failed": "Nie udało się odczytać lokalizacji przeglądarki"
     }
   },
   "power": {
@@ -376,6 +472,10 @@
     "sleepSettings": {
       "description": "Ustawienia uśpienia modułu zasilania",
       "label": "Ustawienia uśpienia"
+    },
+    "powerConfig": {
+      "label": "Konfiguracja zasilania",
+      "description": "Zasilanie i usypianie"
     }
   },
   "security": {
@@ -425,34 +525,62 @@
     "loggingSettings": {
       "description": "Ustawienia logowania",
       "label": "Ustawienia logowania"
+    },
+    "directMessageKey": {
+      "label": "Klucz wiadomości prywatnych",
+      "description": "Publiczny i prywatny klucz wiadomości prywatnych"
+    },
+    "adminKeysCard": {
+      "label": "Klucze administratora",
+      "description": "Klucze uwierzytelniania administratora"
+    },
+    "logsCard": {
+      "label": "Logi",
+      "description": "Konfiguracja logowania"
+    },
+    "administration": {
+      "label": "Administracja",
+      "description": "Tryb zarządzany i dawny kanał administracyjny"
     }
   },
   "user": {
     "title": "User Settings",
-    "description": "Configure your device name and identity settings",
+    "description": "Ustaw nazwę i dane identyfikacyjne urządzenia",
     "longName": {
       "label": "Długa nazwa",
-      "description": "Your full display name (1-40 characters)",
+      "description": "Pełna wyświetlana nazwa (1–40 znaków)",
       "validation": {
-        "min": "Long name must be at least 1 character",
-        "max": "Long name must be at most 40 characters"
+        "min": "Długa nazwa musi mieć co najmniej 1 znak",
+        "max": "Długa nazwa może mieć najwyżej 40 znaków"
       }
     },
     "shortName": {
       "label": "Krótka nazwa",
-      "description": "Your abbreviated name (2-4 characters)",
+      "description": "Skrócona nazwa (2–4 znaki)",
       "validation": {
-        "min": "Short name must be at least 2 characters",
-        "max": "Short name must be at most 4 characters"
+        "min": "Krótka nazwa musi mieć co najmniej 2 znaki",
+        "max": "Krótka nazwa może mieć najwyżej 4 znaki"
       }
     },
     "isUnmessageable": {
-      "label": "Unmessageable",
+      "label": "Nie przyjmuje wiadomości",
       "description": "Used to identify unmonitored or infrastructure nodes so that messaging is not available to nodes that will never respond."
     },
     "isLicensed": {
       "label": "Licensed amateur radio (HAM)",
       "description": "Enable if you are a licensed amateur radio operator, enabling this option disables encryption and is not compatible with the default Meshtastic network."
+    },
+    "userConfig": {
+      "label": "Konfiguracja użytkownika",
+      "description": "Tożsamość i licencja"
+    },
+    "nodeId": {
+      "label": "ID węzła",
+      "description": "Tylko do odczytu — nadawane przez urządzenie"
+    },
+    "hardwareModel": {
+      "label": "Model sprzętu",
+      "description": "Tylko do odczytu — zgłaszany przez urządzenie"
     }
   }
 }

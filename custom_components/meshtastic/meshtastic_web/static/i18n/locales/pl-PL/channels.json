@@ -4,7 +4,7 @@
     "channelName": "Kanał: {{channelName}}",
     "broadcastLabel": "Podstawowy",
     "channelIndex": "Kan. {{index}}",
-    "import": "Import",
+    "import": "Importuj",
     "export": "Eksport"
   },
   "validation": {

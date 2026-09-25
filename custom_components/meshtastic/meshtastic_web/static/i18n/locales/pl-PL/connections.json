@@ -1,34 +1,83 @@
 {
   "page": {
     "title": "Połącz z urządzeniem MT_SW",
-    "description": "Add a device connection via HTTP, Bluetooth, or Serial. Your saved connections will be saved in your browser."
+    "description": "Dodaj połączenie z urządzeniem przez sieć (HTTP), Bluetooth albo port szeregowy. Zapisane połączenia są przechowywane w przeglądarce."
   },
   "connectionType_ble": "BLE",
   "connectionType_serial": "Seryjny",
   "connectionType_network": "Sieć",
-  "deleteConnection": "Delete connection",
-  "areYouSure": "This will remove {{name}}. You canot undo this action.",
-  "moreActions": "More actions",
+  "deleteConnection": "Usuń połączenie",
+  "areYouSure": "To usunie połączenie {{name}}. Tej operacji nie można cofnąć.",
+  "moreActions": "Więcej akcji",
   "noConnections": {
-    "title": "No connections yet.",
-    "description": "Create your first connection. It will connect immediately and be saved for later."
+    "title": "Brak połączeń.",
+    "description": "Utwórz pierwsze połączenie. Połączy się od razu i zostanie zapisane na później."
   },
-  "lastConnectedAt": "Last connected: {{date}}",
-  "neverConnected": "Never connected",
+  "lastConnectedAt": "Ostatnie połączenie: {{date}}",
+  "neverConnected": "Nigdy nie połączono",
   "toasts": {
     "connected": "Połączony",
-    "nowConnected": "{{name}} is now connected",
+    "nowConnected": "Połączono z {{name}}",
     "nowDisconnected": "{{name}} are now disconnecte",
     "disconnected": "Rozłączono",
-    "failed": "Failed to connect",
+    "failed": "Nie udało się połączyć",
     "checkConnetion": "Check your device or settings and try again",
-    "defaultSet": "Default set",
-    "defaultConnection": "Default connection is now {{nameisconnected}}",
-    "deleted": "Deleted",
-    "deletedByName": "{{name}} was removed",
-    "pickConnectionAgain": "Could not connect. You may need to reselect the device/port.",
-    "added": "Connection added",
-    "savedByName": "{{name}} saved.",
-    "savedCantConnect": "The connection was saved but could not connect."
+    "defaultSet": "Ustawiono domyślne",
+    "defaultConnection": "Domyślne połączenie to teraz {{nameisconnected}}",
+    "deleted": "Usunięto",
+    "deletedByName": "Usunięto {{name}}",
+    "pickConnectionAgain": "Nie udało się połączyć. Może być potrzebne ponowne wybranie urządzenia lub portu.",
+    "added": "Dodano połączenie",
+    "savedByName": "Zapisano {{name}}.",
+    "savedCantConnect": "Połączenie zostało zapisane, ale nie udało się połączyć.",
+    "checkConnection": "Sprawdź urządzenie lub ustawienia i spróbuj ponownie",
+    "renamed": "Zmieniono nazwę",
+    "renamedByName": "Nowa nazwa połączenia: {{name}}.",
+    "updated": "Zaktualizowano",
+    "updatedByName": "Zaktualizowano {{name}}."
+  },
+  "default": "Domyślne",
+  "button": {
+    "addConnection": "Dodaj połączenie",
+    "connect": "Połącz",
+    "disconnect": "Rozłącz",
+    "retry": "Spróbuj ponownie",
+    "delete": "Usuń",
+    "cancel": "Anuluj",
+    "setDefault": "Ustaw jako domyślne",
+    "unsetDefault": "Usuń jako domyślne",
+    "rename": "Zmień nazwę",
+    "edit": "Edytuj"
+  },
+  "renameConnection": "Zmień nazwę połączenia",
+  "renameDescription": "Wpisz nową nazwę tego połączenia.",
+  "nameLabel": "Nazwa",
+  "editConnection": {
+    "title": "Edytuj połączenie",
+    "description": "Zmień ustawienia tego połączenia."
+  },
+  "overlay": {
+    "srTitle": "Łączenie z urządzeniem",
+    "phase": {
+      "connecting": "Otwieranie połączenia…",
+      "configuring": "Pobieranie konfiguracji…"
+    },
+    "chip": {
+      "identity": "Tożsamość",
+      "metadata": "Metadane",
+      "channels": "Kanały",
+      "nodes": "Węzły"
+    },
+    "stuckHint": "Trwa to dłużej niż zwykle. Urządzenie może być w trybie CLI lub bootloadera albo firmware nie odpowiada na żądania konfiguracji.",
+    "cancel": "Anuluj"
+  },
+  "errors": {
+    "certNotTrusted": "Certyfikat z podpisem własnym nie jest zaufany. Otwórz {{url}} w nowej karcie, zaakceptuj ostrzeżenie bezpieczeństwa, wróć tutaj i spróbuj ponownie.",
+    "httpsNotReachable": "Adres HTTPS jest nieosiągalny. Sprawdź, czy urządzenie jest w sieci.",
+    "httpNotReachable": "Adres HTTP jest nieosiągalny (może blokować go CORS albo problem z siecią)",
+    "openInNewTab": "Otwórz w nowej karcie →"
+  },
+  "httpTest": {
+    "certNotTrusted": "Certyfikat nie jest zaufany. <0>Otwórz w nowej karcie</0>, zaakceptuj ostrzeżenie i sprawdź ponownie."
   }
 }

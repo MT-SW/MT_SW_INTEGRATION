@@ -15,6 +15,7 @@ import asyncio
 import base64
 import contextlib
 import datetime
+import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, cast
@@ -107,6 +108,9 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA
 PLATFORM_SCHEMA_BASE = cv.PLATFORM_SCHEMA_BASE
 SCAN_INTERVAL = datetime.timedelta(hours=1)
 
+
+# Po tylu sekundach bez radia (mimo ponownego łączenia) wpis jest przeładowywany.
+_LINK_SUPERVISOR_SECONDS = 600
 
 _remove_listeners: MutableMapping[str, list[Callable[[], None]]] = defaultdict(list)
 _last_non_filter_options: dict[str, dict[str, Any]] = {}
@@ -370,14 +374,56 @@ async def _async_setup_app_layer(hass: HomeAssistant, entry: MeshtasticConfigEnt
 
     # Po każdym ponownym połączeniu z radiem odśwież dane koordynatora —
     # zamiast czekać do godzinnego cyklu.
+    # Ostatnia linia obrony: jeśli mimo ponownego łączenia na poziomie gniazda
+    # radio nie wraca przez _LINK_SUPERVISOR_SECONDS (restart radia, zanik
+    # prądu, nieznany zawieszony stan), przeładowujemy cały wpis — nowe
+    # połączenie, nowy stan, od zera. Gdy radio nadal nie odpowiada, start
+    # kończy się ConfigEntryNotReady i Home Assistant sam ponawia próby.
+    supervisor: dict[str, Any] = {"cancel": None, "down_since": None}
+
+    def _cancel_supervisor() -> None:
+        if supervisor["cancel"] is not None:
+            supervisor["cancel"]()
+            supervisor["cancel"] = None
+
+    @callback
+    def _supervisor_check(_now: Any) -> None:
+        supervisor["cancel"] = None
+        if entry.state is not ConfigEntryState.LOADED or data.client.link_up:
+            return
+        down_for = time.monotonic() - (supervisor["down_since"] or time.monotonic())
+        LOGGER.warning(
+            "Brak połączenia z radiem %s od %.0f min mimo ponawiania — przeładowuję integrację, "
+            "żeby połączyć się od nowa",
+            entry.title,
+            down_for / 60,
+        )
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+
     @callback
     def _on_link_state(state: str) -> None:
-        if state == "connected" and entry.state is ConfigEntryState.LOADED and data.stats.enabled:
-            hass.async_create_background_task(
-                data.coordinator.async_request_refresh(), name=f"{DOMAIN}-refresh-after-reconnect"
-            )
+        if state == "connected":
+            if supervisor["down_since"] is not None:
+                LOGGER.info(
+                    "Połączenie z radiem %s przywrócone po %.0f s",
+                    entry.title,
+                    time.monotonic() - supervisor["down_since"],
+                )
+            supervisor["down_since"] = None
+            _cancel_supervisor()
+            if entry.state is ConfigEntryState.LOADED and data.stats.enabled:
+                hass.async_create_background_task(
+                    data.coordinator.async_request_refresh(), name=f"{DOMAIN}-refresh-after-reconnect"
+                )
+        elif state == "disconnected":
+            if supervisor["down_since"] is None:
+                supervisor["down_since"] = time.monotonic()
+                LOGGER.warning("Utracono połączenie z radiem %s — łączę ponownie", entry.title)
+            if supervisor["cancel"] is None:
+                supervisor["cancel"] = async_call_later(hass, _LINK_SUPERVISOR_SECONDS, _supervisor_check)
 
     data.app_unsubscribers.append(data.client.add_connection_state_listener(_on_link_state))
+    data.app_unsubscribers.append(_cancel_supervisor)
 
 
 async def _async_setup_stats_layer(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> None:

@@ -1,0 +1,307 @@
+diff --git a/apps/web/index.html b/apps/web/index.html
+index 4d5b33b..876666a 100644
+--- a/apps/web/index.html
++++ b/apps/web/index.html
+@@ -1,20 +1,19 @@
+ <!doctype html>
+-<html lang="en" data-theme="system">
++<html lang="pl" data-theme="system">
+   <head>
+     <!-- CookieYes banner -->
+     <%- cookieYesScript %>
+     <!-- End of CookieYes banner -->
+     <meta charset="utf-8" />
+-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+-    <link rel="icon" href="/favicon.ico" />
+-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
++    <link rel="icon" href="/meshtastic/web/icon.svg" type="image/svg+xml" />
++    <link rel="apple-touch-icon" href="/meshtastic/web/apple-touch-icon.png" sizes="180x180" />
+ 
+-    <link rel="manifest" href="site.webmanifest" />
+-    <link rel="mask-icon" href="logo_black.svg" color="#67ea94" />
++    <link rel="manifest" href="/meshtastic/web/site.webmanifest" />
++    <link rel="mask-icon" href="/meshtastic/web/logo_black.svg" color="#2C2D3C" />
+     <link rel="stylesheet" href="src/index.css" crossorigin="anonymous" />
+-    <meta name="theme-color" content="#67ea94" />
++    <meta name="theme-color" content="#F5C839" />
+     <meta name="viewport" content="width=device-width, initial-scale=1" />
+-    <meta name="description" content="Meshtastic Web Client" />
++    <meta name="description" content="MT_SW — klient webowy sieci Meshtastic Świętokrzyskie" />
+     <title><%- title %></title>
+   </head>
+   <body>
+diff --git a/apps/web/src/components/Sidebar.tsx b/apps/web/src/components/Sidebar.tsx
+index dd0d407..4bdfb3c 100644
+--- a/apps/web/src/components/Sidebar.tsx
++++ b/apps/web/src/components/Sidebar.tsx
+@@ -156,7 +156,7 @@ export const Sidebar = ({ children }: SidebarProps) => {
+         )}
+       >
+         <img
+-          src="/logo.svg"
++          src={`${import.meta.env.BASE_URL}logo.svg`}
+           alt={t("app.logo")}
+           className="size-10 flex-shrink-0 rounded-xl"
+         />
+diff --git a/apps/web/src/components/UI/ErrorPage.tsx b/apps/web/src/components/UI/ErrorPage.tsx
+index b860e46..8f29bb0 100644
+--- a/apps/web/src/components/UI/ErrorPage.tsx
++++ b/apps/web/src/components/UI/ErrorPage.tsx
+@@ -56,7 +56,7 @@ export function ErrorPage({ error }: { error: Error }) {
+ 
+         <div className="hidden md:block md:max-w-64 lg:max-w-80 w-full aspect-suqare">
+           <img
+-            src="/chirpy.svg"
++            src={`${import.meta.env.BASE_URL}logo.svg`}
+             alt="Chirpy the Meshtastic error"
+             className="max-w-full h-auto"
+           />
+diff --git a/apps/web/src/components/generic/DeviceImage.tsx b/apps/web/src/components/generic/DeviceImage.tsx
+index ef96a42..3f5134c 100644
+--- a/apps/web/src/components/generic/DeviceImage.tsx
++++ b/apps/web/src/components/generic/DeviceImage.tsx
+@@ -47,7 +47,7 @@ const hardwareModelToFilename: { [key: string]: string } = {
+ };
+ 
+ export const DeviceImage = ({ deviceType, className }: DeviceImageProps) => {
+-  const getPath = (device: string) => `/devices/${device}`;
++  const getPath = (device: string) => `${import.meta.env.BASE_URL}devices/${device}`;
+   const device = hardwareModelToFilename[deviceType] || "unknown.svg";
+   return <img className={className} src={getPath(device)} alt={device} />;
+ };
+diff --git a/apps/web/src/i18n-config.ts b/apps/web/src/i18n-config.ts
+index ff259bf..7d31c0a 100644
+--- a/apps/web/src/i18n-config.ts
++++ b/apps/web/src/i18n-config.ts
+@@ -30,7 +30,7 @@ i18next
+   .init({
+     backend: {
+       // With this setup, {{lng}} will correctly resolve to 'en-US', 'fi-FI', etc.
+-      loadPath: "/i18n/locales/{{lng}}/{{ns}}.json",
++      loadPath: `${import.meta.env.BASE_URL}i18n/locales/{{lng}}/{{ns}}.json`,
+     },
+     react: {
+       useSuspense: true,
+diff --git a/apps/web/src/index.css b/apps/web/src/index.css
+index f44ef6b..1f5b868 100644
+--- a/apps/web/src/index.css
++++ b/apps/web/src/index.css
+@@ -182,3 +182,99 @@ img {
+ .animate-spin-slow {
+   animation: spin-slower 2s linear infinite;
+ }
++
++/* ===== MT_SW ===== */
++/*
++ * SPDX-FileCopyrightText: 2026 MT_SW
++ *
++ * SPDX-License-Identifier: MIT
++ *
++ * Kolorystyka MT_SW nałożona na klienta webowego (zbudowany bundle
++ * meshtastic/web). Zamiast przebudowywać bundle, podmieniamy zmienne
++ * kolorów Tailwinda: zieleń Meshtastic (przełączniki, aktywne pozycje menu,
++ * przyciski „sukces”, wyróżnienia) staje się złotem MT_SW (#F5C839), a
++ * najciemniejsze odcienie — granatem z logo (#2C2D3C).
++ *
++ * Reguły poniżej nie są w żadnej warstwie (@layer), więc zawsze wygrywają z
++ * warstwami Tailwinda — nie potrzeba !important.
++ */
++
++:root,
++:host {
++  --mtsw-gold: #f5c839;
++  --mtsw-gold-dark: #c99b14;
++  --mtsw-navy: #2c2d3c;
++
++  --color-green-400: #f8d56a;
++  --color-green-500: #f5c839;
++  --color-green-600: #e6b82a;
++  --color-green-700: #c99b14;
++  --color-green-800: #2c2d3c;
++  --color-green-900: #1f2029;
++}
++
++/* Na złotym tle biały napis jest nieczytelny — ciemny granat z logo. */
++.bg-green-500,
++.bg-green-600,
++.hover\:bg-green-600:hover,
++.hover\:bg-green-700:hover,
++.data-\[state\=checked\]\:bg-green-500[data-state="checked"],
++.dark\:bg-green-600:where([data-theme="dark"], [data-theme="dark"] *),
++.dark\:bg-green-700:where([data-theme="dark"], [data-theme="dark"] *),
++.dark\:hover\:bg-green-600:where([data-theme="dark"], [data-theme="dark"] *):hover,
++.dark\:hover\:bg-green-700:where([data-theme="dark"], [data-theme="dark"] *):hover {
++  color: var(--mtsw-navy);
++}
++
++/* Najciemniejsze odcienie są granatowe — napis jasny. */
++.bg-green-800,
++.active\:bg-green-800:active,
++.dark\:hover\:bg-green-800:where([data-theme="dark"], [data-theme="dark"] *):hover,
++.dark\:active\:bg-green-800:where([data-theme="dark"], [data-theme="dark"] *):active,
++.dark\:active\:bg-green-900:where([data-theme="dark"], [data-theme="dark"] *):active {
++  color: #ffffff;
++}
++
++/*
++ * Zielony tekst niesie znaczenie (dobry sygnał, udany test połączenia,
++ * skopiowano) — zostaje zielony, nie złoty, żeby nie mylił się z żółtym
++ * „średnim” poziomem sygnału.
++ */
++.text-green-500 {
++  color: #22c55e;
++}
++
++.text-green-600 {
++  color: #16a34a;
++}
++
++.dark\:text-green-400:where([data-theme="dark"], [data-theme="dark"] *) {
++  color: #4ade80;
++}
++
++.dark\:text-green-500:where([data-theme="dark"], [data-theme="dark"] *) {
++  color: #22c55e;
++}
++
++/* Logo w pasku bocznym i na ekranie połączeń — złota ramka jak w panelu MT_SW. */
++img[src$="/logo.svg"] {
++  box-shadow: 0 0 0 1px rgba(44, 45, 60, 0.15);
++}
++
++/* Linki w barwach marki: ciemne złoto na jasnym tle, złoto na ciemnym. */
++[data-theme="light"] {
++  --link: #9a740e;
++}
++
++[data-theme="dark"] {
++  --link: #f5c839;
++}
++
++/* Zaznaczenie tekstu i pasek przewijania też w kolorach MT_SW. */
++::selection {
++  background: rgba(245, 200, 57, 0.45);
++}
++
++* {
++  scrollbar-color: rgba(201, 155, 20, 0.6) transparent;
++}
+diff --git a/apps/web/src/routes.tsx b/apps/web/src/routes.tsx
+index 565f83f..dab966d 100644
+--- a/apps/web/src/routes.tsx
++++ b/apps/web/src/routes.tsx
+@@ -8,6 +8,7 @@ import ConfigPage from "@pages/Settings/index.tsx";
+ import {
+   createRootRouteWithContext,
+   createRoute,
++  createHashHistory,
+   createRouter,
+   redirect,
+ } from "@tanstack/react-router";
+@@ -170,6 +171,9 @@ export const routeTree = rootRoute.addChildren([
+ 
+ const router = createRouter({
+   routeTree,
++  // MT_SW: adresy w stylu index.html#/messages — Home Assistant serwuje klienta
++  // jako pliki statyczne pod /meshtastic/web/, więc ścieżki SPA muszą żyć w hashu
++  history: createHashHistory(),
+   context: {
+     stores: {
+       app: {} as ReturnType<typeof useAppStore>,
+diff --git a/apps/web/vite.config.ts b/apps/web/vite.config.ts
+index 2ce0c94..dfc1d07 100644
+--- a/apps/web/vite.config.ts
++++ b/apps/web/vite.config.ts
+@@ -9,7 +9,7 @@ import { createHtmlPlugin } from "vite-plugin-html";
+ import { VitePWA } from "vite-plugin-pwa";
+ 
+ let hash = "";
+-let version = "v0.0.0";
++let version = "v2.7-mtsw";
+ try {
+   hash = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+ } catch (error) {
+@@ -36,6 +36,8 @@ export default defineConfig(({ mode }) => {
+   const useHTTPS = env.VITE_USE_HTTPS === "true";
+ 
+   return {
++    // MT_SW: klient działa pod /meshtastic/web/ w Home Assistancie
++    base: "/meshtastic/web/",
+     plugins: [
+       react(),
+       tailwindcss(),
+@@ -43,7 +45,7 @@ export default defineConfig(({ mode }) => {
+       createHtmlPlugin({
+         inject: {
+           data: {
+-            title: isTest ? "Meshtastic Web (TEST)" : "Meshtastic Web",
++            title: isTest ? "MT_SW Web (TEST)" : "MT_SW",
+             cookieYesScript:
+               isProd && env.VITE_COOKIEYES_CLIENT_ID
+                 ? // This is for GDPR/CCPA compliance
+@@ -74,6 +76,9 @@ export default defineConfig(({ mode }) => {
+     },
+     resolve: {
+       alias: {
++        // MT_SW: @meshtastic/core pochodzi z JSR (niedostępny przy budowaniu) —
++        // aplikacja używa z niego tylko Protobuf i Types, które daje też @meshtastic/sdk
++        "@meshtastic/core": "@meshtastic/sdk",
+         "@app": path.resolve(process.cwd(), "./src"),
+         "@pages": path.resolve(process.cwd(), "./src/pages"),
+         "@components": path.resolve(process.cwd(), "./src/components"),
+diff --git a/package.json b/package.json
+index e5bf17c..9a98826 100644
+--- a/package.json
++++ b/package.json
+@@ -13,7 +13,6 @@
+   },
+   "type": "module",
+   "scripts": {
+-    "preinstall": "npx only-allow pnpm",
+     "lint": "oxlint",
+     "lint:fix": "oxlint --fix",
+     "format": "oxfmt --check .",
+@@ -26,8 +25,7 @@
+     "test": "vitest",
+     "test:e2e": "playwright test",
+     "test:e2e:ui": "playwright test --ui",
+-    "test:e2e:report": "playwright show-report e2e/.report",
+-    "prepare": "husky"
++    "test:e2e:report": "playwright show-report e2e/.report"
+   },
+   "dependencies": {
+     "@bufbuild/protobuf": "^2.13.0",
+@@ -36,7 +34,6 @@
+     "tslog": "^5.1.0"
+   },
+   "devDependencies": {
+-    "@meshtastic/core": "jsr:^2.6.6",
+     "@meshtastic/sdk": "workspace:*",
+     "@playwright/test": "^1.62.0",
+     "@types/node": "^26.1.2",
+diff --git a/packages/sdk/package.json b/packages/sdk/package.json
+index 6ae76da..97c736e 100644
+--- a/packages/sdk/package.json
++++ b/packages/sdk/package.json
+@@ -48,7 +48,7 @@
+   },
+   "dependencies": {
+     "@bufbuild/protobuf": "^2.13.0",
+-    "@meshtastic/protobufs": "jsr:^2.7.18",
++    "@meshtastic/protobufs": "workspace:*",
+     "@preact/signals-core": "^1.14.4",
+     "better-result": "^2.10.0",
+     "crc": "npm:crc@^4.3.2",
+diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
+index 799971d..b7ee2a0 100644
+--- a/pnpm-workspace.yaml
++++ b/pnpm-workspace.yaml
+@@ -3,7 +3,7 @@ allowBuilds:
+   "@tailwindcss/oxide": false
+   "core-js": false
+   esbuild: false
+-minimumReleaseAge: 2880 # package dependency library must be at least 2 days old
++minimumReleaseAge: 0
+ packages:
+   - "packages/*"
+   - "apps/*"

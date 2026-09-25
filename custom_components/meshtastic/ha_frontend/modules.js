@@ -48,10 +48,28 @@ const SERIAL_MODES = [
   { value: "CALTOPO", label: PL("CalTopo") },
 ];
 
+/* Zdarzenia wejścia z protobufu (CannedMessageConfig.InputEventChar). Wcześniej
+   były tu wartości spoza tej listy („UP_DOWN_SELECT”, „ROTARY”) i radio
+   odrzucało cały zapis sekcji gotowych wiadomości. */
 const CANNED_MSG_INPUT_EVENTS = [
   { value: "NONE", label: PL("None") },
-  { value: "UP_DOWN_SELECT", label: PL("Up/Down/Select") },
-  { value: "ROTARY", label: PL("Rotary Encoder") },
+  { value: "UP", label: PL("Up") },
+  { value: "DOWN", label: PL("Down") },
+  { value: "LEFT", label: PL("Left") },
+  { value: "RIGHT", label: PL("Right") },
+  { value: "SELECT", label: PL("Select") },
+  { value: "BACK", label: PL("Back") },
+  { value: "CANCEL", label: PL("Cancel") },
+];
+
+/* Rodzaj wyzwalania czujnika (DetectionSensorConfig.TriggerType). */
+const DETECTION_TRIGGER_TYPES = [
+  { value: "LOGIC_LOW", label: PL("Low level") },
+  { value: "LOGIC_HIGH", label: PL("High level") },
+  { value: "FALLING_EDGE", label: PL("Falling edge") },
+  { value: "RISING_EDGE", label: PL("Rising edge") },
+  { value: "EITHER_EDGE_ACTIVE_LOW", label: PL("Either edge (active low)") },
+  { value: "EITHER_EDGE_ACTIVE_HIGH", label: PL("Either edge (active high)") },
 ];
 
 const CODEC2_RATES = [
@@ -923,14 +941,15 @@ class MeshSettingsDetectionSensor extends ModuleConfigPanel {
                   .description=${PL("Periodic state broadcast interval")}
                   .value=${d.state_broadcast_secs ?? 0} .min=${0}
                   @change=${(e) => this._updateField("state_broadcast_secs", e.detail.value)}></mesh-number-input>
-                <mesh-text-input .label=${PL("Detection Triggered High")}
-                  .description=${PL("Message when pin goes HIGH")}
-                  .value=${d.detection_triggered_high || ""}
-                  @change=${(e) => this._updateField("detection_triggered_high", e.detail.value)}></mesh-text-input>
-                <mesh-text-input .label=${PL("Detection Triggered Low")}
-                  .description=${PL("Message when pin goes LOW")}
-                  .value=${d.detection_triggered_low || ""}
-                  @change=${(e) => this._updateField("detection_triggered_low", e.detail.value)}></mesh-text-input>
+                <mesh-text-input .label=${PL("Friendly name")}
+                  .description=${PL("Used in the message sent to the mesh, up to 20 characters")}
+                  .value=${d.name || ""}
+                  @change=${(e) => this._updateField("name", String(e.detail.value || "").slice(0, 20))}></mesh-text-input>
+                <mesh-select .label=${PL("Trigger type")}
+                  .description=${PL("Which pin change triggers the alert")}
+                  .value=${String(d.detection_trigger_type || "LOGIC_LOW")}
+                  .options=${DETECTION_TRIGGER_TYPES}
+                  @change=${(e) => this._updateField("detection_trigger_type", e.detail.value)}></mesh-select>
               </div>
               <mesh-toggle .label=${PL("Send Bell")} .description=${PL("Send a bell notification with alerts")}
                 .checked=${d.send_bell === true}

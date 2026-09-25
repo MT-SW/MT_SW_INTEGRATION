@@ -11,11 +11,14 @@ jedynego połączenia do radia, którym zarządza MeshtasticApiClient.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
+from google.protobuf.json_format import MessageToDict
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
@@ -729,14 +732,59 @@ async def ws_config(
         connection.send_error(msg["id"], "config_failed", str(err))
         return
 
+    local_config = dict(local_config or {})
+    module_config = dict(module_config or {})
+    await _augment_config_for_panel(client, local_config, module_config)
+
     connection.send_result(
         msg["id"],
         {
-            "local_config": local_config or {},
-            "module_config": module_config or {},
+            "local_config": local_config,
+            "module_config": module_config,
             "schema": _config_schema(),
         },
     )
+
+
+async def _augment_config_for_panel(client: Any, local_config: dict, module_config: dict) -> None:
+    """
+    Dołóż do konfiguracji to, co formularze panelu pokazują, a czego nie ma w
+    samych sekcjach — bez tego pola były puste, a ich zapis ginął po cichu.
+
+    - ekran dotykowy (DeviceUIConfig) — radio wysyła go osobno od configu,
+    - stała pozycja (szerokość, długość, wysokość) — z pozycji własnego węzła,
+    - port MQTT — radio trzyma go w adresie jako „host:port”,
+    - gotowe wiadomości — osobna wiadomość administracyjna, pobierana raz.
+    """
+    interface = client.interface
+    with contextlib.suppress(Exception):
+        device_ui = interface.connected_node_device_ui()
+        if device_ui is not None:
+            local_config["deviceUi"] = MessageToDict(device_ui)
+
+    with contextlib.suppress(Exception):
+        position = dict(local_config.get("position") or {})
+        fixed = interface.connected_node_fixed_position() if position.get("fixedPosition") else None
+        if fixed is not None:
+            position["fixedLat"] = fixed["latitude"]
+            position["fixedLng"] = fixed["longitude"]
+            position["fixedAltitude"] = fixed["altitude"]
+            local_config["position"] = position
+
+    with contextlib.suppress(Exception):
+        mqtt = dict(module_config.get("mqtt") or {})
+        address = str(mqtt.get("address") or "")
+        host, sep, port = address.rpartition(":")
+        if sep and host and port.isdigit():
+            mqtt["address"] = host
+            mqtt["port"] = int(port)
+            module_config["mqtt"] = mqtt
+
+    with contextlib.suppress(Exception):
+        messages = await asyncio.wait_for(interface.get_canned_messages(), timeout=6)
+        canned = dict(module_config.get("cannedMessage") or {})
+        canned["messages"] = messages
+        module_config["cannedMessage"] = canned
 
 
 def _node_action_schema(name: str) -> dict:

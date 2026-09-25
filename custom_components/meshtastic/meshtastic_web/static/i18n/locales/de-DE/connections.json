@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "Mit einem Meshtastic Gerät verbinden",
+    "title": "Mit einem MT_SW Gerät verbinden",
     "description": "Fügen Sie eine Geräteverbindung über HTTP, Bluetooth oder serielle Schnittstelle hinzu. Ihre gespeicherten Verbindungen werden in Ihrem Browser gespeichert."
   },
   "connectionType_ble": "BLE",

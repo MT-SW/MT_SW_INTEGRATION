@@ -714,8 +714,16 @@ class MeshSettingsChannels extends LitElement {
 
   _resetAllDrafts() {
     const channels = this.config?.channels || [];
+    // Kanały z niezapisanymi zmianami zostają — wcześniej każde odświeżenie
+    // konfiguracji (np. po zapisie innego kanału) kasowało wszystkie edycje.
+    const previous = this._drafts || {};
+    const dirty = this._dirtyIndexes || new Set();
     this._drafts = {};
     channels.forEach((ch, i) => {
+      if (dirty.has(i) && previous[i]) {
+        this._drafts[i] = previous[i];
+        return;
+      }
       this._drafts[i] = {
         role: ch.role || "DISABLED",
         name: ch.settings?.name || "",
@@ -733,12 +741,18 @@ class MeshSettingsChannels extends LitElement {
         })(),
       };
     });
-    this._dirtyIndexes = new Set();
+    this._dirtyIndexes = new Set([...dirty].filter((i) => this._drafts[i] === previous[i]));
     this.requestUpdate();
   }
 
   _updateChannelField(index, field, value) {
-    if (!this._drafts[index]) return;
+    if (!this._drafts[index]) {
+      // kanał, którego radio nie przysłało (np. lista krótsza niż 8) — pusty wyłączony
+      this._drafts[index] = {
+        role: "DISABLED", name: "", psk: "", uplink_enabled: false, downlink_enabled: false,
+        position_precision: 0, is_muted: false, approx_precision: DEFAULT_APPROX_BITS,
+      };
+    }
     this._drafts[index] = { ...this._drafts[index], [field]: value };
     this._dirtyIndexes.add(index);
     this.requestUpdate();

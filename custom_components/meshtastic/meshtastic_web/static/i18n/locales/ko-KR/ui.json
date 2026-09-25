@@ -13,7 +13,7 @@
   },
   "app": {
     "title": "MT_SW",
-    "logo": "Meshtastic 로고"
+    "logo": "MT_SW 로고"
   },
   "sidebar": {
     "collapseToggle": {
@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "Powered by <0>▲ Vercel</0> | Meshtastic®는 Meshtastic LLC의 등록 상표입니다. | <1>법적 정보</1>",
+    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic®는 Meshtastic LLC의 등록 상표입니다. | <1>법적 정보</1>",
     "commitSha": "Commit SHA: {{sha}}"
   }
 }

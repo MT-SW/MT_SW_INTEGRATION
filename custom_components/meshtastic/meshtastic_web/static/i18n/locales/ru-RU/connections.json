@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "Подключение к устройству Meshtastic",
+    "title": "Подключение к устройству MT_SW",
     "description": "Добавьте подключение по HTTP, Bluetooth или COM-порту. Сохранённые подключения будут храниться в вашем браузере."
   },
   "connectionType_ble": "BLE",
@@ -29,6 +29,7 @@
     "pickConnectionAgain": "Не удалось подключиться. Возможно, нужно заново выбрать устройство/порт.",
     "added": "Подключение добавлено",
     "savedByName": "{{name}} сохранено.",
-    "savedCantConnect": "Подключение сохранено, но подключиться не удалось."
+    "savedCantConnect": "Подключение сохранено, но подключиться не удалось.",
+    "checkConnetion": "Check your device or settings and try again"
   }
 }

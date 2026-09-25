@@ -42,14 +42,28 @@
     "commandPalette": "Search commands..."
   },
   "toast": {
-    "positionRequestSent": { "title": "Position request sent." },
-    "requestingPosition": { "title": "Requesting position, please wait..." },
-    "sendingTraceroute": { "title": "Sending Traceroute, please wait..." },
-    "tracerouteSent": { "title": "Traceroute sent." },
-    "savedChannel": { "title": "Saved Channel: {{channelName}}" },
+    "positionRequestSent": {
+      "title": "Position request sent."
+    },
+    "requestingPosition": {
+      "title": "Requesting position, please wait..."
+    },
+    "sendingTraceroute": {
+      "title": "Sending Traceroute, please wait..."
+    },
+    "tracerouteSent": {
+      "title": "Traceroute sent."
+    },
+    "savedChannel": {
+      "title": "Saved Channel: {{channelName}}"
+    },
     "messages": {
-      "pkiEncryption": { "title": "Chat is using PKI encryption." },
-      "pskEncryption": { "title": "Chat is using PSK encryption." }
+      "pkiEncryption": {
+        "title": "Chat is using PKI encryption."
+      },
+      "pskEncryption": {
+        "title": "Chat is using PSK encryption."
+      }
     },
     "configSaveError": {
       "title": "Error Saving Config",
