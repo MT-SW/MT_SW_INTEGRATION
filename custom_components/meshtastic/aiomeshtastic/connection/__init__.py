@@ -74,6 +74,18 @@ class ClientApiConnection:
     def last_queue_status_monotonic(self) -> float:
         return self._last_queue_status_monotonic
 
+    def set_restart_hint_callback(self, callback: Callable[[], None] | None) -> None:
+        """Wywoływane, gdy połączenie zauważy, że radio startuje od nowa."""
+        self._restart_hint_callback = callback
+
+    def _signal_restart_hint(self) -> None:
+        callback = getattr(self, "_restart_hint_callback", None)
+        if callback is not None:
+            try:
+                callback()
+            except Exception:  # noqa: BLE001
+                self._logger.debug("Restart hint callback failed", exc_info=True)
+
     async def force_close(self) -> None:
         """
         Zamknij gniazdo i obudź wszystkich czekających na pakiety.

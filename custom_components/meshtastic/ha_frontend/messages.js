@@ -157,7 +157,7 @@ class MeshMessagesTab extends LitElement {
         key: `ch:${channel.index}`,
         kind: "channel",
         channelIndex: channel.index,
-        name: channel.name || `${t(this.hass, "messages.channel")} ${channel.index}`,
+        name: channel.display_name || channel.name || `${t(this.hass, "messages.channel")} ${channel.index}`,
         messages: [],
       });
     }

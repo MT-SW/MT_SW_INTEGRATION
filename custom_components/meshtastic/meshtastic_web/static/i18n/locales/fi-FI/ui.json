@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic® on Meshtastic LLC:n rekisteröity tavaramerkki. | <1>Oikeudelliset tiedot</1>",
+    "text": "MT_SW | Meshtastic® on Meshtastic LLC:n rekisteröity tavaramerkki. | <1>Oikeudelliset tiedot</1>",
     "commitSha": "Ohjelmistokehitysversion SHA-tunniste: {{sha}}"
   }
 }

@@ -1,5 +1,5 @@
 diff --git a/apps/web/index.html b/apps/web/index.html
-index 4d5b33b..876666a 100644
+index 4d5b33b..0276629 100644
 --- a/apps/web/index.html
 +++ b/apps/web/index.html
 @@ -1,20 +1,19 @@
@@ -26,7 +26,7 @@ index 4d5b33b..876666a 100644
 +    <meta name="theme-color" content="#F5C839" />
      <meta name="viewport" content="width=device-width, initial-scale=1" />
 -    <meta name="description" content="Meshtastic Web Client" />
-+    <meta name="description" content="MT_SW — klient webowy sieci Meshtastic Świętokrzyskie" />
++    <meta name="description" content="MT_SW — klient webowy" />
      <title><%- title %></title>
    </head>
    <body>
@@ -69,11 +69,37 @@ index ef96a42..3f5134c 100644
    const device = hardwareModelToFilename[deviceType] || "unknown.svg";
    return <img className={className} src={getPath(device)} alt={device} />;
  };
+diff --git a/apps/web/src/core/hooks/useLang.ts b/apps/web/src/core/hooks/useLang.ts
+index be244f7..433d5ae 100644
+--- a/apps/web/src/core/hooks/useLang.ts
++++ b/apps/web/src/core/hooks/useLang.ts
+@@ -22,7 +22,10 @@ function useLang() {
+   );
+ 
+   const currentLanguage = useMemo((): Lang | undefined => {
+-    const lang = supportedLanguages.find((l) => l.code === i18n.language);
++    // MT_SW: „pl-PL” z przeglądarki też ma pokazać „Polski” jako bieżący język
++    const lang =
++      supportedLanguages.find((l) => l.code === i18n.language) ??
++      supportedLanguages.find((l) => i18n.language?.startsWith(`${l.code}-`));
+     if (lang) {
+       return lang;
+     }
 diff --git a/apps/web/src/i18n-config.ts b/apps/web/src/i18n-config.ts
-index ff259bf..7d31c0a 100644
+index ff259bf..cd27af3 100644
 --- a/apps/web/src/i18n-config.ts
 +++ b/apps/web/src/i18n-config.ts
-@@ -30,7 +30,7 @@ i18next
+@@ -17,6 +17,9 @@ export const supportedLanguages: Lang[] = [
+   { code: "de", name: "Deutsch", flag: "🇩🇪" },
+   { code: "en", name: "English", flag: "🇺🇸" },
+   { code: "fr", name: "Français", flag: "🇫🇷" },
++  // MT_SW: polski (pliki w i18n/locales/pl-PL) — bez niego nie dało się go wybrać
++  // ani do niego wrócić po przełączeniu na inny język
++  { code: "pl", name: "Polski", flag: "🇵🇱" },
+   { code: "ru", name: "Русский", flag: "🇷🇺" },
+   { code: "sv", name: "Svenska", flag: "🇸🇪" },
+ ];
+@@ -30,7 +33,7 @@ i18next
    .init({
      backend: {
        // With this setup, {{lng}} will correctly resolve to 'en-US', 'fi-FI', etc.
@@ -82,6 +108,14 @@ index ff259bf..7d31c0a 100644
      },
      react: {
        useSuspense: true,
+@@ -44,6 +47,7 @@ i18next
+       default: [FALLBACK_LANGUAGE_CODE],
+       fi: ["fi-FI", FALLBACK_LANGUAGE_CODE],
+       fr: ["fr-FR", FALLBACK_LANGUAGE_CODE],
++      pl: ["pl-PL", FALLBACK_LANGUAGE_CODE],
+       ru: ["ru-RU", FALLBACK_LANGUAGE_CODE],
+       sv: ["sv-SE", FALLBACK_LANGUAGE_CODE],
+       de: ["de-DE", FALLBACK_LANGUAGE_CODE],
 diff --git a/apps/web/src/index.css b/apps/web/src/index.css
 index f44ef6b..1f5b868 100644
 --- a/apps/web/src/index.css

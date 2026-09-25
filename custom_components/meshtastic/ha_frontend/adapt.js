@@ -144,7 +144,7 @@ export function adaptChannels(channels) {
     .map((channel) => ({
       id: `ch_${channel.index}`,
       index: channel.index,
-      name: channel.name || `Channel ${channel.index}`,
+      name: channel.display_name || channel.name || `Channel ${channel.index}`,
       role: channel.role,
     }));
 }
@@ -152,7 +152,7 @@ export function adaptChannels(channels) {
 export function adaptChannelNames(channels) {
   const out = {};
   for (const channel of channels || []) {
-    out[channel.index] = channel.name || `Channel ${channel.index}`;
+    out[channel.index] = channel.display_name || channel.name || `Channel ${channel.index}`;
   }
   return out;
 }

@@ -114,9 +114,20 @@ class SerialConnection(StreamingClientTransport, asyncio.Protocol):
             finally:
                 self._log_reader_task = None
 
+    # Komunikaty, które radio wypisuje na port przy starcie (ROM ESP32 i firmware
+    # Meshtastic). Port USB-UART zostaje otwarty mimo restartu, więc to jedyny
+    # natychmiastowy sygnał, że radio zaczęło od nowa i trzeba odnowić sesję API.
+    _BOOT_MARKERS = (b"rst:0x", b"ESP-ROM:", b"ets Jun", b"Booted, wake cause", b"Meshtastic hwvendor")
+
     async def _on_other_data(self, data: bytes) -> None:
         if self.START1 in data or self.START2 in data:
             pass
+
+        tail = (getattr(self, "_other_data_tail", b"") + data)[-96:]
+        self._other_data_tail = tail
+        if any(marker in tail for marker in self._BOOT_MARKERS):
+            self._other_data_tail = b""
+            self._signal_restart_hint()
 
         if self._log_reader:
             self._log_reader.feed_data(data)

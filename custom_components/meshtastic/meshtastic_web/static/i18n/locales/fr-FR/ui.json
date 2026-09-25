@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic® est une marque déposée de Meshtastic LLC. | <1>Informations légales</1>",
+    "text": "MT_SW | Meshtastic® est une marque déposée de Meshtastic LLC. | <1>Informations légales</1>",
     "commitSha": "SHA : {{sha}}"
   }
 }

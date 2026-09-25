@@ -22,6 +22,7 @@ from .api import (
     ATTR_EVENT_MESHTASTIC_API_NODE,
     EVENT_MESHTASTIC_API_NODE_UPDATED,
 )
+from .helpers import preset_channel_name
 from .const import (
     ATTR_SERVICE_DATA_ACK,
     ATTR_SERVICE_DATA_CHANNEL,
@@ -182,8 +183,10 @@ async def _add_channel_entities(
 
     gateway = await config_entry.runtime_data.client.async_get_own_node()
     channels = await config_entry.runtime_data.client.async_get_channels()
+    local_config = await config_entry.runtime_data.client.async_get_node_local_config()
+    default_name = preset_channel_name((local_config or {}).get("lora"))
     entities = [
-        MeshtasticChannelNotify(channel, gateway_node_id=gateway["num"])
+        MeshtasticChannelNotify(channel, gateway_node_id=gateway["num"], default_name=default_name)
         for channel in channels
         if channel["role"] != "DISABLED"
     ]
@@ -263,6 +266,7 @@ class MeshtasticChannelNotify(NotifyEntity):
         gateway_node_id: int,
         device_info: DeviceInfo | None = None,
         supported_features: NotifyEntityFeature = None,
+        default_name: str | None = None,
     ) -> None:
         global_channel_id = _channel_global_id(channel)
         self._global_channel_id = global_channel_id
@@ -273,6 +277,11 @@ class MeshtasticChannelNotify(NotifyEntity):
         if channel["settings"]["name"]:
             self._attr_has_entity_name = True
             self._attr_name = channel["settings"]["name"]
+        elif default_name:
+            # kanał bez nazwy nazywa się jak preset LoRa (np. „MediumFast”) —
+            # tak jak w aplikacji, zamiast „Primary Default” / „Primary”
+            self._attr_has_entity_name = True
+            self._attr_name = default_name
         elif channel["settings"]["psk"] == "AQ==":
             self._attr_has_entity_name = True
             self._attr_name = "Primary Default"

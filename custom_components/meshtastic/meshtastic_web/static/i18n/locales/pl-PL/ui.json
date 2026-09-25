@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic® jest zastrzeżonym znakiem towarowym Meshtastic LLC. | <1>Informacje prawne</1>",
+    "text": "MT_SW | Meshtastic® jest zastrzeżonym znakiem towarowym Meshtastic LLC. | <1>Informacje prawne</1>",
     "commitSha": "Commit SHA: {{sha}}"
   },
   "languagePicker": {

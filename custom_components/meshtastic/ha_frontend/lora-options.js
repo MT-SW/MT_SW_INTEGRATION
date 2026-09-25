@@ -21,31 +21,32 @@ const REGION_CODES = [
 
 export const REGIONS = REGION_CODES.map((value) => ({ value, label: value.replace(/_/g, " ") }));
 
-/* Preset modemu: nazwa z protobufu -> opis jak w aplikacji. Kolejność z protobufu. */
+/* Preset modemu: nazwa z protobufu, angielski opis jak w aplikacji i nazwa kanału,
+   którą firmware nadaje kanałowi bez własnej nazwy (DisplayFormatters). Kolejność z protobufu. */
 const PRESET_NAMES = [
-  ["LONG_FAST", "Long Range - Fast"],
-  ["LONG_SLOW", "Long Range - Slow"],
-  ["VERY_LONG_SLOW", "Very Long Range - Slow"],
-  ["MEDIUM_SLOW", "Medium Range - Slow"],
-  ["MEDIUM_FAST", "Medium Range - Fast"],
-  ["SHORT_SLOW", "Short Range - Slow"],
-  ["SHORT_FAST", "Short Range - Fast"],
-  ["LONG_MODERATE", "Long Range - Moderate"],
-  ["SHORT_TURBO", "Short Range - Turbo"],
-  ["LONG_TURBO", "Long Range - Turbo"],
-  ["LITE_FAST", "Lite - Fast"],
-  ["LITE_SLOW", "Lite - Slow"],
-  ["NARROW_FAST", "Narrow - Fast"],
-  ["NARROW_SLOW", "Narrow - Slow"],
-  ["TINY_FAST", "Tiny - Fast"],
-  ["TINY_SLOW", "Tiny - Slow"],
-  ["MEDIUM_TURBO", "Medium Range - Turbo"],
+  ["LONG_FAST", "Long Range - Fast", "LongFast"],
+  ["LONG_SLOW", "Long Range - Slow", "LongSlow"],
+  ["VERY_LONG_SLOW", "Very Long Range - Slow", "VLongSlow"],
+  ["MEDIUM_SLOW", "Medium Range - Slow", "MediumSlow"],
+  ["MEDIUM_FAST", "Medium Range - Fast", "MediumFast"],
+  ["SHORT_SLOW", "Short Range - Slow", "ShortSlow"],
+  ["SHORT_FAST", "Short Range - Fast", "ShortFast"],
+  ["LONG_MODERATE", "Long Range - Moderate", "LongMod"],
+  ["SHORT_TURBO", "Short Range - Turbo", "ShortTurbo"],
+  ["LONG_TURBO", "Long Range - Turbo", "LongTurbo"],
+  ["LITE_FAST", "Lite - Fast", "LiteFast"],
+  ["LITE_SLOW", "Lite - Slow", "LiteSlow"],
+  ["NARROW_FAST", "Narrow - Fast", "NarrowFast"],
+  ["NARROW_SLOW", "Narrow - Slow", "NarrowSlow"],
+  ["TINY_FAST", "Tiny - Fast", "TinyFast"],
+  ["TINY_SLOW", "Tiny - Slow", "TinySlow"],
+  ["MEDIUM_TURBO", "Medium Range - Turbo", "MediumTurbo"],
 ];
 
-/* Opis jak w aplikacji, a w nawiasie nazwa techniczna — znają ją osoby ze społeczności (LongFast itd.). */
-export const MODEM_PRESETS = PRESET_NAMES.map(([value, name]) => ({
+/* Nazwy presetów zostają po angielsku — tak nazywa je aplikacja i cała społeczność. */
+export const MODEM_PRESETS = PRESET_NAMES.map(([value, name, channelName]) => ({
   value,
-  label: `${PL(name)} (${value.replace(/_/g, " ")})`,
+  label: `${name} (${channelName})`,
 }));
 
 /* Dokładność pozycji to liczba bitów współrzędnych, które zostają w pakiecie: im mniej, tym większy

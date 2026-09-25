@@ -27,7 +27,7 @@ from homeassistant.helpers.storage import Store
 from . import nodedb_cleanup, ondemand
 from .aiomeshtastic.interface import TelemetryType
 from .const import DOMAIN
-from .helpers import panel_enabled
+from .helpers import panel_enabled, preset_channel_name
 from .nodedb_cleanup import NoCriteriaError
 from .ondemand import OnDemandError
 from .store import get_store
@@ -235,14 +235,25 @@ async def ws_channels(
         connection.send_error(msg["id"], "channels_failed", str(err))
         return
 
+    # Kanał bez nazwy nazywa się jak preset LoRa (np. „MediumFast”), tak jak w
+    # firmware i w aplikacji — panel pokazuje display_name zamiast „Kanał 0”.
+    preset_name = "LongFast"
+    with contextlib.suppress(Exception):
+        local = entry.runtime_data.client.interface.connected_node_local_config()
+        preset_name = preset_channel_name(local.lora if local is not None else None)
+
     channels = []
     for channel in raw_channels or []:
         settings = channel.get("settings", {}) or {}
+        role = channel.get("role", "DISABLED")
+        own_name = settings.get("name") or ""
         channels.append(
             {
                 "index": channel.get("index", 0),
-                "role": channel.get("role", "DISABLED"),
-                "name": settings.get("name") or "",
+                "role": role,
+                "name": own_name,
+                "display_name": own_name or (preset_name if role != "DISABLED" else ""),
+                "preset_name": preset_name,
                 "psk": settings.get("psk") or "",
                 "has_psk": bool(settings.get("psk")),
                 "uplink_enabled": bool(settings.get("uplinkEnabled")),

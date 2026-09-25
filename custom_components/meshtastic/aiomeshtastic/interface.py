@@ -154,6 +154,14 @@ class MeshInterface:
     ) -> None:
         self._logger = LOGGER.getChild(self.__class__.__name__)
         self._connection = connection
+        # Ostatni „prawdziwy” pakiet z radia (nie QueueStatus). Po restarcie radia
+        # na porcie szeregowym port zostaje otwarty, heartbeaty dalej dostają
+        # odpowiedź, ale radio nie wysyła już pakietów, dopóki klient nie
+        # poprosi od nowa o konfigurację — patrz _session_probe().
+        self._last_mesh_rx = time.monotonic()
+        self._session_probe_task: asyncio.Task | None = None
+        with contextlib.suppress(AttributeError):
+            connection.set_restart_hint_callback(self._on_restart_hint)
         self._is_running = asyncio.Event()
         self._is_stopped = asyncio.Event()
 
@@ -643,6 +651,60 @@ class MeshInterface:
     _STALLED_RECONNECT_SECONDS = 180
     # Najkrótszy odstęp między kolejnymi interwencjami strażnika.
     _WATCHDOG_KICK_INTERVAL = 120
+    # Tak długo może nie przyjść żaden pakiet (poza odpowiedziami na heartbeat),
+    # zanim sprawdzimy, czy sesja API w radiu nadal działa.
+    _SESSION_PROBE_SECONDS = 300
+
+    def _on_restart_hint(self) -> None:
+        """Połączenie zobaczyło na porcie komunikaty startowe radia (restart)."""
+        if self._link_up:
+            self._logger.info("Radio się uruchamia od nowa (komunikaty startowe na porcie)")
+            self._start_session_probe("restart radia", delay=8)
+
+    def _start_session_probe(self, reason: str, *, delay: float = 0) -> None:
+        if self._session_probe_task is not None and not self._session_probe_task.done():
+            return
+        self._session_probe_task = self._add_background_task(
+            self._session_probe(reason, delay=delay), name="meshtastic-session-probe"
+        )
+
+    async def _session_probe(self, reason: str, *, delay: float = 0) -> None:
+        """
+        Odnów sesję API radia, prosząc ponownie o (minimalną) konfigurację.
+
+        Po restarcie radia podłączonego przez USB-UART (np. ESP32 z CH340/CP210x)
+        port szeregowy się nie zamyka, a radio odpowiada na heartbeat — więc
+        wyglądało to na działające połączenie. Firmware po starcie nie wysyła
+        jednak żadnych pakietów, dopóki klient nie poprosi od nowa o
+        konfigurację. Integracja czekała więc w nieskończoność: dane przestawały
+        przychodzić, choć „połączenie było”. Tu prosimy o konfigurację; radio
+        odpowiada zawsze, niezależnie od stanu sesji. Gdy się zrestartowało
+        (zmiana licznika restartów), pełna baza węzłów pobiera się w tle. Gdy
+        nie odpowiada wcale — łączymy się od nowa.
+        """
+        if delay:
+            await asyncio.sleep(delay)
+        if not self._link_up or self._reconnect_lock.locked():
+            return
+        self._logger.info("Odnawiam sesję z radiem (%s)", reason)
+        previous_reboot_count = self._last_reboot_count
+        for attempt in range(3):
+            try:
+                ok = await asyncio.wait_for(self._connection.request_config(minimal=True), timeout=20)
+            except Exception:  # noqa: BLE001
+                ok = False
+            if ok:
+                # daj pętli głównej chwilę na przetworzenie my_info z tej konfiguracji
+                await asyncio.sleep(1)
+                self._last_mesh_rx = time.monotonic()
+                self._after_reconnect_config(previous_reboot_count)
+                self._logger.info("Sesja z radiem odnowiona")
+                return
+            if not self._link_up or self._reconnect_lock.locked():
+                return
+            self._logger.info("Radio nie odpowiedziało na prośbę o konfigurację (próba %d z 3)", attempt + 1)
+            await asyncio.sleep(5)
+        await self._watchdog_kick("Radio nie odnawia sesji API")
 
     async def _watchdog_kick(self, reason: str) -> None:
         now = time.monotonic()
@@ -702,6 +764,13 @@ class MeshInterface:
             idle = time.monotonic() - self._connection.last_rx_monotonic
             if idle > max(self._DEAD_LINK_SECONDS, 2.5 * self._heartbeat_interval_s):
                 await self._watchdog_kick(f"Brak danych z radia od {idle:.0f} s mimo heartbeatów — łącze uznane za martwe")
+                continue
+
+            # Radio odpowiada na heartbeat, ale od dawna nie przysłało żadnego
+            # pakietu — typowy objaw restartu radia na porcie szeregowym.
+            quiet = time.monotonic() - self._last_mesh_rx
+            if quiet > self._SESSION_PROBE_SECONDS:
+                self._start_session_probe(f"brak pakietów od {quiet:.0f} s")
 
     async def _process_connected_node_packets(self, packet: mesh_pb2.FromRadio) -> None:
         if packet.HasField("rebooted") and packet.rebooted:
@@ -801,6 +870,8 @@ class MeshInterface:
     async def _handle_from_radio(self, from_radio: mesh_pb2.FromRadio) -> None:
         """Pełna obsługa jednego pakietu z radia — wspólna dla pętli głównej i ponownego łączenia."""
         variant = from_radio.WhichOneof("payload_variant")
+        if variant not in ("queueStatus", "log_record", None):
+            self._last_mesh_rx = time.monotonic()
         if variant == "config_complete_id":
             self._config_reply_cache_complete = True
         elif variant == "channel":

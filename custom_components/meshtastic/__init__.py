@@ -62,7 +62,6 @@ from .const import (
     CURRENT_CONFIG_VERSION_MINOR,
     DOMAIN,
     LOGGER,
-    MODEM_PRESET_CHANNEL_NAMES,
     ConnectionType,
 )
 from .coordinator import MeshtasticDataUpdateCoordinator
@@ -80,6 +79,7 @@ from .helpers import (
     fetch_meshtastic_hardware_names,
     node_identity_key,
     panel_enabled,
+    preset_channel_name,
     stats_enabled,
 )
 from .image_upload import async_register_upload_view
@@ -917,11 +917,7 @@ async def _setup_meshtastic_entities(
     # Nazwa domyślna kanału bez własnej nazwy, odtworzona dokładnie tak jak w
     # firmware (Channels::getName + DisplayFormatters::getModemPresetDisplayName),
     # żeby zgadzała się z tym, co pokazuje aplikacja Meshtastic.
-    lora_config = (local_config or {}).get("lora", {})
-    if lora_config.get("usePreset", True):
-        channel_default_name = MODEM_PRESET_CHANNEL_NAMES.get(lora_config.get("modemPreset", "LONG_FAST"), "Invalid")
-    else:
-        channel_default_name = "Custom"
+    channel_default_name = preset_channel_name((local_config or {}).get("lora"))
 
     has_logbook = LOGBOOK_DOMAIN in hass.config.all_components
     gateway_direct_message = GatewayDirectMessageEntity(

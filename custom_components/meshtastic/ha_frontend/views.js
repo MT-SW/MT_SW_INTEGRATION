@@ -167,7 +167,7 @@ class MeshRadioTab extends LitElement {
             (channel) => html`
               <tr>
                 <td class="num">${channel.index}</td>
-                <td>${channel.name || html`<span class="muted">${t(this.hass, "radio.channels.unnamed")}</span>`}</td>
+                <td>${channel.display_name || channel.name || html`<span class="muted">${t(this.hass, "radio.channels.unnamed")}</span>`}</td>
                 <td>${this._roleLabel(channel.role)}</td>
                 <td>
                   ${channel.has_psk

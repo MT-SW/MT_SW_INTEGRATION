@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic® — зарегистрированный товарный знак Meshtastic LLC. | <1>Юридическая информация</1>",
+    "text": "MT_SW | Meshtastic® — зарегистрированный товарный знак Meshtastic LLC. | <1>Юридическая информация</1>",
     "commitSha": "SHA коммита: {{sha}}"
   },
   "language": {

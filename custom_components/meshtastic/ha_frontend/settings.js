@@ -891,6 +891,12 @@ class MeshSettingsChannels extends LitElement {
     `;
   }
 
+  /* Kanał bez własnej nazwy nazywa się jak preset LoRa — tak jak w firmware i aplikacji. */
+  _presetName(index) {
+    const channel = (this.config?.channels || [])[index];
+    return channel?.preset_name || (this.config?.channels || [])[0]?.preset_name || "";
+  }
+
   _renderChannel(index) {
     const draft = this._drafts[index] || { role: "DISABLED", name: "", psk: "", uplink_enabled: false, downlink_enabled: false };
     const isExpanded = this._expandedIndex === index;
@@ -902,7 +908,7 @@ class MeshSettingsChannels extends LitElement {
         <div class="channel-card-header"
           @click=${() => { this._expandedIndex = isExpanded ? null : index; this.requestUpdate(); }}>
           <span class="channel-card-title">
-            ${PL("Channel")} ${index}${draft.name ? ` — ${draft.name}` : ""}
+            ${PL("Channel")} ${index}${draft.role !== "DISABLED" && (draft.name || this._presetName(index)) ? ` — ${draft.name || this._presetName(index)}` : ""}
             ${isDirty ? html` <span style="color: var(--primary-color);">*</span>` : ""}
           </span>
           <span class="badge ${draft.role === "PRIMARY" ? "primary" : draft.role === "SECONDARY" ? "secondary" : ""}">${roleName}</span>
@@ -921,7 +927,7 @@ class MeshSettingsChannels extends LitElement {
                 .label=${PL("Name")}
                 .value=${draft.name}
                 .maxlength=${11}
-                placeholder=${PL("Channel name")}
+                placeholder=${this._presetName(index) ? `${this._presetName(index)} (${PL("from the LoRa preset")})` : PL("Channel name")}
                 @change=${(e) => this._updateChannelField(index, "name", e.detail.value)}
               ></mesh-text-input>
             </div>

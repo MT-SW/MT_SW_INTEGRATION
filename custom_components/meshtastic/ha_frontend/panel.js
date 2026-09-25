@@ -455,12 +455,18 @@ class MeshtasticPanel extends LitElement {
             channels = (raw.channels || []).map((channel) => ({
               index: channel.index,
               role: channel.role,
+              // nazwa z presetu LoRa dla kanału bez własnej nazwy (np. „MediumFast”)
+              preset_name: channel.preset_name || "",
               settings: {
                 name: channel.name || "",
                 psk: channel.psk || "",
                 uplink_enabled: Boolean(channel.uplink_enabled),
                 downlink_enabled: Boolean(channel.downlink_enabled),
-                module_settings: { position_precision: channel.position_precision ?? 0 },
+                // is_muted też — bez niego zapis kanału po cichu zdejmował wyciszenie
+                module_settings: {
+                  position_precision: channel.position_precision ?? 0,
+                  is_muted: Boolean(channel.is_muted),
+                },
               },
             }));
           } catch (err) {

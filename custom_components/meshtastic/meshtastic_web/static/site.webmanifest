@@ -1,9 +1,9 @@
 {
-  "name": "MT_SW — klient webowy",
+  "name": "MT_SW",
   "short_name": "MT_SW",
   "start_url": "/meshtastic/web/index.html",
   "scope": "/meshtastic/web/",
-  "description": "Klient webowy MT_SW (Meshtastic Świętokrzyskie)",
+  "description": "Klient webowy MT_SW",
   "icons": [
     {
       "src": "/meshtastic/web/icon-192.png",

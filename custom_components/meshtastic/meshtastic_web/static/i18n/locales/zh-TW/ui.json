@@ -224,7 +224,7 @@
     "fallbackError": "{{error}}"
   },
   "footer": {
-    "text": "MT_SW · Meshtastic Świętokrzyskie | Meshtastic® 是 Meshtastic LLC. 的註冊商標。| <1>法律資訊</1>",
+    "text": "MT_SW | Meshtastic® 是 Meshtastic LLC. 的註冊商標。| <1>法律資訊</1>",
     "commitSha": "Commit SHA: {{sha}}"
   }
 }

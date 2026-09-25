@@ -22,6 +22,7 @@ from .const import (
     CONF_OPTION_FEATURES_STATS_DEFAULT,
     CONF_OPTION_FILTER_NODES,
     LOGGER,
+    MODEM_PRESET_CHANNEL_NAMES,
 )
 
 if typing.TYPE_CHECKING:
@@ -47,6 +48,37 @@ def get_nodes(entry: MeshtasticConfigEntry) -> typing.Mapping[int, typing.Mappin
         for node_num, node_info in entry.runtime_data.coordinator.data.items()
         if node_num in filter_node_nums or node_identity_key(node_num, node_info) in configured_identity_keys
     }
+
+
+def preset_channel_name(lora: Any) -> str:
+    """
+    Nazwa kanału bez własnej nazwy — dokładnie jak w firmware
+    (Channels::getName + DisplayFormatters::getModemPresetDisplayName), np.
+    „MediumFast”. Przyjmuje sekcję LoRa jako słownik z MessageToDict albo
+    protobuf. Brak sekcji = firmware z ustawieniami domyślnymi (LongFast).
+    """
+    if lora is None:
+        return "LongFast"
+    if isinstance(lora, typing.Mapping):
+        if not lora:
+            return "LongFast"
+        if not lora.get("usePreset", lora.get("use_preset", False)):
+            return "Custom"
+        preset = lora.get("modemPreset", lora.get("modem_preset", "LONG_FAST"))
+    else:
+        if lora.ByteSize() == 0:
+            return "LongFast"
+        if not lora.use_preset:
+            return "Custom"
+        preset = lora.modem_preset
+    if isinstance(preset, int):
+        from .aiomeshtastic.protobuf import config_pb2  # noqa: PLC0415
+
+        try:
+            preset = config_pb2.Config.LoRaConfig.ModemPreset.Name(preset)
+        except ValueError:
+            return "Invalid"
+    return MODEM_PRESET_CHANNEL_NAMES.get(str(preset), "Invalid")
 
 
 def panel_enabled(entry: Any) -> bool:

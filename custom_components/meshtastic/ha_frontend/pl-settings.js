@@ -686,6 +686,7 @@ const PL_STRINGS = {
   Paused: "Wstrzymano",
   "{n} new": "{n} nowych",
   "Group duplicates": "Grupuj powtórzenia",
+  "from the LoRa preset": "nazwa z presetu LoRa",
   "Up": "W górę",
   "Down": "W dół",
   "Left": "W lewo",

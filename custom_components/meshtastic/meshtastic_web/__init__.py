@@ -182,7 +182,7 @@ def _render_connect_instructions_html(*, connection_value: str, client_url: str,
 <main class="card">
 <header>
   <img src="{URL_BASE}/web/logo.svg" alt="MT_SW">
-  <div><div class="brand">MT_SW · Meshtastic Świętokrzyskie</div><h1>{t["title"]}</h1></div>
+  <div><div class="brand">MT_SW</div><h1>{t["title"]}</h1></div>
 </header>
 <p class="lead">{t["lead"]}</p>
 <ol>
