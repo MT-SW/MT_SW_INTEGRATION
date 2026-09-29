@@ -1316,6 +1316,170 @@ if (!customElements.get("mesh-settings-mesh-beacon")) {
 /* Panel Sniffera mieszka w sniffer-panel.js — steruje snifferem przez OnDemand,
    a nie przez konfigurację modułu (upstreamowe protobufy nie mają nodemodadmin). */
 
+/* ══════════════════════════════════════════════════════════
+   <mesh-settings-remote-hardware>  —  zdalny sprzęt (GPIO)
+   ══════════════════════════════════════════════════════════ */
+
+/* Firmware przyjmuje do 4 pinów na liście dostępnych. */
+const MAX_REMOTE_HARDWARE_PINS = 4;
+
+const REMOTE_HARDWARE_PIN_TYPES = [
+  { value: "UNKNOWN", label: PL("Unknown") },
+  { value: "DIGITAL_READ", label: PL("Digital read") },
+  { value: "DIGITAL_WRITE", label: PL("Digital write") },
+];
+
+class MeshSettingsRemoteHardware extends ModuleConfigPanel {
+  get _section() { return "remote_hardware"; }
+
+  _pins() {
+    return this._draft.available_pins || [];
+  }
+
+  _updatePin(index, field, value) {
+    this._updateField(
+      "available_pins",
+      this._pins().map((pin, i) => (i === index ? { ...pin, [field]: value } : pin))
+    );
+  }
+
+  _addPin() {
+    if (this._pins().length >= MAX_REMOTE_HARDWARE_PINS) {
+      return;
+    }
+    this._updateField("available_pins", [
+      ...this._pins(),
+      { gpio_pin: 0, name: "", type: "DIGITAL_READ" },
+    ]);
+  }
+
+  _removePin(index) {
+    this._updateField("available_pins", this._pins().filter((_, i) => i !== index));
+  }
+
+  _renderPin(pin, index) {
+    return html`
+      <div class="pin-row">
+        <div class="pin-row-head">
+          <span>${PL("Pin {n}").replace("{n}", String(index + 1))}</span>
+          <button class="gen-btn" @click=${() => this._removePin(index)}>${PL("Remove pin")}</button>
+        </div>
+        <div class="form-grid">
+          <mesh-number-input
+            .label=${PL("GPIO pin")}
+            .value=${pin.gpio_pin ?? 0}
+            .min=${0}
+            @change=${(e) => this._updatePin(index, "gpio_pin", e.detail.value)}
+          ></mesh-number-input>
+          <mesh-text-input
+            .label=${PL("Pin name")}
+            .value=${pin.name || ""}
+            .maxlength=${14}
+            @change=${(e) => this._updatePin(index, "name", e.detail.value)}
+          ></mesh-text-input>
+          <mesh-select
+            .label=${PL("Pin type")}
+            .value=${String(pin.type || "UNKNOWN")}
+            .options=${REMOTE_HARDWARE_PIN_TYPES}
+            @change=${(e) => this._updatePin(index, "type", e.detail.value)}
+          ></mesh-select>
+        </div>
+      </div>
+    `;
+  }
+
+  render() {
+    const d = this._draft;
+    const pins = this._pins();
+    return html`
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <h3>${PL("Remote Hardware")}</h3>
+          <p>${PL("Lets other nodes read and switch this node's GPIO pins over the mesh.")}</p>
+        </div>
+        <div class="settings-panel-body">
+          <mesh-toggle
+            .label=${PL("Enabled")}
+            .description=${PL("Enable Remote Hardware module")}
+            .checked=${d.enabled === true}
+            @change=${(e) => this._updateField("enabled", e.detail.checked)}
+          ></mesh-toggle>
+
+          ${d.enabled ? html`
+            <div class="settings-section">
+              <mesh-toggle
+                .label=${PL("Allow undefined pin access")}
+                .description=${PL("Allow access to pins that are not on the available pins list")}
+                .checked=${d.allow_undefined_pin_access === true}
+                @change=${(e) => this._updateField("allow_undefined_pin_access", e.detail.checked)}
+              ></mesh-toggle>
+            </div>
+
+            <div class="settings-section">
+              <div class="section-title">${PL("Available pins")}</div>
+              ${pins.map((pin, index) => this._renderPin(pin, index))}
+              <button
+                class="gen-btn"
+                ?disabled=${pins.length >= MAX_REMOTE_HARDWARE_PINS}
+                @click=${() => this._addPin()}
+              >
+                ${PL("Add pin")}
+              </button>
+            </div>
+          ` : ""}
+        </div>
+        <mesh-save-bar .dirty=${this._dirty} .saving=${this._saving}
+          @save=${this._save} @discard=${this._resetDraft}></mesh-save-bar>
+      </div>
+    `;
+  }
+
+  static get styles() {
+    return [
+      ...(Array.isArray(super.styles) ? super.styles : [super.styles]),
+      css`
+        .section-title {
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: var(--secondary-text-color);
+          letter-spacing: 0.5px;
+          margin-bottom: 12px;
+        }
+        .pin-row {
+          padding: 12px;
+          margin-bottom: 10px;
+          border: 1px solid var(--divider-color);
+          border-radius: 10px;
+        }
+        .pin-row-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 13px;
+          font-weight: 600;
+          margin-bottom: 8px;
+        }
+        .gen-btn {
+          padding: 8px 14px;
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
+          cursor: pointer;
+          font-size: 13px;
+          white-space: nowrap;
+        }
+        .gen-btn:hover { border-color: var(--primary-color); }
+        .gen-btn[disabled] { opacity: 0.5; cursor: default; }
+      `,
+    ];
+  }
+}
+if (!customElements.get("mesh-settings-remote-hardware")) {
+  customElements.define("mesh-settings-remote-hardware", MeshSettingsRemoteHardware);
+}
+
 class MeshSettingsStatusMessage extends ModuleConfigPanel {
   get _section() { return "statusmessage"; }
 

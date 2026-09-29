@@ -178,6 +178,7 @@ const NAV_ITEMS = [
       { id: "telemetry", label: PL("Telemetry"), icon: "mdi:chart-line" },
       { id: "canned_message", label: PL("Canned Messages"), icon: "mdi:message-reply-text" },
       { id: "audio", label: PL("Audio"), icon: "mdi:microphone" },
+      { id: "remote_hardware", label: PL("Remote Hardware"), icon: "mdi:chip" },
       { id: "neighbor_info", label: PL("Neighbor Info"), icon: "mdi:account-group" },
       { id: "ambient_lighting", label: PL("Ambient Lighting"), icon: "mdi:led-on" },
       { id: "detection_sensor", label: PL("Detection Sensor"), icon: "mdi:motion-sensor" },
@@ -387,6 +388,8 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-canned-message .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-canned-message>`;
       case "audio":
         return html`<mesh-settings-audio .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-audio>`;
+      case "remote_hardware":
+        return html`<mesh-settings-remote-hardware .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-remote-hardware>`;
       case "neighbor_info":
         return html`<mesh-settings-neighbor-info .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-neighbor-info>`;
       case "ambient_lighting":
