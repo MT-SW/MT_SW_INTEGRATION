@@ -15,11 +15,10 @@ Zmiany w źródłach są w pliku `mtsw-web-client.patch`:
 - logo i ikony MT_SW w `public/`, nazwa „MT_SW” w tłumaczeniach, pełne
   polskie tłumaczenie (`public/i18n/locales/pl-PL/`).
 
-Mapa: styl mapy (`mapStyle` w komponencie mapy) wskazywał na kafle `tile.openstreetmap.org`,
-których polityka nie pozwala na osadzanie bez własnych nagłówków — klient pokazywał komunikat
-o braku klucza. W `static/index-*.js` styl jest teraz wpisany w kodzie i używa kafli Esri
-World Street Map (bez klucza, jak domyślna mapa panelu). Po ponownym zbudowaniu klienta
-trzeba tę zmianę powtórzyć w źródłach.
+Mapa: w komponencie mapy styl `mapStyle` jest wpisany w kodzie (standardowa mapa OpenStreetMap,
+kafle `tile.openstreetmap.org`, bez klucza), a kafle są pobierane z `referrerPolicy: "origin"`
+(`transformRequest`) — tak samo jak w mapie panelu. Zmiana jest w gotowym
+`static/index-*.js`; po ponownym zbudowaniu klienta trzeba ją powtórzyć w źródłach.
 
 Budowanie: `pnpm install` (bez lockfile, `minimumReleaseAge: 0`), potem w `apps/web`
 `vite build`; zawartość `apps/web/dist/` kopiuje się do `static/`.
@@ -43,11 +42,10 @@ Source changes are in `mtsw-web-client.patch`:
 - MT_SW logo and icons in `public/`, "MT_SW" in the translations, and a full
   Polish translation (`public/i18n/locales/pl-PL/`).
 
-Map: the map style (`mapStyle` in the map component) pointed at `tile.openstreetmap.org` tiles,
-whose usage policy does not allow embedding without proper headers — the client showed a
-missing-key message. In `static/index-*.js` the style is now inlined and uses Esri World Street
-Map tiles (no key, same as the panel's default map). After rebuilding the client this change
-has to be repeated in the sources.
+Map: in the map component the `mapStyle` is inlined (standard OpenStreetMap map, tiles from
+`tile.openstreetmap.org`, no key) and tiles are fetched with `referrerPolicy: "origin"`
+(`transformRequest`) — same as the panel map. The change is in the built
+`static/index-*.js`; after rebuilding the client it has to be repeated in the sources.
 
 Build: `pnpm install` (no lockfile, `minimumReleaseAge: 0`), then `vite build` in
 `apps/web`; copy `apps/web/dist/` into `static/`.
