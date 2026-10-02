@@ -22,6 +22,8 @@
 
 import { LitElement, html } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
+import { attachPlanner } from "./planner/planner-ui.js";
+import { TracerouteOverlay } from "./traceroute-layer.js";
 
 const STORAGE_KEY = "mtsw.map.tiles";
 
@@ -351,6 +353,7 @@ class MeshMapTab extends LitElement {
     return {
       hass: { type: Object },
       nodes: { type: Array },
+      traceroute: { type: Object },
       showLinks: { type: Boolean },
       showLabels: { type: Boolean },
       showPrecision: { type: Boolean },
@@ -362,6 +365,8 @@ class MeshMapTab extends LitElement {
   constructor() {
     super();
     this.nodes = [];
+    this.traceroute = null;
+    this._trace = null;
     this.showLinks = true;
     this.showLabels = true;
     this.showPrecision = true;
@@ -390,7 +395,12 @@ class MeshMapTab extends LitElement {
     }
     this._drawnSignature = null;
     this._zooming = false;
+    if (this._trace) {
+      this._trace.clear();
+      this._trace = null;
+    }
     if (this._map) {
+      if (this._planner) { this._planner.destroy(); this._planner = null; }
       this._map.remove();
       this._map = null;
       this._tileLayer = null;
@@ -509,6 +519,7 @@ class MeshMapTab extends LitElement {
     this._markerLayer = L.layerGroup().addTo(this._map);
     this._linkLayer = L.layerGroup().addTo(this._map);
     this._precisionLayer = L.layerGroup().addTo(this._map);
+    this._planner = attachPlanner({ host: this, map: this._map, L, container, hass: this.hass, nodes: this.nodes });
     // Rozsunięcie liczone jest w pikselach, więc po każdej zmianie
     // powiększenia trzeba je przeliczyć od nowa.
     // Warstw nie przebudowujemy w trakcie animacji powiększenia — dodawanie
@@ -561,6 +572,9 @@ class MeshMapTab extends LitElement {
 
   _redraw(force = false) {
     if (!this._map || !window.L || this._zooming || !this._mapReady()) {
+      return;
+    }
+    if (this._syncTraceroute()) {
       return;
     }
     const L = window.L;
@@ -694,6 +708,40 @@ class MeshMapTab extends LitElement {
     }
   }
 
+  /* Podgląd trasy traceroute (traceroute-layer.js) zastępuje zwykłe warstwy:
+     pokazuje wyłącznie węzły trasy. Zwraca true, gdy trasa jest aktywna. */
+  _syncTraceroute() {
+    const layers = [this._markerLayer, this._linkLayer, this._precisionLayer].filter(Boolean);
+    if (!this.traceroute) {
+      if (this._trace && this._trace.active) {
+        this._trace.clear();
+        this._drawnSignature = null;
+        for (const layer of layers) {
+          if (!this._map.hasLayer(layer)) {
+            layer.addTo(this._map);
+          }
+        }
+      }
+      return false;
+    }
+    for (const layer of layers) {
+      if (this._map.hasLayer(layer)) {
+        this._map.removeLayer(layer);
+      }
+    }
+    this._trace = this._trace || new TracerouteOverlay();
+    this._trace.sync({
+      L: window.L,
+      map: this._map,
+      view: this.traceroute,
+      nodes: this.nodes,
+      hass: this.hass,
+      onClose: () =>
+        this.dispatchEvent(new CustomEvent("mtsw-traceroute-close", { bubbles: true, composed: true })),
+    });
+    return true;
+  }
+
   _updateTiles(patch) {
     this._tiles = { ...this._tiles, ...patch };
     saveTileSettings(this._tiles);
@@ -772,6 +820,7 @@ class MeshMapTab extends LitElement {
       this._loadRemoteTiles();
     }
     await this._ensureMap();
+    if (this._planner) this._planner.update(this.hass, this.nodes);
     if (this._map) {
       // Kontener dostaje wymiary dopiero po wstawieniu do drzewa.
       this._map.invalidateSize();
@@ -876,6 +925,7 @@ class MeshMapTab extends LitElement {
             ${t(this.hass, "map.show_precision")}
           </label>
           <span class="map-toolbar-right">
+            <span class="mlp-slot"></span>
             <span class="map-count">${t(this.hass, "map.count", { n: positioned, total })}</span>
             <button
               class="map-settings-toggle"

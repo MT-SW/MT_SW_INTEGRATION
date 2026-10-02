@@ -61,12 +61,14 @@ class MeshtasticPanel extends LitElement {
       _configError: { type: Boolean },
       _configSchema: { type: Object },
       _linkUp: { type: Boolean },
+      _traceView: { type: Object },
     };
   }
 
   constructor() {
     super();
     this._activeTab = tabFromPath();
+    this._traceView = null;
     this._gateways = [];
     this._channels = {};
     this._channelsError = {};
@@ -101,6 +103,13 @@ class MeshtasticPanel extends LitElement {
       this._configEntryId = null;
       this._refresh();
     };
+    this._onShowTraceroute = (event) => {
+      this._traceView = event.detail.view;
+      this._selectTab("map");
+    };
+    this._onCloseTraceroute = () => {
+      this._traceView = null;
+    };
     this._onOpenDm = (event) => {
       this._dmKey = `dm:${event.detail.nodeId}`;
       this._selectTab("messages");
@@ -114,6 +123,8 @@ class MeshtasticPanel extends LitElement {
     this.addEventListener("mtsw-refresh", this._onRefreshRequest);
     this.addEventListener("mtsw-config-saved", this._onConfigSaved);
     this.addEventListener("mtsw-open-dm", this._onOpenDm);
+    this.addEventListener("mtsw-show-traceroute", this._onShowTraceroute);
+    this.addEventListener("mtsw-traceroute-close", this._onCloseTraceroute);
     this.addEventListener("mtsw-node-patch", this._onNodePatch);
     this._startPolling();
   }
@@ -124,6 +135,8 @@ class MeshtasticPanel extends LitElement {
     this.removeEventListener("mtsw-refresh", this._onRefreshRequest);
     this.removeEventListener("mtsw-config-saved", this._onConfigSaved);
     this.removeEventListener("mtsw-open-dm", this._onOpenDm);
+    this.removeEventListener("mtsw-show-traceroute", this._onShowTraceroute);
+    this.removeEventListener("mtsw-traceroute-close", this._onCloseTraceroute);
     this.removeEventListener("mtsw-node-patch", this._onNodePatch);
     this._stopPolling();
     this._unsubscribeMessages();
@@ -578,6 +591,13 @@ class MeshtasticPanel extends LitElement {
           return this._softWs({ type: "meshtastic/sniffer_clear", entry_id: entryId });
         case "sniffer_mqtt_set":
           return this._softWs({ type: "meshtastic/sniffer_mqtt_set", entry_id: entryId, enabled: Boolean(data.enabled) });
+        case "debug_logs_status":
+        case "debug_logs_list":
+        case "debug_logs_clear":
+        case "debug_logs_collect":
+        case "debug_logs_firmware_api":
+        case "debug_logs_capture_debug":
+          return this._softWs({ ...data, type: `meshtastic/${name}`, entry_id: entryId });
         case "ui_settings":
           return this._softWs({ type: "meshtastic/ui_settings" });
         case "ui_settings_set":
@@ -649,7 +669,11 @@ class MeshtasticPanel extends LitElement {
           .nodes=${this._nodes}
         ></mesh-nodes-tab>`;
       case "map":
-        return html`<mesh-map-tab .hass=${this.hass} .nodes=${this._nodes}></mesh-map-tab>`;
+        return html`<mesh-map-tab
+          .hass=${this.hass}
+          .nodes=${this._nodes}
+          .traceroute=${this._traceView}
+        ></mesh-map-tab>`;
       case "settings":
         return entryId
           ? html`<mesh-settings-tab

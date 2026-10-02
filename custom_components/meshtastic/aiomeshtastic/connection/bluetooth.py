@@ -54,6 +54,48 @@ class BluetoothConnection(ClientApiConnection):
         self._write_lock = asyncio.Lock()
         self._last_packet_number = None
         self._force_read_event = asyncio.Event()
+        # Logi firmware idą osobną charakterystyką (jak w aplikacji Android) — subskrybujemy
+        # ją tylko wtedy, gdy ktoś zbiera logi urządzenia.
+        self._log_record_callback = None
+        self._log_notify_wanted = False
+        self._log_notify_active = False
+
+    def set_log_record_callback(self, callback) -> None:  # noqa: ANN001
+        self._log_record_callback = callback
+        # Odbiorca jest od razu — subskrybujemy logi, dopóki ktoś ich nie wyłączy.
+        self._log_notify_wanted = callback is not None
+
+    def _on_log_notification(self, _: BleakGATTCharacteristic, data: bytearray) -> None:
+        callback = self._log_record_callback
+        if callback is None:
+            return
+        try:
+            record = mesh_pb2.LogRecord()
+            record.ParseFromString(bytes(data))
+            callback(record)
+        except Exception:  # noqa: BLE001
+            self._logger.debug("Could not handle BLE log record", exc_info=True)
+
+    async def set_log_notifications(self, enabled: bool) -> None:  # noqa: FBT001
+        """Włącz/wyłącz subskrypcję logów; bez aktywnego połączenia tylko zapamiętaj życzenie."""
+        self._log_notify_wanted = enabled
+        await self._apply_log_notify()
+
+    async def _apply_log_notify(self) -> None:
+        try:
+            client = getattr(self, "_bleak_client", None)
+            char = getattr(self, "_ble_log", None)
+            if client is None or char is None or not client.is_connected:
+                self._log_notify_active = False
+                return
+            if self._log_notify_wanted and not self._log_notify_active:
+                await asyncio.wait_for(client.start_notify(char, self._on_log_notification), timeout=30)
+                self._log_notify_active = True
+            elif not self._log_notify_wanted and self._log_notify_active:
+                self._log_notify_active = False
+                await asyncio.wait_for(client.stop_notify(char), timeout=30)
+        except Exception:  # noqa: BLE001 - logi nie mogą zepsuć głównego połączenia
+            self._logger.debug("Switching BLE log notifications failed", exc_info=True)
 
     async def _connect(self) -> None:
         self._bleak_client = BleakClient(
@@ -182,6 +224,9 @@ class BluetoothConnection(ClientApiConnection):
                     self._logger.debug("Restart notify failed", exc_info=True)
 
             await start_notify()
+            # po (ponownym) połączeniu subskrypcja logów zaczyna od zera
+            self._log_notify_active = False
+            await self._apply_log_notify()
 
             notify_timeout_count = 0
             notify_timeout_duration = 300
@@ -224,6 +269,10 @@ class BluetoothConnection(ClientApiConnection):
         finally:
             with suppress(bleak.BleakError):
                 await self._bleak_client.stop_notify(self._ble_from_num)
+            if self._log_notify_active:
+                self._log_notify_active = False
+                with suppress(Exception):
+                    await self._bleak_client.stop_notify(self._ble_log)
 
     async def _send_packet(self, data: bytes) -> bool:
         if not self._bleak_client.is_connected:

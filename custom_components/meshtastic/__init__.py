@@ -39,7 +39,7 @@ from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.typing import UNDEFINED, ConfigType
 from homeassistant.loader import async_get_loaded_integration
 
-from . import frontend, meshtastic_web, services
+from . import debug_logs, frontend, meshtastic_web, services
 from .api import (
     ATTR_EVENT_MESHTASTIC_API_CONFIG_ENTRY_ID,
     ATTR_EVENT_MESHTASTIC_API_DATA,
@@ -264,10 +264,13 @@ async def async_setup_entry(
 
     # --- 1. transport ------------------------------------------------------
     client = MeshtasticApiClient(entry.data, hass=hass, config_entry_id=entry.entry_id)
+    # Logi do panelu (Debugowanie) — przed połączeniem, żeby złapać też start. Błąd nie blokuje wpisu.
+    debug_logs.async_attach_entry(hass, entry, client)
 
     try:
         await client.connect()
     except Exception as e:
+        debug_logs.async_detach_entry(hass, entry.entry_id)
         with contextlib.suppress(Exception):
             await client.disconnect()
         raise ConfigEntryNotReady from e
@@ -971,6 +974,7 @@ async def _async_teardown(hass: HomeAssistant, entry: MeshtasticConfigEntry) -> 
     gniazdem o jedyne miejsce TCP w urządzeniu.
     """
     data = getattr(entry, "runtime_data", None)
+    debug_logs.async_detach_entry(hass, entry.entry_id)
 
     if data is not None:
         with contextlib.suppress(Exception):

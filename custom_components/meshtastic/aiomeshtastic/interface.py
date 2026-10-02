@@ -162,6 +162,11 @@ class MeshInterface:
         self._session_probe_task: asyncio.Task | None = None
         with contextlib.suppress(AttributeError):
             connection.set_restart_hint_callback(self._on_restart_hint)
+        # Odbiorcy rekordów logu firmware (FromRadio.log_record) — np. panel „Debugowanie”.
+        self._log_record_listeners: list[Callable[[mesh_pb2.LogRecord], None]] = []
+        with contextlib.suppress(AttributeError):
+            # Bluetooth przesyła logi osobną charakterystyką, nie strumieniem FromRadio.
+            connection.set_log_record_callback(self._emit_log_record)
         self._is_running = asyncio.Event()
         self._is_stopped = asyncio.Event()
 
@@ -277,6 +282,28 @@ class MeshInterface:
         """Wołane ze stanem łącza: "connected", "disconnected", "stopped"."""
         self._connection_state_listeners.append(callback)
         return lambda: self._remove_listener(self._connection_state_listeners, callback)
+
+    def add_log_record_listener(self, callback: Callable[[mesh_pb2.LogRecord], None]) -> Callable[[], None]:
+        """Wołane z każdym rekordem logu, który radio wyśle (LogRecord z firmware)."""
+        self._log_record_listeners.append(callback)
+        return lambda: self._remove_listener(self._log_record_listeners, callback)
+
+    def _emit_log_record(self, record: mesh_pb2.LogRecord) -> None:
+        for listener in list(self._log_record_listeners):
+            try:
+                listener(record)
+            except Exception:  # noqa: BLE001
+                self._logger.debug("Log record listener failed", exc_info=True)
+
+    async def set_log_collection(self, enabled: bool) -> None:  # noqa: FBT001
+        """Włącz/wyłącz odbiór logów po Bluetooth (subskrypcja charakterystyki logów).
+
+        Po TCP i USB logi przychodzą w zwykłym strumieniu FromRadio i nic nie trzeba
+        przełączać — tam o wysyłaniu decyduje wyłącznie ustawienie radia.
+        """
+        setter = getattr(self._connection, "set_log_notifications", None)
+        if setter is not None:
+            await setter(enabled)
 
     @staticmethod
     def _remove_listener(listeners: list, callback: Callable) -> None:
@@ -798,7 +825,7 @@ class MeshInterface:
         elif packet.HasField("queueStatus"):
             self._connected_node_queue_status = packet.queueStatus
         elif packet.HasField("log_record"):
-            pass
+            self._emit_log_record(packet.log_record)
         elif packet.HasField("config"):
             self._process_connected_node_config(packet.config)
         elif packet.HasField("moduleConfig"):

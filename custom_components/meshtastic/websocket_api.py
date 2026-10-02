@@ -24,13 +24,14 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 
-from . import nodedb_cleanup, ondemand
+from . import debug_logs, nodedb_cleanup, ondemand
 from .aiomeshtastic.interface import TelemetryType
 from .const import DOMAIN
 from .helpers import panel_enabled, preset_channel_name
 from .nodedb_cleanup import NoCriteriaError
 from .ondemand import OnDemandError
 from .store import get_store
+from .traceroute_util import modem_preset_name, normalize_traceroute
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -915,6 +916,16 @@ async def ws_traceroute(hass, connection, msg) -> None:
 
     async def _action(c, m):
         result = await c.request_traceroute(m["node_id"])
+        # Trasa + SNR + oba końce w jednym kształcie — i do panelu, i do historii.
+        if isinstance(result, dict):
+            entry = _entry_by_id(hass, m["entry_id"])
+            gateway = ((entry.runtime_data.gateway_node or {}).get("num")) if entry is not None else None
+            preset = None
+            with contextlib.suppress(Exception):
+                preset = modem_preset_name(c.interface.connected_node_local_config())
+            result = normalize_traceroute(
+                result, origin=gateway, destination=m["node_id"], modem_preset=preset
+            )
         store = get_store(m["entry_id"])
         if store is not None and isinstance(result, dict):
             store.add_traceroute(m["node_id"], result)
@@ -1749,3 +1760,4 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_device_action,
     ):
         websocket_api.async_register_command(hass, handler)
+    debug_logs.async_register_commands(hass)

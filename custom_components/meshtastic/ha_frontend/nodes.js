@@ -20,6 +20,7 @@ import "./chart.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
 import "./node-stats.js";;
 import "./node-ondemand.js";
+import { buildTraceView, renderTracerouteMapAction } from "./traceroute-layer.js";
 
 /* Kategorie danych w szczegółach węzła, nazwane jak w aplikacji na Androida.
    ask: polecenie WS wysyłane przyciskiem "Poproś"; telemetry: rodzaj telemetrii
@@ -763,7 +764,21 @@ class MeshNodesTab extends LitElement {
       ${direct
         ? html`<div class="route-note">${t(this.hass, "nodes.traceroute.direct")}</div>`
         : ""}
+      ${renderTracerouteMapAction({
+        hass: this.hass,
+        view: buildTraceView(route, node.node_id, gateway),
+        nodes: this.nodes,
+        onShow: (view) => this._showTraceOnMap(view),
+      })}
     `;
+  }
+
+  /* Okno szczegółów zamykamy, a panel przełącza się na zakładkę Mapa. */
+  _showTraceOnMap(view) {
+    this._closeDetail();
+    this.dispatchEvent(
+      new CustomEvent("mtsw-show-traceroute", { detail: { view }, bubbles: true, composed: true })
+    );
   }
 
   /* Liczba skoków w kolejnych pomiarach trasy: jedna oś czasu dla całej historii,
