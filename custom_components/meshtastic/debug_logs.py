@@ -612,7 +612,13 @@ async def ws_debug_logs_firmware_api(hass: HomeAssistant, connection: websocket_
     connection.send_result(msg["id"], device.status())
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/debug_logs_capture_debug", vol.Required("enabled"): bool})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/debug_logs_capture_debug",
+        vol.Optional("entry_id"): str,  # panel dokłada go do każdego polecenia
+        vol.Required("enabled"): bool,
+    }
+)
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_debug_logs_capture_debug(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:

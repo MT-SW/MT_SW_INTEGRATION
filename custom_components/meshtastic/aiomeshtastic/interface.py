@@ -416,7 +416,7 @@ class MeshInterface:
         except Exception:  # noqa: BLE001
             self._logger.info("Ponowne pobranie wpisu własnego węzła nie powiodło się", exc_info=True)
         known = self.own_position_known()
-        self._logger.info("Odświeżenie wpisu własnego węzła z radia: pozycja %s", "znana" if known else "nadal brak")
+        self._logger.warning("Odświeżenie wpisu własnego węzła z radia: pozycja %s", "znana" if known else "nadal brak")
         return known
 
     def log_own_node_diagnostics(self) -> None:
@@ -426,7 +426,7 @@ class MeshInterface:
             local_position = None
             with contextlib.suppress(Exception):
                 local_position = google.protobuf.json_format.MessageToDict(self._connected_node_local_config.position)
-            self._logger.info(
+            self._logger.warning(
                 "DIAGNOSTYKA własnego węzła: num=%s, wpisów NodeInfo odebranych=%s, baza węzłów=%s, "
                 "własny wpis z radia=%s, klucze wpisu w bazie=%s, position w bazie=%s, config.position=%s, "
                 "pakietów POSITION_APP odebranych=%s (od własnego węzła=%s), ostatni własny pakiet=%s, "
@@ -448,7 +448,6 @@ class MeshInterface:
         await asyncio.sleep(20)
         if self.is_running and not self.own_position_known():
             self.log_own_node_diagnostics()
-            await self.refresh_own_node()
         # dopóki pozycji brak — powtarzaj diagnostykę co 10 min (najwyżej 6 razy)
         for _ in range(6):
             await asyncio.sleep(600)
@@ -1087,7 +1086,7 @@ class MeshInterface:
             if node_id in (0, self.my_node_num()):
                 self._own_position_packets_seen = getattr(self, "_own_position_packets_seen", 0) + 1
                 with contextlib.suppress(Exception):
-                    self._logger.info(
+                    self._logger.warning(
                         "POZYCJA bramki z łącza: from=%s payload=%s",
                         node_id,
                         google.protobuf.json_format.MessageToDict(packet.app_payload),
@@ -1146,7 +1145,7 @@ class MeshInterface:
                     self._own_node_info_raw = node_info_dict
                 if node_id == self.my_node_num():
                     # diagnostyka: co radio samo podało o pozycji własnego węzła
-                    self._logger.info(
+                    self._logger.warning(
                         "Własny węzeł z radia: pozycja=%s (poprawna: %s)",
                         node_info_dict.get("position"),
                         gwpos.normalize_position(node_info_dict.get("position")) is not None,
