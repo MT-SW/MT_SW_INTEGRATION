@@ -419,10 +419,42 @@ class MeshInterface:
         self._logger.info("Odświeżenie wpisu własnego węzła z radia: pozycja %s", "znana" if known else "nadal brak")
         return known
 
+    def log_own_node_diagnostics(self) -> None:
+        """Do logu (INFO): co wiemy o własnym węźle i co radio przysłało — gdy pozycji brak."""
+        with contextlib.suppress(Exception):
+            node = self._node_database.get(self.my_node_num()) or {}
+            local_position = None
+            with contextlib.suppress(Exception):
+                local_position = google.protobuf.json_format.MessageToDict(self._connected_node_local_config.position)
+            self._logger.info(
+                "DIAGNOSTYKA własnego węzła: num=%s, wpisów NodeInfo odebranych=%s, baza węzłów=%s, "
+                "własny wpis z radia=%s, klucze wpisu w bazie=%s, position w bazie=%s, config.position=%s, "
+                "pakietów POSITION_APP odebranych=%s (od własnego węzła=%s), ostatni własny pakiet=%s, "
+                "pozycja ustawiona przez nas=%s",
+                self.my_node_num(),
+                getattr(self, "_node_infos_received", 0),
+                len(self._node_database),
+                getattr(self, "_own_node_info_raw", "BRAK — radio nie przysłało wpisu własnego węzła"),
+                sorted(node.keys()),
+                node.get("position"),
+                local_position,
+                getattr(self, "_position_packets_seen", 0),
+                getattr(self, "_own_position_packets_seen", 0),
+                self._own_position,
+                self._fixed_position_hint,
+            )
+
     async def _ensure_own_position(self) -> None:
         await asyncio.sleep(20)
         if self.is_running and not self.own_position_known():
+            self.log_own_node_diagnostics()
             await self.refresh_own_node()
+        # dopóki pozycji brak — powtarzaj diagnostykę co 10 min (najwyżej 6 razy)
+        for _ in range(6):
+            await asyncio.sleep(600)
+            if not self.is_running or self.own_position_known():
+                return
+            self.log_own_node_diagnostics()
 
     def my_node_num(self) -> int | None:
         info = getattr(self, "_connected_node_info", None)
@@ -1050,6 +1082,16 @@ class MeshInterface:
             return
 
         node_id = int(packet.from_id)
+        if packet.port_num == portnums_pb2.PortNum.POSITION_APP:
+            self._position_packets_seen = getattr(self, "_position_packets_seen", 0) + 1
+            if node_id in (0, self.my_node_num()):
+                self._own_position_packets_seen = getattr(self, "_own_position_packets_seen", 0) + 1
+                with contextlib.suppress(Exception):
+                    self._logger.info(
+                        "POZYCJA bramki z łącza: from=%s payload=%s",
+                        node_id,
+                        google.protobuf.json_format.MessageToDict(packet.app_payload),
+                    )
         if node_id == 0 and packet.port_num == portnums_pb2.PortNum.POSITION_APP and self.my_node_num():
             # from=0 oznacza „od nas” — kopia własnego rozgłoszenia pozycji dla klienta
             node_id = self.my_node_num()
@@ -1099,6 +1141,9 @@ class MeshInterface:
                 if "user" in node_info_dict:
                     _normalize_user_dict(node_info_dict["user"], node_info.num)
                 db_node = self._get_or_create_node(node_info.num)
+                self._node_infos_received = getattr(self, "_node_infos_received", 0) + 1
+                if node_id == self.my_node_num():
+                    self._own_node_info_raw = node_info_dict
                 if node_id == self.my_node_num():
                     # diagnostyka: co radio samo podało o pozycji własnego węzła
                     self._logger.info(
