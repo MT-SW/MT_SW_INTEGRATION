@@ -238,7 +238,7 @@ class MeshRadioTab extends LitElement {
           </span>
         </div>
 
-                ${gateway.stats_saved_at
+        ${gateway.stats_saved_at
           ? html`<div class="stale-note">
               ${t(this.hass, "radio.stats_saved_at", {
                 time: new Date(gateway.stats_saved_at).toLocaleString(this.hass.language),
@@ -344,7 +344,7 @@ class MeshRadioTab extends LitElement {
         }
 
         .stale-note {
-          padding: 0 16px 8px;
+          padding: 10px 16px 8px;
           font-size: 12px;
           color: var(--secondary-text-color);
         }
