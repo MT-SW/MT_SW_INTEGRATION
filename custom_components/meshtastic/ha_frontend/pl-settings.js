@@ -797,7 +797,7 @@ const PL_STRINGS = {
 
   /* ── czyszczenie bazy węzłów ── */
   "Clean Node Database": "Wyczyść bazę węzłów",
-  "Warning: this removes nodes from the radio's node database and from the panel. Favorite, ignored and Home Assistant-tracked nodes and your own gateway are skipped.": "Uwaga: to usuwa węzły z bazy danych radia i panelu. Ulubione, ignorowane i śledzone przez Home Assistanta węzły oraz własna bramka są pomijane.",
+  "Warning: this removes nodes from the radio's node database and from the panel. Nodes tracked in Home Assistant are also removed from tracking (their entities disappear). Favorite and ignored nodes and your own gateway are skipped.": "Uwaga: to usuwa węzły z bazy danych radia i panelu. Węzły śledzone w Home Assistancie są też usuwane ze śledzenia (ich encje znikają). Ulubione i ignorowane węzły oraz własna bramka są pomijane.",
   "Inactive for longer than": "Nieaktywne dłużej niż",
   "Any time": "Dowolnie długo",
   "Node kind": "Rodzaj węzłów",
@@ -810,6 +810,10 @@ const PL_STRINGS = {
   "Pick how long a node has been inactive or which kind of nodes to remove.": "Wybierz, jak długo węzeł jest nieaktywny albo jakiego rodzaju węzły usunąć.",
   "No nodes match these choices.": "Żaden węzeł nie spełnia wybranych warunków.",
   "Queued for deletion": "W kolejce do usunięcia",
+  "Skipped (protected, never removed)": "Pominięte (chronione, nigdy nie usuwane)",
+  favorite: "ulubione",
+  ignored: "ignorowane",
+  "tracked in Home Assistant": "śledzone w Home Assistant",
   "unknown": "nieznany",
   "never heard": "nigdy nie słyszany",
   "and {n} more": "i {n} więcej",

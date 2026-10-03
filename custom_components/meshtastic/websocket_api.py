@@ -1672,7 +1672,7 @@ _NODEDB_FILTER = {
 
 async def _nodedb_candidates(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> tuple[Any, list[dict[str, Any]]] | None:
+) -> tuple[Any, list[dict[str, Any]], dict[str, int]] | None:
     """Węzły do usunięcia dla wybranych warunków; przy błędzie odpowiada i zwraca None.
 
     Lista zawsze powstaje po stronie serwera z aktualnej bazy radia — panel podaje tylko
@@ -1692,7 +1692,7 @@ async def _nodedb_candidates(
         candidates = nodedb_cleanup.select_candidates(
             nodes,
             own_node=(entry.runtime_data.gateway_node or {}).get("num"),
-            protected=set(entry.runtime_data.coordinator.data or {}),
+            protected=(),
             inactive_days=msg.get("inactive_days", 0),
             kind=msg.get("kind", "all"),
             mismatched=store.key_mismatch_nodes(),
@@ -1700,7 +1700,15 @@ async def _nodedb_candidates(
     except NoCriteriaError:
         connection.send_error(msg["id"], "no_criteria", "Wybierz czas nieaktywności albo rodzaj węzłów")
         return None
-    return store, candidates
+    skipped = nodedb_cleanup.count_skipped(
+        nodes,
+        own_node=(entry.runtime_data.gateway_node or {}).get("num"),
+        protected=(),
+        inactive_days=msg.get("inactive_days", 0),
+        kind=msg.get("kind", "all"),
+        mismatched=store.key_mismatch_nodes(),
+    )
+    return store, candidates, skipped
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/nodedb_preview", **_NODEDB_FILTER})
@@ -1715,11 +1723,16 @@ async def ws_nodedb_preview(
     found = await _nodedb_candidates(hass, connection, msg)
     if found is None:
         return
-    _store, candidates = found
+    _store, candidates, skipped = found
     limit = nodedb_cleanup.PREVIEW_LIMIT
     connection.send_result(
         msg["id"],
-        {"count": len(candidates), "nodes": candidates[:limit], "more": max(0, len(candidates) - limit)},
+        {
+            "count": len(candidates),
+            "nodes": candidates[:limit],
+            "more": max(0, len(candidates) - limit),
+            "skipped": skipped,
+        },
     )
 
 
@@ -1735,7 +1748,7 @@ async def ws_nodedb_clean(
     found = await _nodedb_candidates(hass, connection, msg)
     if found is None:
         return
-    store, candidates = found
+    store, candidates, _skipped = found
     if store.cleanup.running:
         connection.send_error(msg["id"], "busy", "Czyszczenie już trwa")
         return

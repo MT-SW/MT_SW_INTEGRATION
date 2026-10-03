@@ -10,9 +10,10 @@ widzimy, ile ich zostanie usuniętych, i dopiero wtedy kasujemy. Do usuwania sł
 usuwaniu węzła (client.async_remove_node): potwierdzone przez radio, więc każdy
 węzeł to jedna wiadomość administracyjna i chwila oczekiwania na ACK.
 
-Nigdy nie usuwamy: własnej bramki, ulubionych, ignorowanych ani węzłów śledzonych
-przez Home Assistanta (mają encje) — ich usunięcie z radia niczego by nie
-oczyściło, a psułoby to, co użytkownik świadomie zostawił.
+Nigdy nie usuwamy: własnej bramki, ulubionych ani ignorowanych. Ręczne czyszczenie usuwa
+też węzły śledzone przez Home Assistanta — po usunięciu z radia store zdejmuje je ze
+śledzenia, więc encje znikają bez błędów. Automatyczne czyszczenie (bez nadzoru) śledzonych
+nadal oszczędza.
 """
 
 from __future__ import annotations
@@ -110,6 +111,46 @@ def select_candidates(  # noqa: PLR0913
         )
     found.sort(key=lambda item: item["last_heard"] or 0)
     return found
+
+
+def count_skipped(  # noqa: PLR0913
+    nodes: Mapping[int, Mapping[str, Any]],
+    *,
+    own_node: int | None,
+    protected: Iterable[int] = (),
+    inactive_days: int = 0,
+    kind: str = "all",
+    mismatched: Iterable[int] = (),
+    now: float | None = None,
+) -> dict[str, int]:
+    """Ile węzłów pasuje do wybranych warunków, ale jest chronionych — i dlaczego.
+
+    Dzięki temu panel może wyjaśnić, czemu starych węzłów widocznych na liście nie ma
+    w podglądzie: to ulubione, ignorowane albo śledzone przez Home Assistanta.
+    """
+    now = time.time() if now is None else now
+    cutoff = now - inactive_days * DAY_SECONDS if inactive_days else None
+    skip = set(protected)
+    bad_keys = set(mismatched)
+    result = {"favorite": 0, "ignored": 0, "tracked": 0}
+    for node_id, node in nodes.items():
+        if node_id == own_node:
+            continue
+        unknown = node_is_unknown(node)
+        if (kind == "unknown" and not unknown) or (kind == "known" and unknown):
+            continue
+        if kind == "mismatch" and node_id not in bad_keys:
+            continue
+        heard = _last_heard(node)
+        if cutoff is not None and heard is not None and heard >= cutoff:
+            continue
+        if node.get("isFavorite"):
+            result["favorite"] += 1
+        elif node.get("isIgnored"):
+            result["ignored"] += 1
+        elif node_id in skip:
+            result["tracked"] += 1
+    return result
 
 
 def normalize_auto(raw: Mapping[str, Any] | None) -> dict[str, Any]:

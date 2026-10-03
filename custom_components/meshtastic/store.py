@@ -41,7 +41,7 @@ from .api import (
 )
 from .aiomeshtastic.gateway_position import normalize_position, position_from_packet_dict
 from .aiomeshtastic.protobuf import mesh_pb2
-from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER, CONF_OPTION_MQTT_SNIFFER, CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
+from .const import CONF_OPTION_FILTER_NODES, DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER, CONF_OPTION_MQTT_SNIFFER, CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
 from .nodedb_cleanup import DAY_SECONDS, CleanupJob, normalize_auto, select_candidates
 from . import debug_logs
 from .sniffer import CAPACITY_CHOICES, DEFAULT_CAPACITY, SnifferLog
@@ -398,6 +398,7 @@ class PanelStore:
         try:
             await self.cleanup.run(client, node_ids)
             self.forget_keys(self.cleanup.removed_ids)
+            self._untrack_removed(self.cleanup.removed_ids)
         finally:
             self.cleanup.finish()
             if self.cleanup.source == "auto":
@@ -707,6 +708,23 @@ class PanelStore:
                 except ValueError:
                     continue
         return result
+
+    def _untrack_removed(self, node_ids: Iterable[int]) -> None:
+        """Węzły usunięte z radia znikają też z listy śledzonych — bez osieroconych encji i błędów.
+
+        Zmiana samej listy śledzonych węzłów jest stosowana na żywo, bez rozłączania z radiem.
+        """
+        removed = set(node_ids)
+        if not removed:
+            return
+        tracked = list(self._entry.options.get(CONF_OPTION_FILTER_NODES, []))
+        remaining = [el for el in tracked if el.get("id") not in removed]
+        if len(remaining) == len(tracked):
+            return
+        LOGGER.info("Czyszczenie bazy węzłów: %d usuniętych węzłów przestaje być śledzonych", len(tracked) - len(remaining))
+        self._hass.config_entries.async_update_entry(
+            self._entry, options={**self._entry.options, CONF_OPTION_FILTER_NODES: remaining}
+        )
 
     def forget_keys(self, node_ids: Iterable[int]) -> None:
         """Po usunięciu węzła z radia zapomnij jego klucz — nowy zacznie od zera."""

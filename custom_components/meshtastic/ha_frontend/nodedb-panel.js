@@ -12,8 +12,8 @@
  *
  * Lista węzłów zawsze powstaje po stronie serwera z aktualnej bazy radia —
  * panel podaje tylko warunki, a usuwanie trwa w tle i odpytujemy je o postęp.
- * Ulubione, ignorowane, śledzone przez Home Assistanta węzły i własna bramka
- * nigdy nie są usuwane.
+ * Ulubione i ignorowane węzły oraz własna bramka nigdy nie są usuwane. Węzły śledzone
+ * w Home Assistancie są usuwane i znikają też ze śledzenia (bez osieroconych encji).
  */
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
@@ -237,8 +237,10 @@ class MeshNodeDbCleanup extends LitElement {
     if (!preview) {
       return "";
     }
+    const skippedNote = this._skippedNote(preview.skipped);
     if (preview.count === 0) {
-      return html`<div class="note">${PL("No nodes match these choices.")}</div>`;
+      return html`<div class="note">${PL("No nodes match these choices.")}</div>
+        ${skippedNote}`;
     }
     const shown = preview.nodes.slice(0, LIST_ROWS);
     const hidden = preview.count - shown.length;
@@ -255,7 +257,26 @@ class MeshNodeDbCleanup extends LitElement {
         )}
       </ul>
       ${hidden > 0 ? html`<div class="note">${PL("and {n} more").replace("{n}", String(hidden))}</div>` : ""}
+      ${skippedNote}
     `;
+  }
+
+  /* Węzły pasujące do warunków, ale chronione — wyjaśnia, czemu starych węzłów z listy nie ma w podglądzie. */
+  _skippedNote(skipped) {
+    const parts = [];
+    if (skipped && skipped.favorite) {
+      parts.push(`${PL("favorite")}: ${skipped.favorite}`);
+    }
+    if (skipped && skipped.ignored) {
+      parts.push(`${PL("ignored")}: ${skipped.ignored}`);
+    }
+    if (skipped && skipped.tracked) {
+      parts.push(`${PL("tracked in Home Assistant")}: ${skipped.tracked}`);
+    }
+    if (!parts.length) {
+      return "";
+    }
+    return html`<div class="note">${PL("Skipped (protected, never removed)")}: ${parts.join(", ")}</div>`;
   }
 
   _renderProgress() {
@@ -316,7 +337,7 @@ class MeshNodeDbCleanup extends LitElement {
       <div class="section">
         <h4>${PL("Clean Node Database")}</h4>
         <p class="note">
-          ${PL("Warning: this removes nodes from the radio's node database and from the panel. Favorite, ignored and Home Assistant-tracked nodes and your own gateway are skipped.")}
+          ${PL("Warning: this removes nodes from the radio's node database and from the panel. Nodes tracked in Home Assistant are also removed from tracking (their entities disappear). Favorite and ignored nodes and your own gateway are skipped.")}
         </p>
         <div class="form-grid">
           <mesh-select
