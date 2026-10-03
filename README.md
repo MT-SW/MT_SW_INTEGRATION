@@ -49,7 +49,7 @@ Sniffer (Ustawienia → Inne → Sniffer):
 - Odszyfrowywanie jak w firmware, po hashu kanału: kluczami kanałów bramki, publicznych kanałów domyślnych (każdy preset modemu z domyślnym kluczem) oraz kanałów bez szyfrowania, także o nazwach, których bramka nie zna. Tak samo dla radia i MQTT; pakiety z bram, które wysyłają do MQTT bez szyfrowania, pokazują pełną treść. Karta mówi, dzięki któremu kluczowi pakiet odczytano
 - Pełna treść pakietu, jak w Panelu Debugowania w aplikacji: tekst, pozycja, NodeInfo, telemetria z wartościami, traceroute z trasą w obie strony i SNR, sąsiedzi, routing, admin, waypoint, OnDemand, raport mapy, Paxcounter, Store & Forward
 - Gdy pakietu nie da się odczytać, widać to, co niesie: hash kanału ze znanymi kanałami o tym samym hashu (np. „LongFast — inny klucz”), informację o wiadomości prywatnej PKI (także o prywatnych wiadomościach do innych węzłów, których nie odczyta nikt poza odbiorcą), rozmiar oraz zrzut bajtów w hex i ASCII
-- Filtr źródła (Wszystko / Radio / MQTT), wyszukiwarka przeszukująca także treść, kopiowanie pakietu ze wszystkimi odbiorami, eksport do JSON i CSV oraz ikona kosza przy przycisku „Na żywo”, która po potwierdzeniu czyści całą listę. Log trzyma do 5000 wpisów w pamięci
+- Filtr źródła (Wszystko / Radio / MQTT), wyszukiwarka przeszukująca także treść, kopiowanie pakietu ze wszystkimi odbiorami, eksport do JSON i CSV oraz ikona kosza przy przycisku „Na żywo”, która po potwierdzeniu czyści całą listę. Log trzyma w pamięci do 25 000 wpisów (rozmiar 5 000 / 10 000 / 25 000 wybierasz w panelu; to samo dla logów Debugowania), lista jest wirtualna i szybka także przy pełnym buforze
 
 Encje i usługi (jak w oryginale, z poprawkami poniżej): czujniki telemetrii i statystyk, czujniki binarne (m.in. wyciszony, podpisany XEdDSA, słyszany na bieżącym LoRa), device_tracker, przyciski (restart, pobranie sąsiadów), encje tekstowe, powiadomienia (notify) dla kanałów i węzłów, wpisy w logbooku, wyzwalacze i akcje urządzeń oraz usługi send_text, send_direct_message, broadcast_channel_message, request_telemetry, request_position, request_traceroute i set_fixed_position.
 
@@ -94,6 +94,12 @@ Dodane funkcje:
 - Sniffer z odszyfrowywaniem, pełnym dekodowaniem i grupowaniem powtórzeń, opisany wyżej
 - Własny branding: ikona i logo MT_SW w Home Assistancie, w panelu i w kliencie webowym MT_SW, razem z kolorystyką marki
 - Przywrócone nagłówki SPDX/MIT w plikach, które miały je w oryginale
+- Kolory SNR i RSSI jak w aplikacji (dobry – złoty, wystarczający – czerwony, słaby – fioletowy, brak – biały; progi zależne od presetu modemu) w liście węzłów, szczegółach węzła, trasach traceroute, listach sąsiadów i wiadomościach
+- Sniffer: pakiety czytelnie rozpisane jak w aplikacji (sąsiedzi jako lista z SNR, traceroute jako lista skoków w obu kierunkach, pozycja, NodeInfo, telemetria, routing itd. jako tabele), bufor do 25 000 pakietów (do wyboru 5000 / 10 000 / 25 000) z wirtualną listą, taki sam bufor w logach debugowania
+- Scalanie urządzeń po zmianie numeru węzła: ten sam klucz publiczny PKI (a bez klucza – ta sama nazwa i model) oznacza to samo urządzenie; stare urządzenie jest zastępowane, a encje zachowują historię. W opcjach integracji jest menu „Dodane urządzenia” z przejściem do szczegółów urządzenia oraz ręczne scalanie duplikatów
+- Pozycja własnej bramki jest ustalana z kilku źródeł (baza węzłów radia, własne pakiety pozycji, pozycja stała, ostatnia zapamiętana), a komenda diagnostyczna pokazuje, skąd pochodzi
+- Błędy akcji na węźle (np. „brak odpowiedzi” przy żądaniu pozycji) mają czytelne polskie komunikaty i nie zaśmiecają logu Home Assistanta
+- Planer: pobieranie danych z OpenStreetMap przez POST z zapasowymi serwerami, automatyczne ponowienie z mniejszym promieniem i szczegóły techniczne błędu; zapasowy dostęp przez serwer integracji
 
 Podziękowania:
 - Meshtastic i Pascal Brogle (@broglep) za oficjalną integrację, na której oparty jest ten fork
@@ -146,7 +152,7 @@ Sniffer (Settings → Other → Sniffer):
 - Decryption the way the firmware does it, by channel hash: with the gateway's channel keys, the public default channels (every modem preset with the default key) and unencrypted channels, including ones whose names the gateway doesn't know. It works the same for the radio and MQTT; packets from gateways that publish to MQTT unencrypted show their full content. The card says which key the packet was read with
 - Full packet content, as in the Debug Panel in the app: text, position, NodeInfo, telemetry with values, traceroute with the route both ways and SNR, neighbours, routing, admin, waypoint, OnDemand, map report, Paxcounter, Store & Forward
 - When a packet can't be read, you see what it carries: the channel hash with the known channels sharing it (e.g. "LongFast — different key"), a note about private PKI messages (including direct messages to other nodes, which only the recipient can read), the size and a hex and ASCII dump
-- Source filter (All / Radio / MQTT), search that also covers the content, copying a packet with all its receptions, export to JSON and CSV, and a trash icon next to the "Live" button that clears the whole list after confirmation. The log keeps up to 5000 entries in memory
+- Source filter (All / Radio / MQTT), search that also covers the content, copying a packet with all its receptions, export to JSON and CSV, and a trash icon next to the "Live" button that clears the whole list after confirmation. The log keeps up to 25,000 entries in memory (5,000 / 10,000 / 25,000, selectable in the panel; the same for the Debugging logs), and the list is virtualised, so it stays fast with a full buffer
 
 Entities and services (as in the original, with the fixes below): telemetry and statistics sensors, binary sensors (e.g. muted, XEdDSA signed, heard on the current LoRa), device_tracker, buttons (reboot, request neighbors), text entities, notify entities for channels and nodes, logbook entries, device triggers and actions, and the services send_text, send_direct_message, broadcast_channel_message, request_telemetry, request_position, request_traceroute and set_fixed_position.
 
@@ -191,6 +197,12 @@ Added features:
 - The sniffer with decryption, full decoding and duplicate grouping, described above
 - Custom branding: the MT_SW icon and logo in Home Assistant, in the panel and in the MT_SW web client, together with the brand colours
 - SPDX/MIT license headers restored in the files that had them in the original
+- SNR and RSSI colours as in the app (good – gold, fair – red, weak – purple, none – white; thresholds depend on the modem preset) in the node list, node details, traceroutes, neighbour lists and messages
+- Sniffer: packets laid out readably as in the app (neighbours as a list with SNR, traceroute as a hop list in both directions, position, NodeInfo, telemetry, routing etc. as tables), a buffer of up to 25,000 packets (5000 / 10,000 / 25,000 selectable) with a virtual list, the same buffer size in the debug logs
+- Device merging after a node number change: the same PKI public key (without a key – the same name and model) means the same device; the old device is replaced and its entities keep their history. The integration options have an "Added devices" menu that opens the device details, and a manual duplicate merge
+- The position of the gateway itself is resolved from several sources (the radio's node DB, its own position packets, fixed position, the last remembered one), and a diagnostic command shows where it came from
+- Node action errors (e.g. "no response" to a position request) have readable Polish messages and no longer clutter the Home Assistant log
+- Planner: OpenStreetMap downloads by POST with fallback servers, an automatic retry with a smaller radius and technical details of the error; fallback access through the integration's server
 
 Credits:
 - Meshtastic and Pascal Brogle (@broglep) for the official integration this fork is based on

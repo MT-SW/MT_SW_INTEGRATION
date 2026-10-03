@@ -119,6 +119,15 @@
     "step": {
       "init": {
         "title": "Opcje MT_SW_INTEGRATION",
+        "description": "Wybierz, co chcesz zrobić.",
+        "menu_options": {
+          "settings": "Ustawienia (tryb pracy, śledzone węzły, powiadomienia, serwery)",
+          "devices": "Dodane urządzenia — otwórz szczegóły",
+          "merge": "Scal duplikaty węzłów (zmiana numeru)"
+        }
+      },
+      "settings": {
+        "title": "Opcje MT_SW_INTEGRATION",
         "description": "Tryb sniffera (radiowy i MQTT) oraz konfigurację samego radia zmieniasz w panelu MT_SW, nie tutaj.\n\nIntegracja składa się z dwóch części, które działają niezależnie od siebie — możesz używać obu albo tylko jednej. Błąd w jednej części nigdy nie zatrzymuje drugiej.\n\n**Panel MT_SW** — aplikacja w pasku bocznym Home Assistanta, działająca jak aplikacja Meshtastic na telefonie: wiadomości na kanałach i prywatne, lista wszystkich węzłów z ulubionymi, mapa, sąsiedzi, ustawienia radia, sniffer i diagnostyka OnDemand. Nie tworzy żadnych encji.\n\n**Statystyki** — urządzenia i encje Home Assistanta dla wybranych węzłów: bateria, napięcie, sygnał (SNR/RSSI), obciążenie kanału, telemetria środowiskowa, pozycja na mapie HA i encje powiadomień do wysyłania wiadomości. Z nich korzystają historia, wykresy, karty na pulpitach i automatyzacje.",
         "data": {
           "mode": "Tryb pracy",
@@ -166,6 +175,24 @@
             }
           }
         }
+      },
+      "devices": {
+        "title": "Dodane urządzenia",
+        "description": "Wybierz urządzenie, aby zobaczyć jego szczegóły, przejść do jego strony w Home Assistant albo przestać je śledzić.",
+        "data": {
+          "device": "Urządzenie"
+        }
+      },
+      "device_details": {
+        "title": "Urządzenie: {name}",
+        "description": "**{name}** ({node})\n\nKrótka nazwa: {short_name}\nModel: {hw_model}\nTożsamość: `{identity}`\n\nStrona urządzenia w Home Assistant: {device_link}\n\nWybierz akcję:",
+        "data": {
+          "action": "Akcja"
+        }
+      },
+      "merge": {
+        "title": "Scal duplikaty węzłów",
+        "description": "Szuka urządzeń tego samego węzła, który wrócił pod NOWYM numerem (ten sam klucz publiczny albo — bez klucza — te same nazwy i model), przenosi encje wraz z historią na jedno urządzenie i usuwa duplikat. Węzłów, które są jednocześnie aktywne z różnymi kluczami, nigdy nie skleja. Bezpieczne do wielokrotnego uruchamiania."
       }
     },
     "error": {
@@ -174,6 +201,11 @@
       "unknown": "Wystąpił nieznany błąd.",
       "option_invalid": "Nieprawidłowa konfiguracja opcji",
       "port_in_use": "Port jest już zajęty"
+    },
+    "abort": {
+      "no_devices": "Nie dodano jeszcze żadnych urządzeń.",
+      "not_loaded": "Statystyki są wyłączone lub integracja jeszcze się nie uruchomiła.",
+      "merge_done": "Gotowe. Zmienionych wpisów encji: {count}. Szczegóły w logu Home Assistanta (INFO)."
     }
   },
   "services": {
@@ -626,6 +658,12 @@
         "panel_and_stats": "Panel i statystyki (zalecane)",
         "panel_only": "Tylko panel — bez urządzeń i encji w Home Assistant",
         "stats_only": "Tylko statystyki — bez panelu w pasku bocznym"
+      }
+    },
+    "option_device_action_selector": {
+      "options": {
+        "back": "Wróć (nic nie zmieniaj)",
+        "untrack": "Przestań śledzić to urządzenie i usuń je"
       }
     }
   },

@@ -65,6 +65,7 @@ from .const import (
     ConnectionType,
 )
 from .helpers import node_identity_key
+from .identity import node_signature
 
 if TYPE_CHECKING:
     import asyncio
@@ -147,6 +148,12 @@ def _build_add_node_schema(
             vol.Optional(CONF_OPTION_ADD_ANOTHER_NODE): cv.boolean,
         }
     )
+
+
+def _signature_fields(node: Mapping[str, Any]) -> dict[str, str]:
+    """Krótka nazwa i model zapamiętane we wpisie filtra — pozwalają rozpoznać węzeł po zmianie numeru bez klucza."""
+    sig = node_signature(node)
+    return {"short_name": sig[1], "hw_model": sig[2]} if sig else {}
 
 
 def _tracked_nodes_selector(
@@ -696,6 +703,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "id": node_id,
                         "name": self.nodes[node_id]["user"]["longName"],
                         "identity_key": node_identity_key(node_id, self.nodes[node_id]),
+                        **_signature_fields(self.nodes[node_id]),
                     }
                 )
                 if user_input.get(CONF_OPTION_ADD_ANOTHER_NODE, False):
@@ -775,8 +783,124 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:  # noqa: ARG002
         self.options = {}
         self.nodes = None
+        self._selected_node: int | None = None
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: PLR0912
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
+        """Menu: ustawienia / lista śledzonych urządzeń (każde do otwarcia) / scalanie duplikatów."""
+        return self.async_show_menu(step_id="init", menu_options=["settings", "devices", "merge"])
+
+    async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Lista dodanych urządzeń — wybór dowolnego otwiera jego szczegóły i akcje."""
+        tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
+        if not tracked:
+            return self.async_abort(reason="no_devices")
+        if user_input is not None:
+            self._selected_node = int(user_input["device"])
+            return await self.async_step_device_details()
+
+        live: dict[int, Any] = {}
+        try:
+            runtime = getattr(self.config_entry, "runtime_data", None)
+            if runtime is not None and runtime.coordinator.data:
+                live = dict(runtime.coordinator.data)
+        except Exception:  # noqa: BLE001
+            live = {}
+        options = []
+        for el in tracked:
+            node_hex = f"!{el['id']:08x}"
+            state = "online" if el["id"] in live else "offline"
+            options.append(
+                SelectOptionDict(value=str(el["id"]), label=f"{el.get('name') or node_hex} ({node_hex}) — {state}")
+            )
+        schema = vol.Schema(
+            {
+                vol.Required("device"): SelectSelector(
+                    SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
+                )
+            }
+        )
+        return self.async_show_form(step_id="devices", data_schema=schema)
+
+    async def async_step_device_details(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Szczegóły jednego urządzenia: link do jego strony w HA, tożsamość, akcje."""
+        from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
+
+        node_id = getattr(self, "_selected_node", None)
+        tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
+        el = next((e for e in tracked if e["id"] == node_id), None)
+        if el is None:
+            return await self.async_step_init()
+
+        if user_input is not None:
+            if user_input.get("action") == "untrack":
+                new_options = {
+                    **self.config_entry.options,
+                    CONF_OPTION_FILTER_NODES: [e for e in tracked if e["id"] != node_id],
+                }
+                runtime = getattr(self.config_entry, "runtime_data", None)
+                if runtime is not None and runtime.coordinator:
+                    self.hass.async_create_task(runtime.coordinator.async_request_node_removal(node_id))
+                return self.async_create_entry(title="", data=new_options)
+            return await self.async_step_init()
+
+        registry = dr.async_get(self.hass)
+        device = None
+        for ident in (el.get("identity_key"), str(node_id)):
+            if ident:
+                device = registry.async_get_device(identifiers={(DOMAIN, ident)})
+                if device is not None and self.config_entry.entry_id in device.config_entries:
+                    break
+                device = None
+        node_hex = f"!{node_id:08x}"
+        if device is not None:
+            link = f"[{device.name_by_user or device.name}](/config/devices/device/{device.id})"
+        else:
+            link = "—"
+        schema = vol.Schema(
+            {
+                vol.Required("action", default="back"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=["back", "untrack"],
+                        mode=SelectSelectorMode.LIST,
+                        translation_key="option_device_action_selector",
+                    )
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="device_details",
+            data_schema=schema,
+            description_placeholders={
+                "name": el.get("name") or node_hex,
+                "node": node_hex,
+                "short_name": el.get("short_name") or "—",
+                "hw_model": el.get("hw_model") or "—",
+                "identity": el.get("identity_key") or "—",
+                "device_link": link,
+            },
+        )
+
+    async def async_step_merge(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Ręczne scalenie duplikatów (węzeł, który wrócił pod nowym numerem)."""
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        if runtime is None or not runtime.stats.enabled:
+            return self.async_abort(reason="not_loaded")
+        if user_input is None:
+            return self.async_show_form(step_id="merge", data_schema=vol.Schema({}))
+        from .node_merge import async_reconcile_nodes  # noqa: PLC0415
+
+        try:
+            nodes = await runtime.client.async_get_all_nodes()
+        except Exception:  # noqa: BLE001
+            nodes = runtime.coordinator.data or {}
+        changed = await async_reconcile_nodes(
+            self.hass, self.config_entry, nodes, (runtime.gateway_node or {}).get("num")
+        )
+        if changed:
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+        return self.async_abort(reason="merge_done", description_placeholders={"count": str(changed)})
+
+    async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: PLR0912
         errors: dict[str, str] = {}
 
         if (
@@ -801,7 +925,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 errors["base"] = "unknown"
 
         if errors:
-            return self.async_show_form(step_id="init", errors=errors)
+            return self.async_show_form(step_id="settings", errors=errors)
 
         current_filter_node_option = (
             self.options[CONF_OPTION_FILTER_NODES]
@@ -827,6 +951,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         "id": new_node_id,
                         "name": node_info.get("user", {}).get("longName") or f"!{new_node_id:08x}",
                         "identity_key": node_identity_key(new_node_id, node_info),
+                        **_signature_fields(node_info),
                     }
                 )
 
@@ -910,4 +1035,4 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=options_schema, errors=errors)
+        return self.async_show_form(step_id="settings", data_schema=options_schema, errors=errors)

@@ -3,6 +3,7 @@
 // Dane © współtwórcy OpenStreetMap (ODbL).
 import { distanceM, interpolate } from './geodesy.js';
 import { fmt, clamp, Mutex, abortError, isAbortError, throwIfAborted } from './util.js';
+import { plannerFetch, hostOf } from './net.js';
 
 export const ClutterKind = Object.freeze({ BUILDING: 'BUILDING', FOREST: 'FOREST', RESIDENTIAL: 'RESIDENTIAL', COMMERCIAL: 'COMMERCIAL' });
 
@@ -10,13 +11,26 @@ export const ClutterKind = Object.freeze({ BUILDING: 'BUILDING', FOREST: 'FOREST
 export const PlannerClutterFailure = Object.freeze({ NETWORK: 'NETWORK', BAD_RESPONSE: 'BAD_RESPONSE', TOO_LARGE: 'TOO_LARGE' });
 
 export class PlannerClutterError extends Error {
-  /** @param {'NETWORK'|'BAD_RESPONSE'|'TOO_LARGE'} failure */
-  constructor(failure, cause) {
+  /**
+   * @param {'NETWORK'|'BAD_RESPONSE'|'TOO_LARGE'} failure
+   * @param {*} [cause]
+   * @param {Object} [detail]  dane diagnostyczne (JSON-owe): status HTTP, nazwa/komunikat błędu, uwaga serwera,
+   *   lista prób po kolejnych serwerach; UI pokazuje je w „Szczegóły techniczne”
+   */
+  constructor(failure, cause, detail) {
     super(`Planner clutter unavailable: ${failure}`);
     this.name = 'PlannerClutterError';
     this.failure = failure;
     if (cause !== undefined) this.cause = cause;
+    this.detail = detail || (cause !== undefined ? { errorName: cause && cause.name, errorMessage: shorten(cause && cause.message) } : {});
   }
+}
+
+/** Skraca tekst do jednej linii (do podglądu błędów serwera: HTML bez tagów, białe znaki zwinięte). */
+export function shorten(text, max = 300) {
+  if (text === undefined || text === null) return '';
+  const s = String(text).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
 /** Domyślne wysokości przeszkód (m nad gruntem). */
@@ -438,33 +452,62 @@ export function parseOverpass(text) {
 
 // ---------------------------------------------------------------- klient Overpass
 
-const BASE_URL = 'https://overpass-api.de/api/interpreter';
+/** Serwery Overpass po kolei: przy błędzie sieci / HTTP 429, 502, 503, 504 / przekroczeniu czasu idziemy do następnego. */
+const MIRRORS = Object.freeze([
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+]);
+const BASE_URL = MIRRORS[0];
 const TIMEOUT_MS = 60000;
+const RETRY_DELAY_MS = 2000;
 const CACHE_MS = 30 * 60 * 1000;
 const MAX_BODY_BYTES = 12000000;
 const CACHE_ENTRIES = 6;
+const MIN_RADIUS_KM = 0.5;
+const MAX_ATTEMPTS_LOGGED = 8;
 
 const pointKey = (p) => `${fmt(p.lat, 5)},${fmt(p.lon, 5)}`;
+const sleepMs = (ms, signal) => new Promise((resolve, reject) => {
+  const t = setTimeout(resolve, ms);
+  if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(abortError()); }, { once: true });
+});
+const errInfo = (e) => ({ errorName: (e && e.name) || typeof e, errorMessage: shorten(e && e.message !== undefined ? e.message : e) });
+/** Odpowiedzi, po których warto spróbować innego serwera. */
+const isNextMirrorStatus = (s) => s === 403 || s === 408 || s === 429 || s >= 500;
+/** Uwagi serwera przy HTTP 200, które znaczą „spróbuj gdzie indziej / później” (przeciążenie, limit czasu). */
+const isBusyRemark = (msg) => /timed out|rate_limit|too busy|too many|slot|dispatcher|overload/i.test(msg);
 
 /**
- * Źródło przeszkód z serwera Overpass. Odpowiedzi trzymane w pamięci przez 30 min (maks. 6 wpisów),
- * jedno zapytanie naraz. Rzuca PlannerClutterError (NETWORK / BAD_RESPONSE / TOO_LARGE).
+ * Źródło przeszkód z serwerów Overpass. Odpowiedzi trzymane w pamięci przez 30 min (maks. 6 wpisów),
+ * jedno zapytanie naraz. Rzuca PlannerClutterError (NETWORK / BAD_RESPONSE / TOO_LARGE) z polem `detail`.
+ * Zapytanie idzie POST-em (`data=` w treści, application/x-www-form-urlencoded - bez preflight CORS).
  */
 export class PlannerOverpass {
   /**
    * @param {Object} [o]
    * @param {typeof fetch} [o.fetch]
-   * @param {string} [o.baseUrl]
-   * @param {number} [o.timeoutMs]  łączny limit czasu zapytania (pobranie), domyślnie 60 s
+   * @param {string} [o.baseUrl]   jeden serwer (zamiast listy mirrorów)
+   * @param {string[]} [o.mirrors] lista serwerów po kolei (domyślnie 3 publiczne)
+   * @param {number} [o.timeoutMs]  limit czasu jednej próby (pobranie), domyślnie 60 s
+   * @param {number} [o.retryDelayMs]  przerwa przed jednym ponowieniem po HTTP 429/504 (domyślnie 2 s)
+   * @param {(ms:number, signal?:AbortSignal)=>Promise<void>} [o.sleep]
+   * @param {((...a:any[])=>void)|null} [o.log]  domyślnie console.warn; null wyłącza
    * @param {() => number} [o.clockMs]
    */
-  constructor({ fetch: fetchFn, baseUrl = BASE_URL, timeoutMs = TIMEOUT_MS, clockMs = () => Date.now() } = {}) {
+  constructor({ fetch: fetchFn, baseUrl, mirrors, timeoutMs = TIMEOUT_MS, retryDelayMs = RETRY_DELAY_MS, sleep = sleepMs,
+    log, clockMs = () => Date.now() } = {}) {
     this._fetch = fetchFn || ((...a) => globalThis.fetch(...a));
-    this._baseUrl = baseUrl;
+    this._mirrors = mirrors && mirrors.length ? [...mirrors] : (baseUrl ? [baseUrl] : [...MIRRORS]);
+    this._baseUrl = this._mirrors[0];
     this._timeoutMs = timeoutMs;
+    this._retryDelayMs = retryDelayMs;
+    this._sleep = sleep;
+    this._log = log === undefined ? (...a) => { if (globalThis.console && console.warn) console.warn(...a); } : log;
     this._clockMs = clockMs;
     this._lock = new Mutex();
     this._cache = new Map();
+    this._tooBig = new Map(); // klucz obszaru -> { at, usedKm }: promień, który wcześniej okazał się za duży
   }
 
   /** Przeszkody wzdłuż linii prostej a-b. */
@@ -472,14 +515,42 @@ export class PlannerOverpass {
     return this._cached(`L:${pointKey(a)}:${pointKey(b)}`, () => OsmQueries.link(a, b), signal);
   }
 
-  /** Lasy i zabudowa w promieniu radiusKm (0.1..100) wokół center. */
-  forArea(center, radiusKm, { signal } = {}) {
+  /**
+   * Lasy i zabudowa w promieniu radiusKm (0.1..100) wokół center. Gdy serwer zgłosi błąd po swojej stronie
+   * albo odpowiedź jest za duża (TOO_LARGE), robi JEDNĄ ponowną próbę z połową promienia i wywołuje
+   * `onRadiusReduced({requestedKm, usedKm, failure})`, żeby UI powiedziało, jaki promień zastosowano.
+   */
+  async forArea(center, radiusKm, { signal, onRadiusReduced } = {}) {
     const r = clamp(radiusKm, 0.1, PlannerClutter.MAX_AREA_RADIUS_KM);
-    return this._cached(`A:${pointKey(center)}:${fmt(r, 1)}`, () => OsmQueries.area(center, r), signal);
+    const load = (km) => this._cached(`A:${pointKey(center)}:${fmt(km, 1)}`, () => OsmQueries.area(center, km), signal);
+    const areaKey = `${pointKey(center)}:${fmt(r, 1)}`;
+    const known = this._tooBig.get(areaKey);
+    if (known && this._clockMs() - known.at < CACHE_MS) {
+      const map = await load(known.usedKm);
+      if (onRadiusReduced) onRadiusReduced({ requestedKm: r, usedKm: known.usedKm, failure: known.failure });
+      return map;
+    }
+    try {
+      return await load(r);
+    } catch (e) {
+      const retryable = e instanceof PlannerClutterError && (e.failure === PlannerClutterFailure.TOO_LARGE || (e.detail && e.detail.serverSide));
+      const half = Math.max(MIN_RADIUS_KM, Math.round((r / 2) * 10) / 10);
+      if (!retryable || half >= r) throw e;
+      let map;
+      try {
+        map = await load(half);
+      } catch (e2) {
+        if (e2 instanceof PlannerClutterError) e2.detail = { ...e2.detail, radiusKm: half, requestedRadiusKm: r, firstFailure: e.failure, firstDetail: e.detail };
+        throw e2;
+      }
+      this._tooBig.set(areaKey, { at: this._clockMs(), usedKm: half, failure: e.failure });
+      if (onRadiusReduced) onRadiusReduced({ requestedKm: r, usedKm: half, failure: e.failure });
+      return map;
+    }
   }
 
   /** Czyści pamięć podręczną ("odśwież"). */
-  invalidate() { return this._lock.run(async () => { this._cache.clear(); }); }
+  invalidate() { return this._lock.run(async () => { this._cache.clear(); this._tooBig.clear(); }); }
 
   _cached(key, query, signal) {
     return this._lock.run(async () => {
@@ -495,31 +566,83 @@ export class PlannerOverpass {
     });
   }
 
+  /** Pobiera i parsuje odpowiedź, przechodząc po serwerach; rzuca PlannerClutterError z `detail`. */
   async _fetch1(query, signal) {
-    let body;
-    try {
-      body = await this._download(query, signal);
-    } catch (e) {
-      if (e instanceof PlannerClutterError) throw e;
-      if (signal && signal.aborted) throw e; // anulowanie przez wołającego
-      if (e instanceof RangeError) throw new PlannerClutterError(PlannerClutterFailure.TOO_LARGE, e);
-      throw new PlannerClutterError(PlannerClutterFailure.NETWORK, e);
+    const attempts = [];
+    let last = null;
+    for (const mirror of this._mirrors) {
+      throwIfAborted(signal);
+      const out = await this._tryMirror(mirror, query, signal, attempts);
+      if (out.map) return out.map;
+      last = out;
+      if (out.stop) break;
     }
-    if (body === null) throw new PlannerClutterError(PlannerClutterFailure.NETWORK);
-    try {
-      return parseOverpass(body);
-    } catch (e) {
-      const msg = String((e && e.message) || '').toLowerCase();
-      const tooLarge = e instanceof RangeError || msg.includes('memory') || msg.includes('maxsize');
-      throw new PlannerClutterError(tooLarge ? PlannerClutterFailure.TOO_LARGE : PlannerClutterFailure.BAD_RESPONSE, e);
+    const detail = { ...(last && last.detail), attempts: attempts.slice(-MAX_ATTEMPTS_LOGGED) };
+    if (attempts.some((a) => a.status === 429 || a.status >= 500 || a.timedOut || a.busy)) detail.serverSide = true;
+    const err = new PlannerClutterError((last && last.failure) || PlannerClutterFailure.NETWORK, last && last.cause, detail);
+    if (this._log) this._log('MT_SW planner: pobieranie danych OSM nie powiodło się', err.failure, detail);
+    throw err;
+  }
+
+  /** Jedna runda dla jednego serwera (z jednym ponowieniem po 429/504). Zwraca {map} albo {failure, detail, stop?}. */
+  async _tryMirror(mirror, query, signal, attempts) {
+    const mirrorHost = hostOf(mirror) || mirror;
+    for (let pass = 0; pass < 2; pass++) {
+      const t0 = Date.now();
+      const r = await this._post(mirror, query, signal);
+      const rec = { mirror: mirrorHost, ms: Date.now() - t0 };
+      if (r.status !== undefined) rec.status = r.status;
+      if (r.timedOut) rec.timedOut = true;
+      if (r.viaProxy) rec.viaProxy = true;
+      if (r.error) Object.assign(rec, errInfo(r.error));
+      if (r.proxyError) rec.proxyError = shorten(r.proxyError.message);
+      if (r.remark) rec.remark = r.remark;
+      attempts.push(rec);
+
+      if (r.tooLarge) throw this._tooLarge(r.error, attempts);
+      if (r.body !== undefined) {
+        try {
+          return { map: parseOverpass(r.body) };
+        } catch (e) {
+          const msg = String((e && e.message) || '');
+          const low = msg.toLowerCase();
+          rec.remark = shorten(msg);
+          if (e instanceof RangeError || low.includes('memory') || low.includes('maxsize')) throw this._tooLarge(e, attempts);
+          if (msg.startsWith('overpass:') && isBusyRemark(msg)) {
+            rec.busy = true;
+            return { failure: PlannerClutterFailure.BAD_RESPONSE, cause: e, detail: { remark: rec.remark, ...errInfo(e) } };
+          }
+          return { failure: PlannerClutterFailure.BAD_RESPONSE, cause: e, stop: true, detail: { remark: rec.remark, ...errInfo(e) } };
+        }
+      }
+      if (r.status !== undefined) {
+        if ((r.status === 429 || r.status === 504) && pass === 0) {
+          await this._sleep(this._retryDelayMs, signal); // krótka przerwa i jedno ponowienie na tym samym serwerze
+          continue;
+        }
+        const detail = { status: r.status, remark: r.remark || '', errorName: 'HttpError', errorMessage: `HTTP ${r.status}` };
+        return { failure: PlannerClutterFailure.NETWORK, detail, stop: !isNextMirrorStatus(r.status) };
+      }
+      // błąd sieci / CORS / przekroczony czas
+      const detail = r.timedOut ? { errorName: 'TimeoutError', errorMessage: `no answer within ${this._timeoutMs} ms` } : errInfo(r.error);
+      if (r.timedOut) detail.timedOut = true;
+      return { failure: PlannerClutterFailure.NETWORK, cause: r.error, detail };
     }
+    return { failure: PlannerClutterFailure.NETWORK, detail: {} };
+  }
+
+  _tooLarge(cause, attempts) {
+    const err = new PlannerClutterError(PlannerClutterFailure.TOO_LARGE, cause, { ...(cause ? errInfo(cause) : {}), attempts: attempts.slice(-MAX_ATTEMPTS_LOGGED) });
+    if (this._log) this._log('MT_SW planner: odpowiedź OSM zbyt duża', err.detail);
+    return err;
   }
 
   /**
-   * Czyta odpowiedź kawałkami i przerywa po przekroczeniu 12 000 000 bajtów (TOO_LARGE). Zwraca null przy
-   * błędzie HTTP albo przekroczeniu limitu czasu (wołający zamienia to na NETWORK).
+   * Jedno żądanie POST. Zwraca {body} (HTTP 2xx), {status, remark} (inny status HTTP), {timedOut} albo {error}.
+   * Czyta odpowiedź kawałkami i przerywa po przekroczeniu 12 000 000 bajtów ({tooLarge}). Anulowanie przez
+   * wołającego rzuca AbortError.
    */
-  async _download(query, signal) {
+  async _post(url, query, signal) {
     const ctrl = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, this._timeoutMs);
@@ -528,10 +651,20 @@ export class PlannerOverpass {
       if (signal.aborted) { clearTimeout(timer); throw abortError(); }
       signal.addEventListener('abort', onAbort, { once: true });
     }
+    let res = null;
     try {
-      const url = `${this._baseUrl}?data=${encodeURIComponent(query)}`;
-      const res = await this._fetch(url, { signal: ctrl.signal });
-      if (!res.ok) return null;
+      res = await plannerFetch(this._fetch, url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: ctrl.signal,
+      });
+      const viaProxy = !!res.viaProxy;
+      if (!res.ok) {
+        let remark = '';
+        try { if (typeof res.text === 'function') remark = shorten(await res.text()); } catch { /* brak treści */ }
+        return { status: res.status, remark, viaProxy };
+      }
       const chunks = [];
       let size = 0;
       const reader = res.body && res.body.getReader ? res.body.getReader() : null;
@@ -542,24 +675,26 @@ export class PlannerOverpass {
           if (size + value.byteLength > MAX_BODY_BYTES) {
             try { await reader.cancel(); } catch { /* best effort */ }
             ctrl.abort();
-            throw new PlannerClutterError(PlannerClutterFailure.TOO_LARGE);
+            return { tooLarge: true, viaProxy };
           }
           chunks.push(value);
           size += value.byteLength;
         }
       } else {
         const buf = new Uint8Array(await res.arrayBuffer());
-        if (buf.byteLength > MAX_BODY_BYTES) throw new PlannerClutterError(PlannerClutterFailure.TOO_LARGE);
+        if (buf.byteLength > MAX_BODY_BYTES) return { tooLarge: true, viaProxy };
         chunks.push(buf);
         size = buf.byteLength;
       }
       const all = new Uint8Array(size);
       let off = 0;
       for (const c of chunks) { all.set(c, off); off += c.byteLength; }
-      return new TextDecoder('utf-8').decode(all);
+      return { body: new TextDecoder('utf-8').decode(all), status: res.status, viaProxy };
     } catch (e) {
-      if (timedOut && !(signal && signal.aborted) && isAbortError(e)) return null;
-      throw e;
+      if (signal && signal.aborted) throw isAbortError(e) ? e : abortError(); // anulowanie przez wołającego
+      if (timedOut && isAbortError(e)) return { timedOut: true };
+      if (e instanceof RangeError) return { tooLarge: true, error: e };
+      return { error: e, proxyError: e && e.proxyError, viaProxy: !!(res && res.viaProxy) };
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
@@ -568,7 +703,9 @@ export class PlannerOverpass {
 }
 
 PlannerOverpass.BASE_URL = BASE_URL;
+PlannerOverpass.MIRRORS = MIRRORS;
 PlannerOverpass.TIMEOUT_MS = TIMEOUT_MS;
+PlannerOverpass.RETRY_DELAY_MS = RETRY_DELAY_MS;
 PlannerOverpass.CACHE_MS = CACHE_MS;
 PlannerOverpass.MAX_BODY_BYTES = MAX_BODY_BYTES;
 PlannerOverpass.CACHE_ENTRIES = CACHE_ENTRIES;

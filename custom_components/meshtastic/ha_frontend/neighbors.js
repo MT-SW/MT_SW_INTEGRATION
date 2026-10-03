@@ -13,6 +13,7 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t } from "./i18n.js";
+import { signalValue } from "./signal-quality.js";
 
 class MeshNeighborsTab extends LitElement {
   static get properties() {
@@ -64,7 +65,11 @@ class MeshNeighborsTab extends LitElement {
                           <span class="long">${n.long_name}</span>
                         </td>
                         <td><code>${n.id}</code></td>
-                        <td class="num">${Number(n.snr ?? 0).toFixed(2)} dB</td>
+                        <td class="num">
+                          ${typeof n.snr === "number"
+                            ? signalValue(this.hass, "snr", n.snr, `${n.snr.toFixed(2)} dB`)
+                            : "0.00 dB"}
+                        </td>
                         <td>
                           ${n.last_heard
                             ? new Date(n.last_heard).toLocaleString(this.hass.language)

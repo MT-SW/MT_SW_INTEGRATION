@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import base64
 import time
 import typing
 from collections import defaultdict
@@ -14,6 +13,7 @@ from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .identity import node_identity_key as _node_identity_key
 from .const import (
     CONF_OPTION_FEATURES,
     CONF_OPTION_FEATURES_PANEL,
@@ -136,21 +136,12 @@ def device_by_connection(
 
 def node_identity_key(node_id: int, node_data: typing.Mapping[str, Any] | None) -> str:
     """
-    Return a stable identity key for a node.
+    Return a stable identity key for a node (``pk_<hex>`` or ``num_<id>``).
 
-    Meshtastic node numbers (``num``) are normally derived from the radio's
-    MAC address, but the firmware regenerates a new random ``num`` if it
-    detects a collision with another node on the mesh. The node's PKI public
-    key survives that change, so it is a much more stable identity than the
-    raw number. Falls back to the node number when no public key is known
-    yet (older firmware, or a node we haven't received a NodeInfo for).
+    Logic lives in identity.py (pure, unit-tested); the PKI public key survives
+    a node-number change, the number does not.
     """
-    public_key_b64 = (node_data or {}).get("user", {}).get("publicKey")
-    if public_key_b64:
-        public_key_hex = base64.b64decode(public_key_b64).hex()
-        if public_key_hex:
-            return f"pk_{public_key_hex}"
-    return f"num_{node_id}"
+    return _node_identity_key(node_id, node_data)
 
 
 _remove_listeners = defaultdict(lambda: defaultdict(list))

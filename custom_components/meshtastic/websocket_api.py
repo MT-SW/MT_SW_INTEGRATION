@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -28,6 +29,9 @@ from . import debug_logs, nodedb_cleanup, ondemand
 from .aiomeshtastic.interface import TelemetryType
 from .const import DOMAIN
 from .helpers import panel_enabled, preset_channel_name
+from .planner_proxy import async_register_planner_proxy
+from .node_action_errors import classify_node_action_error
+from .aiomeshtastic.gateway_position import valid_coordinates
 from .nodedb_cleanup import NoCriteriaError
 from .ondemand import OnDemandError
 from .store import get_store
@@ -298,6 +302,15 @@ class _NodePayloadContext:
             self.tracked = set()
         self.store = get_store(entry.entry_id)
         self.own_status = _own_status_message(entry)
+        self.gateway_position: dict[str, Any] | None = None
+        self.gateway_position_source: str | None = None
+        try:
+            persisted = self.store.gateway_position if self.store is not None else None
+            self.gateway_position, self.gateway_position_source = entry.runtime_data.client.get_gateway_position(
+                persisted
+            )
+        except Exception:  # noqa: BLE001 - pozycja bramki jest best-effort
+            _LOGGER.debug("Nie udało się ustalić pozycji bramki", exc_info=True)
 
 
 def _node_payload(context: _NodePayloadContext, node_id: int, node: Mapping[str, Any]) -> dict[str, Any]:
@@ -335,6 +348,19 @@ def _node_payload(context: _NodePayloadContext, node_id: int, node: Mapping[str,
         if neighbor.get("nodeId") is not None
     ]
 
+    latitude = _coordinate(position, "latitude")
+    longitude = _coordinate(position, "longitude")
+    gateway_position = None
+    gateway_position_source = None
+    if node_id == gateway_id and not valid_coordinates(latitude, longitude) and context.gateway_position:
+        # radio nie odsyła własnych rozgłoszeń — pozycję bramki składamy z kilku źródeł
+        gateway_position = context.gateway_position
+        gateway_position_source = context.gateway_position_source
+        latitude = gateway_position["latitude"]
+        longitude = gateway_position["longitude"]
+    elif node_id == gateway_id and valid_coordinates(latitude, longitude):
+        gateway_position_source = "node_db"
+
     return {
         "node_id": node_id,
         "node_hex": f"!{node_id:08x}" if isinstance(node_id, int) else None,
@@ -367,10 +393,11 @@ def _node_payload(context: _NodePayloadContext, node_id: int, node: Mapping[str,
         "via_snr": _as_float((saved_state.get("via") or {}).get("snr")),
         "via_rssi": _as_int((saved_state.get("via") or {}).get("rssi")),
         "via_mqtt": bool(node.get("viaMqtt")),
-        "latitude": _coordinate(position, "latitude"),
-        "longitude": _coordinate(position, "longitude"),
-        "altitude": _as_int(position.get("altitude")),
-        "position_time": position.get("time"),
+        "latitude": latitude,
+        "longitude": longitude,
+        "altitude": _as_int(position.get("altitude")) if gateway_position is None else gateway_position.get("altitude"),
+        "position_time": position.get("time") if gateway_position is None else gateway_position.get("time"),
+        "position_source": gateway_position_source,
         "precision_bits": _as_int(position.get("precisionBits")),
         "battery_level": _as_int(device_metrics.get("batteryLevel")),
         "voltage": _as_float(device_metrics.get("voltage")),
@@ -816,8 +843,14 @@ async def _run_node_action(hass, connection, msg, action):
     try:
         result = await action(entry.runtime_data.client, msg)
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
-        _LOGGER.warning("Akcja %s nie powiodła się: %s", msg["type"], err)
-        connection.send_error(msg["id"], "action_failed", str(err))
+        code, text, expected = classify_node_action_error(err)
+        if expected:
+            # Zwykła porażka po stronie radia/sieci (węzeł poza zasięgiem itp.) —
+            # to nie błąd integracji, więc bez stosu i bez wpisu błędu w dzienniku HA.
+            _LOGGER.debug("Akcja %s: %s (%s: %s)", msg["type"], code, type(err).__name__, err)
+        else:
+            _LOGGER.warning("Akcja %s nie powiodła się: %s", msg["type"], text)
+        connection.send_error(msg["id"], code, text)
         return
 
     # Część akcji zwraca bool — brak potwierdzenia z radia to niepowodzenie,
@@ -873,6 +906,55 @@ async def ws_set_ignored(hass, connection, msg) -> None:
 async def ws_remove_node(hass, connection, msg) -> None:
     """Usuń węzeł z bazy urządzenia."""
     await _run_node_action(hass, connection, msg, lambda c, m: c.async_remove_node(m["node_id"]))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/gateway_debug",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_gateway_debug(hass, connection, msg) -> None:
+    """Diagnostyka pozycji bramki: surowy wpis węzła, wynik rozwiązania i użyte źródło.
+
+    Do wklejenia w zgłoszeniu, gdy bramka nadal nie ma pozycji (np. „Pokaż na mapie” przy traceroute).
+    """
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    client = entry.runtime_data.client
+    store = get_store(entry.entry_id)
+    persisted = store.gateway_position if store is not None else None
+    try:
+        sources = client.get_gateway_position_sources()
+        position, source = client.get_gateway_position(persisted)
+    except Exception as err:  # noqa: BLE001
+        connection.send_error(msg["id"], "gateway_debug_failed", str(err))
+        return
+
+    def _safe(value: Any) -> Any:
+        return json.loads(json.dumps(value, default=str)) if value is not None else None
+
+    connection.send_result(
+        msg["id"],
+        {
+            "gateway_node": _safe(dict(sources.get("node") or {})),
+            "runtime_gateway_node": _safe(dict(entry.runtime_data.gateway_node or {})),
+            "resolved_position": position,
+            "source": source,
+            "sources": {
+                "node_db": _safe((sources.get("node") or {}).get("position")),
+                "own_packet": _safe(sources.get("own_packet")),
+                "fixed_position": _safe(sources.get("fixed_position")),
+                "persisted": _safe(persisted),
+            },
+            "fixed_position_flag": sources.get("fixed_position_flag"),
+            "source_order": ["node_db", "own_packet", "fixed_position", "persisted"],
+        },
+    )
 
 
 @websocket_api.websocket_command(_node_action_schema("request_position"))
@@ -1388,7 +1470,8 @@ async def ws_sniffer_mqtt_set(
         vol.Required("type"): f"{WS_PREFIX}/sniffer_log",
         vol.Required("entry_id"): str,
         vol.Optional("since", default=0): int,
-        vol.Optional("limit", default=5000): vol.All(int, vol.Range(min=1, max=5000)),
+        # 0 = tylko metadane (panel dopytuje tak przyrost, a strony grup pobiera przez sniffer_query)
+        vol.Optional("limit", default=25000): vol.All(int, vol.Range(min=0, max=25000)),
     }
 )
 @websocket_api.require_admin
@@ -1408,6 +1491,7 @@ async def ws_sniffer_log(
         {
             "entries": store.sniffer.entries_since(msg["since"], msg["limit"]),
             "last_seq": store.sniffer.last_seq,
+            "first_seq": store.sniffer.first_seq,
             "enabled": store.sniffer.enabled,
             "mqtt_enabled": store.sniffer.mqtt_enabled,
             "count": store.sniffer.count,
@@ -1730,6 +1814,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_set_ignored,
         ws_remove_node,
         ws_request_position,
+        ws_gateway_debug,
         ws_request_neighbors,
         ws_request_telemetry,
         ws_traceroute,
@@ -1761,3 +1846,4 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     ):
         websocket_api.async_register_command(hass, handler)
     debug_logs.async_register_commands(hass)
+    async_register_planner_proxy(hass)

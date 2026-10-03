@@ -19,6 +19,7 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { t, resolveLanguage } from "./i18n.js";
+import { signalValue } from "./signal-quality.js";
 
 class MeshMessageInfo extends LitElement {
   static get properties() {
@@ -83,12 +84,12 @@ class MeshMessageInfo extends LitElement {
   _signal(info) {
     const parts = [];
     if (typeof info.rx_snr === "number") {
-      parts.push(`SNR ${info.rx_snr.toFixed(1)} dB`);
+      parts.push(signalValue(this.hass, "snr", info.rx_snr, `SNR ${info.rx_snr.toFixed(1)} dB`));
     }
     if (typeof info.rx_rssi === "number" && info.rx_rssi !== 0) {
-      parts.push(`RSSI ${info.rx_rssi} dBm`);
+      parts.push(signalValue(this.hass, "rssi", info.rx_rssi, `RSSI ${info.rx_rssi} dBm`));
     }
-    return parts.length ? parts.join(" · ") : t(this.hass, "common.unknown");
+    return parts.length ? parts.map((p, i) => (i ? html` · ${p}` : p)) : t(this.hass, "common.unknown");
   }
 
   /* Trasa (bezpośrednio albo liczba skoków i przekaźnik, przez który doleciało)
@@ -278,4 +279,4 @@ class MeshMessageInfo extends LitElement {
 
 if (!customElements.get("mesh-message-info")) {
   customElements.define("mesh-message-info", MeshMessageInfo);
-}
+}

@@ -15,12 +15,13 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatUptime, formatRelative, formatHops } from "./i18n.js";
-import { viaInfo, relayLabel, signalInfo, formatSignal } from "./hops.js";
+import { viaInfo, relayLabel, signalInfo } from "./hops.js";
 import "./chart.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
 import "./node-stats.js";;
 import "./node-ondemand.js";
-import { buildTraceView, renderTracerouteMapAction } from "./traceroute-layer.js";
+import { buildTraceView, renderTracerouteMapAction, UNKNOWN_SNR } from "./traceroute-layer.js";
+import { signalValue } from "./signal-quality.js";
 
 /* Kategorie danych w szczegółach węzła, nazwane jak w aplikacji na Androida.
    ask: polecenie WS wysyłane przyciskiem "Poproś"; telemetry: rodzaj telemetrii
@@ -410,8 +411,8 @@ class MeshNodesTab extends LitElement {
     if (!info || (info.snr === null && info.rssi === null)) {
       return t(this.hass, "common.unknown");
     }
-    return html`${info.snr !== null ? html`<div>${info.snr.toFixed(1)} dB</div>` : ""}${info.rssi !== null
-      ? html`<div class="rssi">${info.rssi} dBm</div>`
+    return html`${info.snr !== null ? html`<div>${signalValue(this.hass, "snr", info.snr, `${info.snr.toFixed(1)} dB`)}</div>` : ""}${info.rssi !== null
+      ? html`<div class="rssi">${signalValue(this.hass, "rssi", info.rssi, `${info.rssi} dBm`)}</div>`
       : ""}`;
   }
 
@@ -437,6 +438,16 @@ class MeshNodesTab extends LitElement {
     return html`${node.status_message}${node.status_ts
       ? html`<span class="via">${formatRelative(this.hass, node.status_ts)}</span>`
       : ""}`;
+  }
+
+  /* "5.5 dB / -101 dBm" z kolorami jakości (jak formatSignal w hops.js). */
+  _signalDetail(info) {
+    if (!info || (info.snr === null && info.rssi === null)) {
+      return "";
+    }
+    const snr = info.snr !== null ? signalValue(this.hass, "snr", info.snr, `${info.snr.toFixed(1)} dB`) : "";
+    const rssi = info.rssi !== null ? signalValue(this.hass, "rssi", info.rssi, `${info.rssi} dBm`) : "";
+    return html`${snr}${info.snr !== null && info.rssi !== null ? " / " : ""}${rssi}`;
   }
 
   _detailRow(labelKey, value) {
@@ -708,14 +719,7 @@ class MeshNodesTab extends LitElement {
     return gateway ? gateway.node_id : null;
   }
 
-  _snrClass(db) {
-    if (db === null) return "";
-    if (db >= 0) return "good";
-    if (db >= -8) return "fair";
-    return "poor";
-  }
-
-  _renderChain(labelKey, chain, snrs) {
+  _renderChain(labelKey, chain, snrs, preset) {
     if (!chain || chain.length < 2) {
       return html``;
     }
@@ -723,7 +727,8 @@ class MeshNodesTab extends LitElement {
       <div class="detail-section">${t(this.hass, labelKey)}</div>
       <div class="route">
         ${chain.map((hop, index) => {
-          const raw = snrs && snrs[index] !== undefined ? snrs[index] / 4 : null;
+          const raw =
+            snrs && snrs[index] !== undefined && snrs[index] !== UNKNOWN_SNR ? snrs[index] / 4 : null;
           return html`
             <div class="route-node">
               <span class="route-dot ${index === 0 ? "start" : ""}${index === chain.length - 1 ? "end" : ""}"></span>
@@ -732,8 +737,10 @@ class MeshNodesTab extends LitElement {
             ${index < chain.length - 1
               ? html`<div class="route-link">
                   <span class="route-line"></span>
-                  <span class="route-snr ${this._snrClass(raw)}">
-                    ${raw === null ? t(this.hass, "common.unknown") : `${raw.toFixed(2)} dB`}
+                  <span class="route-snr">
+                    ${raw === null
+                      ? t(this.hass, "common.unknown")
+                      : signalValue(this.hass, "snr", raw, `${raw.toFixed(2)} dB`, preset)}
                   </span>
                 </div>`
               : ""}
@@ -759,8 +766,8 @@ class MeshNodesTab extends LitElement {
     const direct = (route.route || []).length === 0;
 
     return html`
-      ${this._renderChain("nodes.traceroute.towards", towards, route.snrTowards)}
-      ${route.routeBack ? this._renderChain("nodes.traceroute.back", back, route.snrBack) : ""}
+      ${this._renderChain("nodes.traceroute.towards", towards, route.snrTowards, route.modemPreset)}
+      ${route.routeBack ? this._renderChain("nodes.traceroute.back", back, route.snrBack, route.modemPreset) : ""}
       ${direct
         ? html`<div class="route-note">${t(this.hass, "nodes.traceroute.direct")}</div>`
         : ""}
@@ -933,7 +940,7 @@ class MeshNodesTab extends LitElement {
             ${this._detailRow("nodes.col.id", node.node_hex)}
             ${this._detailRow("radio.hw_model", node.hw_model)}
             ${this._detailRow("radio.role", node.role)}
-            ${this._detailRow("nodes.col.signal", formatSignal(signalInfo(node)))}
+            ${this._detailRow("nodes.col.signal", this._signalDetail(signalInfo(node)))}
             ${this._detailRow("nodes.col.hops", this._hopsText(node))}
             ${this._detailRow("nodes.col.last_heard", this._absoluteTime(node.last_heard))}
             ${this._detailRow("radio.battery", this._formatValue(node.battery_level, " %"))}
@@ -988,7 +995,11 @@ class MeshNodesTab extends LitElement {
                     (neighbor) => html`
                       <div class="detail-row">
                         <span class="detail-label">${this._nameOf(neighbor.node_id)}</span>
-                        <span class="detail-value">${this._formatValue(neighbor.snr, " dB", 2)}</span>
+                        <span class="detail-value"
+                          >${typeof neighbor.snr === "number"
+                            ? signalValue(this.hass, "snr", neighbor.snr, this._formatValue(neighbor.snr, " dB", 2))
+                            : this._formatValue(neighbor.snr, " dB", 2)}</span
+                        >
                       </div>
                     `
                   )}
@@ -1519,18 +1530,6 @@ class MeshNodesTab extends LitElement {
           font-variant-numeric: tabular-nums;
           color: var(--secondary-text-color);
           padding-inline-start: 8px;
-        }
-
-        .route-snr.good {
-          color: #4caf50;
-        }
-
-        .route-snr.fair {
-          color: #f5c839;
-        }
-
-        .route-snr.poor {
-          color: #e57373;
         }
 
         .route-note {

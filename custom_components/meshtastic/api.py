@@ -244,6 +244,14 @@ class MeshtasticApiClient:
     def get_own_node(self) -> Mapping[str, Any]:
         return self._interface.connected_node() or {}
 
+    def get_gateway_position(self, persisted: Mapping[str, Any] | None = None) -> tuple[dict[str, Any] | None, str | None]:
+        """Pozycja bramki (własnego węzła) i źródło, z którego pochodzi — patrz gateway_position.py."""
+        return self._interface.gateway_position(persisted)
+
+    def get_gateway_position_sources(self) -> dict[str, Any]:
+        """Surowe kandydaty na pozycję bramki (do meshtastic/gateway_debug)."""
+        return self._interface.gateway_position_sources()
+
     @property
     def interface(self) -> AioMeshInterface:
         """Połączenie z radiem — dla ondemand.py, które rozmawia wprost z warstwą pakietów."""
@@ -640,6 +648,7 @@ class MeshtasticApiClient:
         except MeshtasticError as e:
             raise MeshtasticApiClientError(str(e)) from e
 
+        self._interface.note_fixed_position(latitude, longitude, altitude)
         return {"latitude": latitude, "longitude": longitude, "altitude": round(altitude), "time": position.time}
 
     async def request_traceroute(self, node: int) -> Mapping[str, Any]:

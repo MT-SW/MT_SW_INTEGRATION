@@ -25,6 +25,7 @@ from .api import (
 )
 from .const import CONF_OPTION_FILTER_NODES, DOMAIN, LOGGER
 from .helpers import node_identity_key
+from .identity import find_filter_successors, node_signature
 
 EVENT_MESHTASTIC_NODE_IDENTITY_MIGRATED = f"{DOMAIN}_node_identity_migrated"
 
@@ -338,6 +339,8 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             return
 
         node_id = event_data.get("num", None)
+        if node_id is not None and node_id not in self.data:
+            self._maybe_follow_new_number(node_id, event_data)
         if node_id is None or node_id not in self.data:
             # oczekiwane dla każdego węzła spoza filtra — nie logujemy, bo zalewa log
             return
@@ -346,6 +349,42 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
             data = deepcopy(self.data)
             data[node_id] = event_data
             self.async_set_updated_data(data)
+
+    def _maybe_follow_new_number(self, node_id: int, node_info: Mapping[str, Any]) -> None:
+        """
+        NodeInfo od nieśledzonego numeru, który wygląda na znany węzeł pod nowym
+        numerem (ten sam klucz publiczny albo — bez klucza — te same nazwy i
+        model co wpis filtra, którego już nie ma w danych) → odśwież od razu,
+        zamiast czekać do godzinnego cyklu. Tanie: bez zapytań do radia.
+        """
+        try:
+            filter_nodes = self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
+            if not filter_nodes or node_id in {el["id"] for el in filter_nodes}:
+                return
+            key = node_identity_key(node_id, node_info)
+            sig = node_signature(node_info)
+            for el in filter_nodes:
+                if el["id"] in (self.data or {}):
+                    continue  # ten wpis jest żywy
+                stored = el.get("identity_key")
+                if key.startswith("pk_") and stored == key:
+                    match = True
+                elif (not stored or stored.startswith("num_")) and sig is not None:
+                    match = (
+                        (el.get("name") or "").strip() == sig[0]
+                        and str(el.get("hw_model") or "") == sig[2]
+                        and (not el.get("short_name") or el["short_name"] == sig[1])
+                    )
+                else:
+                    match = False
+                if match:
+                    self._logger.info(
+                        "Node %d looks like tracked node %d under a new number — refreshing now", node_id, el["id"]
+                    )
+                    self.hass.async_create_task(self.async_request_refresh())
+                    return
+        except Exception:  # noqa: BLE001
+            self._logger.debug("Live node-number follow check failed", exc_info=True)
 
     async def _async_update_data(self) -> Any:
         if self.config_entry is None or self.config_entry.runtime_data is None:
@@ -387,6 +426,15 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 live_identity_index[identity_key] = node_num
                 live_identity_last_heard[identity_key] = last_heard
 
+        # Offline entries without a public key: follow them by long/short name +
+        # hardware model when exactly one live node matches (see identity.py).
+        try:
+            gateway_num = (getattr(self.config_entry.runtime_data, "gateway_node", None) or {}).get("num")
+            successors = find_filter_successors(filter_nodes, node_infos, [gateway_num] if gateway_num else [])
+        except Exception:  # noqa: BLE001
+            self._logger.warning("Matching nodes by name failed", exc_info=True)
+            successors = {}
+
         resolved_node_nums = set()
         updated_filter_nodes = []
         filter_changed = False
@@ -406,6 +454,14 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 if el_config.get("identity_key") != current_identity_key:
                     updated_el = {**el_config, "identity_key": current_identity_key}
                     filter_changed = True
+                # remember names + model: they let the node be recognised after a
+                # number change even when it never reported a public key
+                sig = node_signature(node_infos[tracked_num])
+                if sig is not None:
+                    wanted = {"short_name": sig[1], "hw_model": sig[2]}
+                    if any(updated_el.get(k) != v for k, v in wanted.items()):
+                        updated_el = {**updated_el, **wanted}
+                        filter_changed = True
                 updated_filter_nodes.append(updated_el)
                 continue
 
@@ -443,6 +499,32 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
                 # self-heal the configured number so the filter (and the
                 # options UI) reflect where this node actually lives now
                 updated_el = {**el_config, "id": new_num, "identity_key": known_identity_key}
+                filter_changed = True
+            elif new_num is None and tracked_num in successors:
+                new_num = successors[tracked_num]
+                new_info = node_infos[new_num]
+                new_key = node_identity_key(new_num, new_info)
+                sig = node_signature(new_info)
+                self._logger.info(
+                    "Node %d (no public key) matches live node %d by names + hardware model — treating it as the same node",
+                    tracked_num,
+                    new_num,
+                )
+                resolved_node_nums.add(new_num)
+                self._node_id_migrations[tracked_num] = new_num
+                self.hass.bus.async_fire(
+                    EVENT_MESHTASTIC_NODE_IDENTITY_MIGRATED,
+                    {
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_CONFIG_ENTRY_ID: self.config_entry.entry_id,
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_KEY: new_key,
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_OLD_NODE: tracked_num,
+                        ATTR_EVENT_MESHTASTIC_IDENTITY_NEW_NODE: new_num,
+                    },
+                )
+                self._queue_removal(tracked_num)
+                updated_el = {**el_config, "id": new_num, "identity_key": new_key}
+                if sig is not None:
+                    updated_el.update(short_name=sig[1], hw_model=sig[2])
                 filter_changed = True
             # else: node is genuinely offline, or its identity was never
             # captured (no public key, and its old num is no longer live

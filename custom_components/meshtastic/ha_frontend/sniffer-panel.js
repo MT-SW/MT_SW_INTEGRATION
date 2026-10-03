@@ -18,55 +18,57 @@
  * po kliknięciu, przycisk "Na żywo" / "N nowych". Dodatkowo ten sam pakiet
  * (ten sam nadawca i ID) usłyszany kilka razy — z różnych bram MQTT albo
  * przez różne przekaźniki — jest zbierany w jedną kartę z listą odbiorów.
+ * Szczegóły to czytelne widoki (sąsiedzi jako lista, traceroute jako lista
+ * skoków, pozycja / telemetria jako tabele), patrz sniffer-details.js.
  *
- * Log zbiera integracja (bufor w pamięci, do 5000 wpisów), panel go tylko
- * dopytuje przyrostowo. Eksport zawiera surowe wpisy (każdy odbiór osobno),
- * z uwzględnieniem filtra.
+ * Log zbiera integracja (bufor w pamięci, domyślnie 25 000 wpisów; rozmiar
+ * 5 000 / 10 000 / 25 000 wybiera się tutaj). Panel NIE trzyma całego bufora:
+ * grupowanie i filtrowanie robi serwer (sniffer_query), a lista jest
+ * wirtualna — w DOM są tylko widoczne karty z zapasem, kolejne strony grup
+ * dociągają się przy przewijaniu. Przewinięcie w dół zamraża widok na numerze
+ * wpisu (upto), więc napływające pakiety nie przesuwają listy. Eksport
+ * (JSON/CSV) pobiera cały przefiltrowany bufor porcjami po 1000 wpisów
+ * i składa plik w kawałkach, żeby nie zawiesić karty przeglądarki.
  */
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { PL } from "./pl-settings.js";
 import { settingsStyles, badgeStyles } from "./styles.js";
 import "./components.js";
-import { portLabel, routingErrorLabel } from "./port-names.js";
+import { portLabel } from "./port-names.js";
 import { MIN_FW_PLUS_VERSION } from "./firmware.js";
+import { signalStyle } from "./signal-quality.js";
+import { HeightMap, computeWindow, pagesForRange } from "./virtual-list.js";
+import { streamPages } from "./log-index.js";
+import {
+  BROADCAST,
+  CSV_COLUMNS,
+  buildDetailSections,
+  csvLine,
+  exportRow,
+  gatewayNum,
+  hexId,
+  jsonChunk,
+  jsonFooter,
+  jsonHeader,
+  matchingNodeIds,
+  matchingPorts,
+  stamp,
+} from "./sniffer-format.js";
+import { renderSections, detailStyles } from "./sniffer-details.js";
 
 const POLL_MS = 2000;
 const NAMES_REFRESH_MS = 30000;
-const PAGE_GROUPS = 200;
-const BROADCAST = 0xffffffff;
-/* ten sam (nadawca, ID) po tylu ms to już inny pakiet — ID z czasem się powtarzają */
-const GROUP_WINDOW_MS = 10 * 60 * 1000;
+/* grup w jednej stronie z serwera */
+const PAGE = 60;
+/* szacowana wysokość zwiniętej karty, zanim ją zmierzymy */
+const ROW_ESTIMATE = 118;
+const OVERSCAN_PX = 360;
+const FILTER_DEBOUNCE_MS = 300;
+const EXPORT_CHUNK = 1000;
 /* odsunięcie listy od góry, po którym przestajemy dokładać nowe karty na górę */
 const LIVE_SCROLL_THRESHOLD = 40;
-
-const CSV_COLUMNS = [
-  "source",
-  "gateway",
-  "time",
-  "seq",
-  "from",
-  "from_name",
-  "to",
-  "to_name",
-  "channel",
-  "id",
-  "port",
-  "info",
-  "rx_snr",
-  "rx_rssi",
-  "hop_limit",
-  "hop_start",
-  "hops_away",
-  "relay_node",
-  "want_ack",
-  "signed",
-  "pki",
-  "via_mqtt",
-  "encrypted",
-  "payload_size",
-  "payload_hex",
-];
+const CAPACITY_CHOICES = [5000, 10000, 25000];
 
 /* kolor paska karty wg rodzaju pakietu — jak kolorowe etykiety portów w aplikacji */
 const PORT_COLORS = {
@@ -86,92 +88,7 @@ const PORT_COLORS = {
   PKI: "#9e9e9e",
 };
 
-const pad = (value) => String(value).padStart(2, "0");
-
-function stamp(date) {
-  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
-}
-
-function csvCell(value) {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  const text = String(value);
-  return /[",\n\r;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-function hex(id) {
-  return `!${(id >>> 0).toString(16).padStart(8, "0")}`;
-}
-
-/* "!a1b2c3d4" z koperty MQTT → liczba (do szukania nazwy) */
-function gatewayNum(gateway) {
-  if (typeof gateway !== "string" || !gateway.startsWith("!")) {
-    return null;
-  }
-  const value = parseInt(gateway.slice(1), 16);
-  return Number.isFinite(value) ? value >>> 0 : null;
-}
-
-/* etykiety pól treści pakietu (klucze z backendu, jak w protobufach) */
-const FIELD_LABELS = {
-  text: "Text",
-  latitude: "Latitude",
-  longitude: "Longitude",
-  altitude: "Altitude",
-  sats_in_view: "Satellites",
-  precision_bits: "Precision (bits)",
-  ground_speed: "Speed",
-  ground_track: "Heading",
-  PDOP: "PDOP",
-  time: "Time",
-  id: "Node ID",
-  longName: "Long name",
-  shortName: "Short name",
-  hwModel: "Hardware",
-  role: "Role",
-  publicKey: "Public key",
-  isLicensed: "Licensed",
-  variant: "Type",
-  batteryLevel: "Battery",
-  voltage: "Voltage",
-  channelUtilization: "Channel utilization",
-  airUtilTx: "Air util TX",
-  uptimeSeconds: "Uptime",
-  temperature: "Temperature",
-  relativeHumidity: "Humidity",
-  barometricPressure: "Pressure",
-  errorReason: "Result",
-  route: "Route",
-  routeBack: "Route back",
-  snrTowards: "SNR towards (dB)",
-  snrBack: "SNR back (dB)",
-  nodeId: "Node",
-  neighbors: "Neighbors",
-  broadcastInterval: "Broadcast interval",
-  name: "Name",
-  description: "Description",
-  expire: "Expires",
-  request: "Request",
-  response: "Response",
-};
-
-/* lepszy wpis do pokazania na karcie: odczytany wygrywa z zaszyfrowanym */
-function betterEntry(current, candidate) {
-  if (!current) {
-    return candidate;
-  }
-  if (current.encrypted && !candidate.encrypted) {
-    return candidate;
-  }
-  if (!(current.fields || []).length && (candidate.fields || []).length && !candidate.encrypted) {
-    return candidate;
-  }
-  if (!current.info && candidate.info && current.encrypted === candidate.encrypted) {
-    return candidate;
-  }
-  return current;
-}
+const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
 class MeshSettingsSniffer extends LitElement {
   static get properties() {
@@ -185,7 +102,8 @@ class MeshSettingsSniffer extends LitElement {
       _error: { type: String, state: true },
       _confirmOpen: { type: Boolean, state: true },
       _clearConfirmOpen: { type: Boolean, state: true },
-      _entries: { type: Array, state: true },
+      _capConfirm: { type: Number, state: true },
+      _capacity: { type: Number, state: true },
       _meta: { type: Object, state: true },
       _paused: { type: Boolean, state: true },
       _scrolledAway: { type: Boolean, state: true },
@@ -194,8 +112,11 @@ class MeshSettingsSniffer extends LitElement {
       _grouped: { type: Boolean, state: true },
       _expanded: { type: String, state: true },
       _names: { type: Object, state: true },
-      _visible: { type: Number, state: true },
-      _frozenSeq: { type: Number, state: true },
+      _total: { type: Number, state: true },
+      _receptionsTotal: { type: Number, state: true },
+      _newCount: { type: Number, state: true },
+      _loaded: { type: Boolean, state: true },
+      _exporting: { type: Object, state: true },
       _copied: { type: String, state: true },
     };
   }
@@ -209,7 +130,8 @@ class MeshSettingsSniffer extends LitElement {
     this._error = "";
     this._confirmOpen = false;
     this._clearConfirmOpen = false;
-    this._entries = [];
+    this._capConfirm = null;
+    this._capacity = null;
     this._meta = null;
     this._paused = false;
     this._scrolledAway = false;
@@ -218,20 +140,37 @@ class MeshSettingsSniffer extends LitElement {
     this._grouped = true;
     this._expanded = null;
     this._names = {};
-    this._visible = PAGE_GROUPS;
-    this._frozenSeq = null;
+    this._longNames = {};
+    this._total = 0;
+    this._receptionsTotal = 0;
+    this._newCount = 0;
+    this._loaded = false;
+    this._exporting = null;
     this._copied = null;
+    // stan zapytania: wiersze (grupy) wczytywane stronami, migawka widoku (upto)
+    this._rows = [];
+    this._pages = new Set();
+    this._inflight = new Set();
+    this._gen = 0;
+    this._upto = null;
     this._lastSeq = 0;
+    this._filterApplied = "";
+    this._filterTimer = null;
     this._polling = false;
     this._pollTimer = null;
     this._namesTimer = null;
-    this._groupCache = { key: null, groups: [] };
+    // lista wirtualna
+    this._heights = new HeightMap(ROW_ESTIMATE);
+    this._scrollTop = 0;
+    this._viewport = 560;
+    this._win = { start: 0, end: 0, offset: 0, total: 0 };
   }
 
   connectedCallback() {
     super.connectedCallback();
     this._checkStatus();
     this._loadNames();
+    this._loadCapacity();
     this._pollLog();
     this._pollTimer = setInterval(() => this._pollLog(), POLL_MS);
     this._namesTimer = setInterval(() => this._loadNames(), NAMES_REFRESH_MS);
@@ -241,13 +180,14 @@ class MeshSettingsSniffer extends LitElement {
     super.disconnectedCallback();
     clearInterval(this._pollTimer);
     clearInterval(this._namesTimer);
+    clearTimeout(this._filterTimer);
     this._pollTimer = null;
     this._namesTimer = null;
+    this._filterTimer = null;
   }
 
   /* ── dane ─────────────────────────────────────────────────── */
 
-  /* force pomija zapamiętany wynik — przycisk "Sprawdź ponownie" ma naprawdę zapytać radio. */
   async _checkStatus(force = false) {
     this._checking = true;
     this._error = "";
@@ -265,38 +205,139 @@ class MeshSettingsSniffer extends LitElement {
     const res = await this.wsCommand("meshtastic_ui/node_names");
     if (res && res.names) {
       this._names = res.names;
+      this._longNames = res.long_names || {};
     }
   }
 
-  /* Log dopytujemy zawsze — pauza zatrzymuje tylko widok, nie zbieranie. */
+  async _loadCapacity() {
+    const res = await this.wsCommand("meshtastic_ui/log_capacity_get");
+    if (res && res.ok && res.sniffer) {
+      this._capacity = res.sniffer.capacity;
+    }
+  }
+
+  /* Parametry zapytania do serwera. Nazwy węzłów i portów zna tylko panel, więc
+     do tekstu filtra dokładamy numery węzłów i porty, których nazwa pasuje. */
+  _queryParams() {
+    const needle = (this._filterApplied || "").trim();
+    return {
+      filter: needle,
+      node_ids: matchingNodeIds(needle, this._names, this._longNames),
+      ports: matchingPorts(needle),
+      source: this._source,
+      grouped: this._grouped,
+    };
+  }
+
+  _query(extra) {
+    return this.wsCommand("meshtastic_ui/sniffer_query", { ...this._queryParams(), ...extra });
+  }
+
+  /* Pierwsza strona (najnowsze grupy) i nowa migawka: wołane na żywo, po zmianie filtra, po wyczyszczeniu. */
+  async _reload({ fresh = false } = {}) {
+    const gen = ++this._gen;
+    const topKey = !fresh && this._rows[0] ? this._rows[0].key : null;
+    const res = await this._query({ offset: 0, limit: PAGE });
+    if (gen !== this._gen || !res || !res.ok) {
+      return;
+    }
+    // Ten sam filtr: nowe grupy dochodzą od góry, więc zmierzone wysokości przesuwamy o ich liczbę
+    // (dzięki temu lista nie skacze przy każdym nowym pakiecie). Inaczej — mierzymy od nowa.
+    const shift = topKey ? res.groups.findIndex((group) => group.key === topKey) : -1;
+    if (shift >= 0) {
+      this._heights.shift(shift);
+      this._heights.setCount(res.total);
+    } else {
+      this._heights.reset(res.total);
+    }
+    this._rows = new Array(res.total);
+    res.groups.forEach((group, index) => {
+      this._rows[index] = group;
+    });
+    this._pages = new Set([0]);
+    this._inflight.clear();
+    this._upto = res.upto;
+    this._lastSeq = res.last_seq;
+    this._total = res.total;
+    this._receptionsTotal = res.receptions;
+    this._newCount = 0;
+    this._applyMeta(res);
+    this._loaded = true;
+  }
+
+  async _fetchPage(page) {
+    if (this._pages.has(page) || this._inflight.has(page)) {
+      return;
+    }
+    this._inflight.add(page);
+    const gen = this._gen;
+    try {
+      const res = await this._query({ offset: page * PAGE, limit: PAGE, upto: this._upto });
+      if (gen !== this._gen) {
+        return;
+      }
+      if (res && res.ok) {
+        res.groups.forEach((group, index) => {
+          this._rows[page * PAGE + index] = group;
+        });
+        this._pages.add(page);
+        this.requestUpdate();
+      }
+    } finally {
+      this._inflight.delete(page);
+    }
+  }
+
+  _applyMeta(res) {
+    this._meta = {
+      count: res.count,
+      capacity: res.capacity,
+      enabled: res.enabled,
+      mqtt_enabled: res.mqtt_enabled,
+    };
+    if (res.capacity && res.capacity !== this._capacity) {
+      this._capacity = res.capacity;
+    }
+  }
+
+  /* Sondaż jest tani (sam stan bufora, bez wpisów): dopiero zmiana numeru ostatniego
+     wpisu uruchamia pobranie pierwszej strony, i to tylko na żywo. Pauza zatrzymuje
+     widok, nie zbieranie. */
   async _pollLog() {
     if (this._polling) {
       return;
     }
     this._polling = true;
     try {
-      const res = await this.wsCommand("meshtastic_ui/sniffer_log", { since: this._lastSeq });
+      const res = await this.wsCommand("meshtastic_ui/sniffer_log", { since: this._lastSeq, limit: 0 });
       if (!res || !res.ok) {
         return;
       }
-      if (res.last_seq < this._lastSeq) {
+      const restarted = res.last_seq < this._lastSeq;
+      if (restarted) {
         // integracja została przeładowana — numeracja zaczęła się od nowa
-        this._entries = [];
-        this._lastSeq = 0;
         this._expanded = null;
-        this._frozenSeq = this._isLive() ? null : 0;
+        this._lastSeq = 0;
+      }
+      const changed =
+        restarted ||
+        !this._loaded ||
+        res.last_seq !== this._lastSeq ||
+        !this._meta ||
+        res.count !== this._meta.count ||
+        res.capacity !== this._meta.capacity;
+      this._applyMeta(res);
+      if (!changed) {
         return;
       }
-      this._meta = {
-        count: res.count,
-        capacity: res.capacity,
-        enabled: res.enabled,
-        mqtt_enabled: res.mqtt_enabled,
-      };
-      if (res.entries.length) {
-        const merged = this._entries.concat(res.entries);
-        this._entries = merged.length > res.capacity ? merged.slice(merged.length - res.capacity) : merged;
-        this._lastSeq = res.entries[res.entries.length - 1].seq;
+      if (restarted || !this._loaded || this._isLive()) {
+        await this._reload();
+      } else {
+        // widok jest zamrożony: liczymy tylko, ile nowych kart czeka na górze
+        const fresh = await this._query({ offset: 0, limit: 0 });
+        if (fresh && fresh.ok) {
+          this._newCount = Math.max(0, fresh.total - this._total);
+        }
       }
     } finally {
       this._polling = false;
@@ -335,11 +376,35 @@ class MeshSettingsSniffer extends LitElement {
   async _clearLog() {
     const res = await this.wsCommand("meshtastic_ui/sniffer_clear");
     if (res && res.ok) {
-      this._entries = [];
       this._expanded = null;
-      this._visible = PAGE_GROUPS;
-      this._frozenSeq = this._isLive() ? null : this._lastSeq;
-      this._meta = this._meta ? { ...this._meta, count: 0 } : this._meta;
+      this._paused = false;
+      this._scrolledAway = false;
+      this._scrollToTop();
+      await this._reload({ fresh: true });
+    }
+  }
+
+  async _setCapacity(capacity) {
+    this._error = "";
+    const res = await this.wsCommand("meshtastic_ui/log_capacity_set", { kind: "sniffer", capacity });
+    if (!res || !res.ok) {
+      this._error = this._errorText(res && res.error);
+      return;
+    }
+    this._capacity = res.sniffer.capacity;
+    await this._pollLog();
+    await this._reload({ fresh: true });
+  }
+
+  _onCapacityChange(value) {
+    const capacity = Number(value);
+    if (!CAPACITY_CHOICES.includes(capacity) || capacity === this._capacity) {
+      return;
+    }
+    if (this._meta && capacity < this._meta.count) {
+      this._capConfirm = capacity;
+    } else {
+      this._setCapacity(capacity);
     }
   }
 
@@ -365,42 +430,95 @@ class MeshSettingsSniffer extends LitElement {
     return !this._paused && !this._scrolledAway;
   }
 
-  _freeze() {
-    if (this._frozenSeq === null) {
-      this._frozenSeq = this._lastSeq;
+  _scrollToTop() {
+    const list = this.renderRoot && this.renderRoot.querySelector(".cards");
+    if (list) {
+      list.scrollTop = 0;
     }
+    this._scrollTop = 0;
   }
 
   _goLive() {
     this._paused = false;
     this._scrolledAway = false;
-    this._frozenSeq = null;
-    const list = this.renderRoot && this.renderRoot.querySelector(".cards");
-    if (list) {
-      list.scrollTop = 0;
-    }
+    this._newCount = 0;
+    this._scrollToTop();
+    this._reload({ fresh: true });
   }
 
   _togglePause() {
     if (this._isLive()) {
       this._paused = true;
-      this._freeze();
     } else {
       this._goLive();
     }
   }
 
   _onScroll(event) {
-    const away = event.target.scrollTop > LIVE_SCROLL_THRESHOLD;
-    if (away === this._scrolledAway) {
+    const top = event.target.scrollTop;
+    this._scrollTop = top;
+    const away = top > LIVE_SCROLL_THRESHOLD;
+    if (away !== this._scrolledAway) {
+      this._scrolledAway = away;
+      if (!away && !this._paused) {
+        // wróciliśmy na górę: dołącz to, co przyszło w międzyczasie
+        this._newCount = 0;
+        this._reload({ fresh: true });
+      }
+    }
+    this.requestUpdate();
+  }
+
+  /* ── lista wirtualna ──────────────────────────────────────── */
+
+  updated() {
+    const list = this.renderRoot.querySelector(".cards");
+    if (!list) {
       return;
     }
-    this._scrolledAway = away;
-    if (away) {
-      this._freeze();
-    } else if (!this._paused) {
-      this._frozenSeq = null;
+    if (list.clientHeight && list.clientHeight !== this._viewport) {
+      this._viewport = list.clientHeight;
+      this.requestUpdate();
     }
+    // zmierz narysowane wiersze; różnice względem szacunku przesuwają resztę listy
+    const anchor = this._win.start;
+    const before = this._heights.offsetOf(anchor);
+    let changed = false;
+    list.querySelectorAll(".vrow").forEach((el) => {
+      if (this._heights.set(Number(el.dataset.i), el.offsetHeight)) {
+        changed = true;
+      }
+    });
+    if (changed) {
+      const delta = this._heights.offsetOf(anchor) - before;
+      if (delta && list.scrollTop > 0) {
+        list.scrollTop += delta;
+        this._scrollTop = list.scrollTop;
+      }
+      this.requestUpdate();
+    }
+    for (const page of pagesForRange(this._win.start, this._win.end, PAGE, this._total)) {
+      this._fetchPage(page);
+    }
+  }
+
+  _filterNow() {
+    clearTimeout(this._filterTimer);
+    this._filterTimer = null;
+    if (this._filterApplied === this._filter) {
+      return;
+    }
+    this._filterApplied = this._filter;
+    this._restartQuery();
+  }
+
+  /* Nowy filtr / źródło / grupowanie: wracamy na górę, na żywo. */
+  _restartQuery() {
+    this._paused = false;
+    this._scrolledAway = false;
+    this._expanded = null;
+    this._scrollToTop();
+    this._reload({ fresh: true });
   }
 
   /* ── nazwy i formatowanie ─────────────────────────────────── */
@@ -420,7 +538,7 @@ class MeshSettingsSniffer extends LitElement {
       return PL("Everyone");
     }
     const name = this._name(id);
-    return name ? `${hex(id)} (${name})` : hex(id);
+    return name ? `${hexId(id)} (${name})` : hexId(id);
   }
 
   _gatewayLabel(entry) {
@@ -434,6 +552,7 @@ class MeshSettingsSniffer extends LitElement {
 
   /* Przekaźnik to tylko ostatni bajt numeru węzła — szukamy znanych węzłów
      z takim końcem; gdy równy końcówce nadawcy, pakiet przyszedł wprost. */
+
   _relayLabel(entry) {
     const relay = entry.relay_node;
     if (relay === null || relay === undefined || relay === 0) {
@@ -456,15 +575,21 @@ class MeshSettingsSniffer extends LitElement {
     return `${byte} (${shown}${matches.length > 3 ? " …" : ""})`;
   }
 
-  _signal(entry) {
+  /* SNR / RSSI w kolorze jakości łącza (signal-quality.js) */
+  _signalHtml(entry) {
+    const snr = typeof entry.rx_snr === "number" ? entry.rx_snr : undefined;
+    const rssi = typeof entry.rx_rssi === "number" && entry.rx_rssi !== 0 ? entry.rx_rssi : undefined;
+    if (snr === undefined && rssi === undefined) {
+      return "";
+    }
     const parts = [];
-    if (typeof entry.rx_snr === "number") {
-      parts.push(`SNR ${entry.rx_snr.toFixed(1)} dB`);
+    if (snr !== undefined) {
+      parts.push(`SNR ${snr.toFixed(1)} dB`);
     }
-    if (typeof entry.rx_rssi === "number" && entry.rx_rssi !== 0) {
-      parts.push(`RSSI ${entry.rx_rssi} dBm`);
+    if (rssi !== undefined) {
+      parts.push(`RSSI ${rssi} dBm`);
     }
-    return parts.join(" · ");
+    return html`<span class="sig" style=${signalStyle(snr, rssi)}>${parts.join(" · ")}</span>`;
   }
 
   _hops(entry) {
@@ -488,6 +613,7 @@ class MeshSettingsSniffer extends LitElement {
   }
 
   /* Co widać w pakiecie, którego nie da się odczytać — zamiast pustego wiersza. */
+
   _undecodedInfo(entry) {
     if (entry.pki) {
       return PL("Private message encrypted with the recipient's key — cannot be read without it ({n} B).").replace(
@@ -526,63 +652,6 @@ class MeshSettingsSniffer extends LitElement {
     return PL("gateway channel {c}").replace("{c}", info.name);
   }
 
-  _nodeList(ids) {
-    return (ids || []).map((id) => this._label(id)).join(" → ");
-  }
-
-  _fieldValue(field) {
-    const value = field.v;
-    if (field.t === "nodes") {
-      return value && value.length ? this._nodeList(value) : "—";
-    }
-    if (field.t === "node") {
-      return this._label(value);
-    }
-    if (field.t === "neighbors") {
-      return (value || []).length
-        ? value.map((n) => `${this._label(n.node)} (SNR ${n.snr} dB)`).join(", ")
-        : "—";
-    }
-    if (field.t === "time") {
-      return value ? new Date(value * 1000).toLocaleString() : "—";
-    }
-    if (field.t === "routing_error") {
-      return routingErrorLabel("pl", value);
-    }
-    if (field.k === "batteryLevel") {
-      return `${value}%`;
-    }
-    if (field.k === "voltage") {
-      return `${value} V`;
-    }
-    if (field.k === "uptimeSeconds") {
-      const hours = Math.floor(value / 3600);
-      return hours >= 24 ? `${Math.floor(hours / 24)} d ${hours % 24} h` : `${hours} h ${Math.floor((value % 3600) / 60)} min`;
-    }
-    if (Array.isArray(value)) {
-      return value.join(", ");
-    }
-    if (typeof value === "boolean") {
-      return value ? "✓" : "—";
-    }
-    return value === null || value === undefined || value === "" ? "—" : String(value);
-  }
-
-  _renderFields(entry) {
-    const fields = entry.fields || [];
-    if (!fields.length) {
-      return "";
-    }
-    return html`
-      <div class="section-title">${PL("Content")}</div>
-      ${fields.map(
-        (field) => html`<div class="kv ${field.k === "text" ? "text" : ""}">
-          <span class="k">${PL(FIELD_LABELS[field.k] || field.k)}</span><span>${this._fieldValue(field)}</span>
-        </div>`
-      )}
-    `;
-  }
-
   _time(ts) {
     const date = new Date(ts);
     return `${date.toLocaleTimeString([], { hour12: false })}.${String(date.getMilliseconds()).padStart(3, "0")}`;
@@ -599,80 +668,10 @@ class MeshSettingsSniffer extends LitElement {
     return entry.source === "mqtt" ? "MQTT" : PL("Radio");
   }
 
-  /* ── filtrowanie i grupowanie ─────────────────────────────── */
-
-  _matches(entry) {
-    if (this._source !== "all" && (entry.source || "radio") !== this._source) {
-      return false;
-    }
-    const needle = (this._filter || "").trim().toLowerCase();
-    if (!needle) {
-      return true;
-    }
-    return [
-      this._label(entry.from),
-      this._label(entry.to),
-      entry.port,
-      this._portText(entry),
-      entry.info,
-      (entry.fields || []).map((field) => (typeof field.v === "object" ? JSON.stringify(field.v) : field.v)).join(" "),
-      entry.gateway,
-      entry.mqtt_channel_name,
-      entry.id,
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(needle);
-  }
-
-  _filteredEntries() {
-    return this._entries.filter((entry) => this._matches(entry));
-  }
-
-  /* Grupa = wszystkie odbiory tego samego pakietu (nadawca + ID w oknie
-     10 min). Bez grupowania każda grupa ma dokładnie jeden odbiór. */
-  _groups() {
-    const key = `${this._lastSeq}|${this._entries.length}|${this._filter}|${this._source}|${this._grouped}`;
-    if (this._groupCache.key === key) {
-      return this._groupCache.groups;
-    }
-    const groups = [];
-    const byPacket = new Map();
-    for (const entry of this._filteredEntries()) {
-      const packetKey =
-        this._grouped && entry.id && entry.from !== null && entry.from !== undefined
-          ? `${entry.from >>> 0}:${entry.id >>> 0}`
-          : null;
-      const existing = packetKey ? byPacket.get(packetKey) : null;
-      if (existing && entry.ts - existing.lastTs <= GROUP_WINDOW_MS) {
-        existing.receptions.push(entry);
-        existing.lastTs = entry.ts;
-        existing.lastSeq = entry.seq;
-        existing.main = betterEntry(existing.main, entry);
-        continue;
-      }
-      const group = {
-        key: packetKey ? `${packetKey}:${entry.seq}` : `seq:${entry.seq}`,
-        firstSeq: entry.seq,
-        lastSeq: entry.seq,
-        firstTs: entry.ts,
-        lastTs: entry.ts,
-        main: entry,
-        receptions: [entry],
-      };
-      groups.push(group);
-      if (packetKey) {
-        byPacket.set(packetKey, group);
-      }
-    }
-    this._groupCache = { key, groups };
-    return groups;
-  }
-
   /* ── eksport i kopiowanie ─────────────────────────────────── */
 
-  _download(filename, mime, text) {
-    const blob = new Blob([text], { type: mime });
+  _download(filename, mime, parts) {
+    const blob = new Blob(Array.isArray(parts) ? parts : [parts], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -683,34 +682,61 @@ class MeshSettingsSniffer extends LitElement {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  _exportRow(entry) {
-    return {
-      ...entry,
-      time: new Date(entry.ts).toISOString(),
-      from_name: this._name(entry.from) || "",
-      to_name: entry.to >>> 0 === BROADCAST ? "broadcast" : this._name(entry.to) || "",
-    };
+  _exportCtx() {
+    return { name: (id) => this._name(id) };
   }
 
-  _exportJson() {
-    const rows = this._filteredEntries().map((entry) => this._exportRow(entry));
-    const body = JSON.stringify({ exported_at: new Date().toISOString(), count: rows.length, entries: rows }, null, 2);
-    this._download(`sniffer-${stamp(new Date())}.json`, "application/json", body);
-  }
-
-  _exportCsv() {
-    const rows = this._filteredEntries().map((entry) => this._exportRow(entry));
-    const lines = [CSV_COLUMNS.join(";")];
-    for (const row of rows) {
-      lines.push(CSV_COLUMNS.map((column) => csvCell(row[column])).join(";"));
+  /* Cały przefiltrowany bufor, porcjami po 1000 wpisów; plik składany z kawałków. */
+  async _export(kind) {
+    if (this._exporting) {
+      return;
     }
-    // BOM, żeby Excel poprawnie odczytał polskie znaki
-    this._download(`sniffer-${stamp(new Date())}.csv`, "text/csv;charset=utf-8", `\ufeff${lines.join("\r\n")}`);
+    this._exporting = { kind, count: 0 };
+    this._error = "";
+    try {
+      const params = this._queryParams();
+      const ctx = this._exportCtx();
+      const fetchPage = async (after) => {
+        const res = await this.wsCommand("meshtastic_ui/sniffer_entries", { ...params, after, limit: EXPORT_CHUNK });
+        if (!res || !res.ok) {
+          throw new Error((res && res.error) || "export");
+        }
+        return res;
+      };
+      const onProgress = (count) => {
+        this._exporting = { kind, count };
+      };
+      const name = `sniffer-${stamp(new Date())}`;
+      if (kind === "json") {
+        const out = await streamPages({
+          fetchPage,
+          format: (entries, first) => jsonChunk(entries.map((entry) => exportRow(entry, ctx)), first),
+          header: jsonHeader(new Date().toISOString()),
+          footer: (count) => jsonFooter(count),
+          onProgress,
+        });
+        this._download(`${name}.json`, "application/json", out.chunks);
+      } else {
+        // BOM, żeby Excel poprawnie odczytał polskie znaki
+        const out = await streamPages({
+          fetchPage,
+          format: (entries) => entries.map((entry) => csvLine(exportRow(entry, ctx))).join("\r\n") + "\r\n",
+          header: `﻿${CSV_COLUMNS.join(";")}\r\n`,
+          onProgress,
+        });
+        this._download(`${name}.csv`, "text/csv;charset=utf-8", out.chunks);
+      }
+    } catch (err) {
+      this._error = PL("Could not reach the radio.");
+    } finally {
+      this._exporting = null;
+    }
   }
 
   async _copyGroup(group) {
+    const ctx = this._exportCtx();
     const text = JSON.stringify(
-      { packet: this._exportRow(group.main), receptions: group.receptions.map((entry) => this._exportRow(entry)) },
+      { packet: exportRow(group.main, ctx), receptions: group.receptions.map((entry) => exportRow(entry, ctx)) },
       null,
       2
     );
@@ -833,19 +859,13 @@ class MeshSettingsSniffer extends LitElement {
   /* ── widok: karty pakietów ────────────────────────────────── */
 
   _renderChips(group) {
-    const radio = group.receptions.filter((entry) => (entry.source || "radio") === "radio").length;
-    const gateways = new Set(
-      group.receptions.filter((entry) => entry.source === "mqtt").map((entry) => entry.gateway || "?")
-    );
     const main = group.main;
     return html`
-      ${radio ? html`<span class="chip"><ha-icon icon="mdi:radio-tower"></ha-icon>${radio > 1 ? `${PL("Radio")} ×${radio}` : PL("Radio")}</span>` : ""}
-      ${gateways.size
-        ? html`<span class="chip"><ha-icon icon="mdi:cloud-outline"></ha-icon>MQTT${gateways.size > 1 ? ` ×${gateways.size}` : ""}</span>`
+      ${group.radio ? html`<span class="chip"><ha-icon icon="mdi:radio-tower"></ha-icon>${group.radio > 1 ? `${PL("Radio")} ×${group.radio}` : PL("Radio")}</span>` : ""}
+      ${group.gateways
+        ? html`<span class="chip"><ha-icon icon="mdi:cloud-outline"></ha-icon>MQTT${group.gateways > 1 ? ` ×${group.gateways}` : ""}</span>`
         : ""}
-      ${group.receptions.length > 1
-        ? html`<span class="chip strong">${PL("Heard {n}×").replace("{n}", group.receptions.length)}</span>`
-        : ""}
+      ${group.n > 1 ? html`<span class="chip strong">${PL("Heard {n}×").replace("{n}", group.n)}</span>` : ""}
       ${main.signed ? html`<span class="chip" title=${PL("Signed")}><ha-icon icon="mdi:shield-check-outline"></ha-icon></span>` : ""}
       ${main.pki ? html`<span class="chip" title="PKI"><ha-icon icon="mdi:key-outline"></ha-icon></span>` : ""}
       ${main.want_ack ? html`<span class="chip">ACK</span>` : ""}
@@ -853,10 +873,10 @@ class MeshSettingsSniffer extends LitElement {
   }
 
   _renderReceptions(group) {
-    const first = group.firstTs;
+    const first = group.first_ts;
     return html`
       <div class="receptions">
-        <div class="section-title">${PL("Receptions")} (${group.receptions.length})</div>
+        <div class="section-title">${PL("Receptions")} (${group.n})</div>
         ${group.receptions.map(
           (entry) => html`
             <div class="reception">
@@ -872,14 +892,28 @@ class MeshSettingsSniffer extends LitElement {
               <div class="reception-meta">
                 <span>${PL("Relay")}: ${this._relayLabel(entry)}</span>
                 ${this._hops(entry) !== null ? html`<span>${PL("Hops")}: ${this._hops(entry)}</span>` : ""}
-                ${this._signal(entry) ? html`<span>${this._signal(entry)}</span>` : ""}
+                ${this._signalHtml(entry) ? html`<span>${this._signalHtml(entry)}</span>` : ""}
                 ${entry.encrypted ? html`<span>${PL("Encrypted")}</span>` : ""}
               </div>
             </div>
           `
         )}
+        ${group.n > group.receptions.length
+          ? html`<div class="more-note">Pokazano ${group.receptions.length} z ${group.n} odbiorów.</div>`
+          : ""}
       </div>
     `;
+  }
+
+  _detailCtx() {
+    return {
+      nodeOf: (id) => {
+        const key = id >>> 0;
+        const short = this._names[key] || this._names[String(key)];
+        const long = this._longNames[key] || this._longNames[String(key)];
+        return short || long ? { short, long } : null;
+      },
+    };
   }
 
   _renderDetails(group) {
@@ -896,19 +930,22 @@ class MeshSettingsSniffer extends LitElement {
       entry.hop_start !== null && entry.hop_start !== undefined
         ? `${entry.hop_limit ?? "—"} / ${entry.hop_start}`
         : "—";
+    const sections = buildDetailSections(entry, this._detailCtx());
+    const decoded = sections.length > 0;
     return html`
       <div class="details" @click=${(e) => e.stopPropagation()}>
-        ${this._renderReceptions(group)}
-        ${this._renderFields(entry)}
+        ${group.n > 1 || group.receptions.length > 1 ? this._renderReceptions(group) : ""}
+        ${decoded ? html`<div class="content">${renderSections(sections)}</div>` : ""}
         <div class="section-title">${PL("Packet")}</div>
         ${entry.decrypted_with
           ? html`<div class="kv"><span class="k">${PL("Decrypted with")}</span><span>${this._decryptedWith(entry.decrypted_with)}</span></div>`
           : ""}
-        ${!entry.fields || !entry.fields.length
+        ${!decoded
           ? html`<div class="kv"><span class="k">${PL("What is visible")}</span><span>${this._undecodedInfo(entry) || "—"}</span></div>`
           : ""}
         <div class="kv"><span class="k">${PL("Packet ID")}</span><span>${entry.id ?? "—"}</span></div>
         <div class="kv"><span class="k">${PL("Channel")}</span><span>${entry.mqtt_channel_name || (entry.decrypted_with && entry.decrypted_with.name) || entry.channel || "—"}</span></div>
+        <div class="kv"><span class="k">${PL("Signal")}</span><span>${this._signalHtml(entry) || "—"}</span></div>
         <div class="kv"><span class="k">${PL("Hop limit / start")}</span><span>${hops}</span></div>
         <div class="kv"><span class="k">${PL("Flags")}</span><span>${flags.length ? flags.join(", ") : "—"}</span></div>
         <div class="kv"><span class="k">${PL("Payload size")}</span><span>${entry.payload_size} B</span></div>
@@ -932,7 +969,6 @@ class MeshSettingsSniffer extends LitElement {
     const expanded = this._expanded === group.key;
     const info = entry.info || this._undecodedInfo(entry);
     const hops = this._hops(entry);
-    const signal = this._signal(entry);
     const muted = !entry.info && (entry.encrypted || entry.pki || Boolean(entry.payload_ascii));
     return html`
       <div
@@ -942,7 +978,7 @@ class MeshSettingsSniffer extends LitElement {
       >
         <div class="card-top">
           <span class="port">${this._portText(entry)}</span>
-          <span class="time">${this._time(group.firstTs)}</span>
+          <span class="time">${this._time(group.first_ts)}</span>
         </div>
         <div class="route">
           <span class="node">${this._label(entry.from)}</span>
@@ -953,7 +989,7 @@ class MeshSettingsSniffer extends LitElement {
         <div class="meta">
           ${this._renderChips(group)}
           ${hops !== null ? html`<span class="chip">${PL("Hops")} ${hops}</span>` : ""}
-          ${signal && group.receptions.length === 1 ? html`<span class="chip">${signal}</span>` : ""}
+          ${group.n === 1 && this._signalHtml(entry) ? html`<span class="chip">${this._signalHtml(entry)}</span>` : ""}
         </div>
         ${expanded ? this._renderDetails(group) : ""}
       </div>
@@ -976,15 +1012,47 @@ class MeshSettingsSniffer extends LitElement {
     </button>`;
   }
 
+  _renderRows() {
+    const win = computeWindow(this._heights, this._scrollTop, this._viewport, OVERSCAN_PX);
+    this._win = win;
+    const rows = [];
+    for (let i = win.start; i < win.end; i += 1) {
+      const group = this._rows[i];
+      rows.push(
+        group
+          ? html`<div class="vrow" data-i=${i}>${this._renderCard(group)}</div>`
+          : html`<div class="vrow" data-i=${i}><div class="card skeleton"></div></div>`
+      );
+    }
+    return html`
+      <div class="cards" @scroll=${(e) => this._onScroll(e)}>
+        <div class="vspacer" style="height:${win.total}px">
+          <div class="vrows" style="transform:translateY(${win.offset}px)">${rows}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderCapacity() {
+    const value = this._capacity || (this._meta && this._meta.capacity) || 25000;
+    return html`
+      <label class="cap" title="Ile ostatnich wpisów trzyma integracja w pamięci. Zmniejszenie usuwa najstarsze.">
+        <span>Bufor</span>
+        <select .value=${String(value)} @change=${(e) => this._onCapacityChange(e.target.value)}>
+          ${CAPACITY_CHOICES.map(
+            (size) => html`<option value=${size} ?selected=${size === value}>${thousands(size)}</option>`
+          )}
+        </select>
+      </label>
+    `;
+  }
+
   _renderLog() {
-    const groups = this._groups();
-    const frozen = this._frozenSeq;
-    const visibleGroups = frozen === null ? groups : groups.filter((group) => group.firstSeq <= frozen);
-    const newCount = groups.length - visibleGroups.length;
-    const shown = visibleGroups.slice(-this._visible).reverse();
     const meta = this._meta;
     const collecting = meta ? Boolean(meta.enabled || meta.mqtt_enabled) : false;
-    const filteredCount = this._filter || this._source !== "all" ? this._filteredEntries().length : this._entries.length;
+    const hasEntries = Boolean(meta && meta.count);
+    const filtering = Boolean((this._filterApplied || "").trim()) || this._source !== "all";
+    const busy = Boolean(this._exporting);
 
     return html`
       <div class="log-head">
@@ -993,15 +1061,16 @@ class MeshSettingsSniffer extends LitElement {
           ${collecting ? PL("Collecting") : PL("Not collecting")}
         </span>
         <span class="count">
-          ${groups.length} ${PL("packets")} · ${filteredCount} ${PL("receptions")}${meta ? ` · ${PL("buffer")} ${meta.count}/${meta.capacity}` : ""}
+          ${thousands(this._total)} ${PL("packets")} · ${thousands(this._receptionsTotal)} ${PL("receptions")}${meta ? ` · ${PL("buffer")} ${thousands(meta.count)}/${thousands(meta.capacity)}` : ""}
         </span>
         <span class="spacer"></span>
-        ${this._renderLiveButton(newCount)}
+        ${this._renderCapacity()}
+        ${this._renderLiveButton(this._newCount)}
         <button
           class="icon-btn danger"
           title=${PL("Clear log")}
           aria-label=${PL("Clear log")}
-          ?disabled=${!this._entries.length}
+          ?disabled=${!hasEntries}
           @click=${() => { this._clearConfirmOpen = true; }}
         >
           <ha-icon icon="mdi:trash-can-outline"></ha-icon>
@@ -1014,7 +1083,12 @@ class MeshSettingsSniffer extends LitElement {
           type="search"
           .value=${this._filter}
           placeholder=${PL("Filter by node, port or content")}
-          @input=${(e) => { this._filter = e.target.value; this._visible = PAGE_GROUPS; }}
+          @input=${(e) => {
+            this._filter = e.target.value;
+            clearTimeout(this._filterTimer);
+            this._filterTimer = setTimeout(() => this._filterNow(), FILTER_DEBOUNCE_MS);
+          }}
+          @keydown=${(e) => { if (e.key === "Enter") this._filterNow(); }}
         />
         <div class="segmented">
           ${[
@@ -1024,37 +1098,36 @@ class MeshSettingsSniffer extends LitElement {
           ].map(
             ([value, label]) => html`<button
               class=${this._source === value ? "active" : ""}
-              @click=${() => { this._source = value; this._visible = PAGE_GROUPS; }}
+              @click=${() => { if (this._source !== value) { this._source = value; this._restartQuery(); } }}
             >${label}</button>`
           )}
         </div>
         <label class="toggle">
-          <input type="checkbox" .checked=${this._grouped} @change=${(e) => { this._grouped = e.target.checked; }} />
+          <input type="checkbox" .checked=${this._grouped} @change=${(e) => { this._grouped = e.target.checked; this._restartQuery(); }} />
           ${PL("Group duplicates")}
         </label>
       </div>
 
-      ${shown.length
-        ? html`
-            <div class="cards" @scroll=${(e) => this._onScroll(e)}>
-              ${shown.map((group) => this._renderCard(group))}
-              ${visibleGroups.length > this._visible
-                ? html`<button class="btn more" @click=${() => { this._visible += PAGE_GROUPS; }}>${PL("Show more")}</button>`
-                : ""}
-            </div>
-          `
+      ${this._total > 0
+        ? this._renderRows()
         : html`<div class="empty">
             <ha-icon icon="mdi:access-point-network"></ha-icon>
-            <div>${collecting ? PL("Waiting for packets…") : PL("Enable the sniffer to start collecting packets.")}</div>
+            <div>${!this._loaded
+              ? PL("Checking…")
+              : hasEntries && filtering
+                ? "Żaden pakiet nie pasuje do filtrów."
+                : collecting ? PL("Waiting for packets…") : PL("Enable the sniffer to start collecting packets.")}</div>
           </div>`}
 
       <div class="toolbar bottom">
-        <button class="btn" ?disabled=${!this._entries.length} @click=${() => this._exportJson()}>${PL("Export JSON")}</button>
-        <button class="btn" ?disabled=${!this._entries.length} @click=${() => this._exportCsv()}>${PL("Export CSV")}</button>
-        <button class="btn danger" ?disabled=${!this._entries.length} @click=${() => { this._clearConfirmOpen = true; }}>
+        <button class="btn" ?disabled=${!hasEntries || busy} @click=${() => this._export("json")}>${PL("Export JSON")}</button>
+        <button class="btn" ?disabled=${!hasEntries || busy} @click=${() => this._export("csv")}>${PL("Export CSV")}</button>
+        ${busy ? html`<span class="count">Eksport… ${thousands(this._exporting.count)} wpisów</span>` : ""}
+        <button class="btn danger" ?disabled=${!hasEntries} @click=${() => { this._clearConfirmOpen = true; }}>
           <ha-icon icon="mdi:trash-can-outline"></ha-icon>${PL("Clear log")}
         </button>
       </div>
+      <div class="note">Eksport obejmuje cały przefiltrowany bufor, każdy odbiór osobno (nie tylko to, co widać na liście).</div>
     `;
   }
 
@@ -1090,6 +1163,16 @@ class MeshSettingsSniffer extends LitElement {
         @confirm=${() => { this._clearConfirmOpen = false; this._clearLog(); }}
         @cancel=${() => { this._clearConfirmOpen = false; }}
       ></mesh-confirm-dialog>
+
+      <mesh-confirm-dialog
+        .open=${this._capConfirm !== null}
+        .title=${"Zmniejszyć bufor?"}
+        .message=${`Bufor zostanie zmniejszony do ${thousands(this._capConfirm || 0)} wpisów. Najstarsze pakiety ponad ten limit zostaną usunięte z pamięci.`}
+        .confirmLabel=${"Zmniejsz"}
+        .danger=${true}
+        @confirm=${() => { const size = this._capConfirm; this._capConfirm = null; this._setCapacity(size); }}
+        @cancel=${() => { this._capConfirm = null; }}
+      ></mesh-confirm-dialog>
     `;
   }
 
@@ -1097,6 +1180,7 @@ class MeshSettingsSniffer extends LitElement {
     return [
       settingsStyles,
       badgeStyles,
+      detailStyles,
       css`
         :host { display: block; }
 
@@ -1313,14 +1397,40 @@ class MeshSettingsSniffer extends LitElement {
         }
 
         /* ── karty ── */
+        /* lista wirtualna: stała wysokość okna, w środku rozpórka o pełnej wysokości listy */
         .cards {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
           margin-top: 12px;
-          max-height: 560px;
+          height: min(70vh, 640px);
+          min-height: 280px;
           overflow-y: auto;
+          overflow-anchor: none;
           padding-right: 2px;
+        }
+
+        .vspacer { position: relative; }
+        .vrows { position: absolute; top: 0; left: 0; right: 0; will-change: transform; }
+        .vrow { padding-bottom: 8px; }
+        .card.skeleton { min-height: 86px; opacity: 0.5; animation: pulse 1.6s ease-in-out infinite; cursor: default; }
+        .sig { font-variant-numeric: tabular-nums; font-weight: 500; }
+        .more-note { margin-top: 4px; font-size: 11px; color: var(--secondary-text-color); }
+        .content { margin-bottom: 6px; }
+
+        .cap {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
+        }
+
+        .cap select {
+          padding: 4px 6px;
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          font-family: inherit;
+          font-size: 12px;
         }
 
         .card {
@@ -1496,7 +1606,6 @@ class MeshSettingsSniffer extends LitElement {
         @media (max-width: 600px) {
           .kv .k { flex-basis: 110px; }
           .route { font-size: 13px; }
-          .cards { max-height: none; }
         }
       `,
     ];

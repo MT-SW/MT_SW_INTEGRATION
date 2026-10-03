@@ -105,6 +105,9 @@ export const PLANNER_CSS = `
 .mlp-progress::-moz-progress-bar { background: var(--primary-color, #03a9f4); }
 .mlp-spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--divider-color, #bbb); border-top-color: var(--primary-color, #03a9f4); border-radius: 50%; animation: mlp-rot 0.9s linear infinite; flex: none; }
 @keyframes mlp-rot { to { transform: rotate(360deg); } }
+.mlp-details { margin-top: 4px; font-size: 12px; }
+.mlp-details summary { cursor: pointer; color: var(--secondary-text-color, #727272); }
+.mlp-pre { margin: 4px 0 0; padding: 6px 8px; max-height: 180px; overflow: auto; white-space: pre-wrap; word-break: break-word; user-select: text; background: var(--secondary-background-color, #f3f3f3); border-radius: 6px; font-size: 11px; }
 .mlp-status { display: flex; align-items: center; gap: 8px; }
 .mlp-status > .mlp-small { flex: 1; }
 

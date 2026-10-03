@@ -40,6 +40,7 @@ from .connection import (
 )
 from .const import LOGGER, UNDEFINED
 from .errors import MeshInterfaceRequestError, MeshRoutingError, MeshtasticError
+from . import gateway_position as gwpos
 from .packet import DatabaseNodeInfoPacket, FullNodeInfoPacket, Packet
 from .protobuf import (
     admin_pb2,
@@ -50,6 +51,7 @@ from .protobuf import (
     localonly_pb2,
     mesh_pb2,
     module_config_pb2,
+    mqtt_pb2,
     portnums_pb2,
     telemetry_pb2,
 )
@@ -194,6 +196,11 @@ class MeshInterface:
         self._response_timeout = 60.0 if response_timeout is None else response_timeout.total_seconds()
 
         self._node_database: dict[int, dict[str, Any]] = {}
+        # Pozycja własnego węzła z innych źródeł niż baza węzłów (patrz gateway_position.py).
+        # Celowo poza _node_database: baza jest zerowana w _start_config(), a radio nie
+        # odsyła nam własnych rozgłoszeń, więc ta pozycja nie wróciłaby sama.
+        self._own_position: dict[str, Any] | None = None
+        self._fixed_position_hint: dict[str, Any] | None = None
         self._queue: asyncio.Queue = asyncio.Queue()
 
         # Cached config-phase FromRadio bytes (my_info, metadata, channel, node_info,
@@ -380,6 +387,49 @@ class MeshInterface:
                     "altitude": position.get("altitude", 0),
                 }
         return None
+
+    def my_node_num(self) -> int | None:
+        info = getattr(self, "_connected_node_info", None)
+        return int(info.my_node_num) if info is not None else None
+
+    def note_own_position(self, position: Mapping[str, Any] | None) -> bool:
+        """Zapamiętaj pozycję własnego węzła zobaczoną na łączu (POSITION_APP / proxy MQTT).
+
+        Zwraca True, gdy zapamiętana pozycja się zmieniła.
+        """
+        normalized = gwpos.normalize_position(dict(position) if position is not None else None)
+        if normalized is None or normalized == self._own_position:
+            return False
+        self._own_position = normalized
+        self._emit_node_changed(self.my_node_num())
+        return True
+
+    def note_fixed_position(self, latitude: float, longitude: float, altitude: float = 0) -> None:
+        """Pozycja stała, którą sami ustawiliśmy na radiu — źródło awaryjne."""
+        normalized = gwpos.normalize_position({"latitude": latitude, "longitude": longitude, "altitude": altitude})
+        if normalized is not None:
+            self._fixed_position_hint = normalized
+            self._emit_node_changed(self.my_node_num())
+
+    def gateway_position_sources(self) -> dict[str, Any]:
+        """Surowe kandydaty na pozycję bramki (do rozwiązania i do debugowania)."""
+        node = self._node_database.get(self.my_node_num()) if self.my_node_num() is not None else None
+        fixed_flag = None
+        with contextlib.suppress(Exception):
+            fixed_flag = bool(self._connected_node_local_config.position.fixed_position)
+        return {
+            "node": node,
+            "own_packet": self._own_position,
+            "fixed_position": self._fixed_position_hint if fixed_flag is not False else None,
+            "fixed_position_flag": fixed_flag,
+        }
+
+    def gateway_position(self, persisted: Mapping[str, Any] | None = None) -> tuple[dict[str, Any] | None, str | None]:
+        """(pozycja, źródło) własnego węzła — patrz gwpos.resolve_gateway_position."""
+        sources = self.gateway_position_sources()
+        return gwpos.resolve_gateway_position(
+            sources["node"], sources["own_packet"], sources["fixed_position"], dict(persisted) if persisted else None
+        )
 
     async def get_canned_messages(self, node: int | None = None) -> str:
         """Gotowe wiadomości z radia (jedna odpowiedź admin, wynik zapamiętywany)."""
@@ -626,6 +676,24 @@ class MeshInterface:
             except asyncio.CancelledError:
                 break
 
+    def _spot_own_position_in_proxy_message(self, message: mesh_pb2.MqttClientProxyMessage) -> None:
+        """Kopia własnego rozgłoszenia pozycji z proxy MQTT (tylko gdy koperta nie jest zaszyfrowana)."""
+        try:
+            if not message.HasField("data"):
+                return
+            envelope = mqtt_pb2.ServiceEnvelope()
+            envelope.ParseFromString(message.data)
+            mesh_packet = envelope.packet
+            if getattr(mesh_packet, "from") != self.my_node_num() or not mesh_packet.HasField("decoded"):
+                return
+            if mesh_packet.decoded.portnum != portnums_pb2.PortNum.POSITION_APP:
+                return
+            position = mesh_pb2.Position()
+            position.ParseFromString(mesh_packet.decoded.payload)
+            self.note_own_position(google.protobuf.json_format.MessageToDict(position))
+        except Exception:  # noqa: BLE001
+            self._logger.debug("Nie udało się odczytać pozycji z proxy MQTT", exc_info=True)
+
     async def _handle_mqtt_client_proxy_message(self, message: mesh_pb2.MqttClientProxyMessage) -> None:
         """
         Handle MQTT client proxy messages from the radio.
@@ -633,6 +701,7 @@ class MeshInterface:
         This receives MqttClientProxyMessage messages from the radio and forwards them to the
         configured MQTT broker.
         """
+        self._spot_own_position_in_proxy_message(message)
         if (
             not hasattr(self._connected_node_module_config, "mqtt")
             or not self._connected_node_module_config.mqtt.enabled
@@ -945,6 +1014,9 @@ class MeshInterface:
             return
 
         node_id = int(packet.from_id)
+        if node_id == 0 and packet.port_num == portnums_pb2.PortNum.POSITION_APP and self.my_node_num():
+            # from=0 oznacza „od nas” — kopia własnego rozgłoszenia pozycji dla klienta
+            node_id = self.my_node_num()
         node = self.find_node(node_id) or MeshNode.stub_node(node_id)
 
         if packet.port_num == portnums_pb2.PortNum.TELEMETRY_APP:
@@ -955,6 +1027,9 @@ class MeshInterface:
         elif packet.port_num == portnums_pb2.PortNum.POSITION_APP:
             position = packet.app_payload
             position_info = google.protobuf.json_format.MessageToDict(position)
+            if node_id == self.my_node_num():
+                self.note_own_position(position_info)
+                self._get_or_create_node(node_id)
             if node_id in self._node_database:
                 await self._node_database_update(node_id, position=position_info)
         elif packet.port_num == portnums_pb2.PortNum.NODEINFO_APP:
@@ -988,6 +1063,8 @@ class MeshInterface:
                 if "user" in node_info_dict:
                     _normalize_user_dict(node_info_dict["user"], node_info.num)
                 db_node = self._get_or_create_node(node_info.num)
+                if "position" in node_info_dict:
+                    node_info_dict["position"] = gwpos.merge_position(db_node.get("position"), node_info_dict["position"])
                 db_node.update(node_info_dict)
                 self._emit_node_changed(node_info.num)
 
@@ -1521,6 +1598,7 @@ class MeshInterface:
                     position.altitude = round(float(alt or 0))
                     position.time = int(time.time())
                     position.location_source = mesh_pb2.Position.LocSource.LOC_MANUAL
+                    self.note_fixed_position(float(lat), float(lng), float(alt or 0))
                     fixed_message = admin_pb2.AdminMessage()
                     fixed_message.set_fixed_position.CopyFrom(position)
                     extra_messages.append(fixed_message)
@@ -1804,9 +1882,9 @@ class MeshInterface:
                 return next(iter(done)).result()
             if not ack_received.is_set():
                 msg = f"No acknowledgement received within {actual_timeout} seconds"
-                raise MeshInterfaceRequestError(msg)
+                raise MeshInterfaceRequestError(msg, reason="no_ack")
             msg = f"No response received within {actual_timeout} seconds"
-            raise MeshInterfaceRequestError(msg)
+            raise MeshInterfaceRequestError(msg, reason="no_response")
         finally:
             for p in pending:
                 p.cancel()
@@ -1932,6 +2010,9 @@ class MeshInterface:
         if node_id not in self._node_database:
             return False
 
+        if "position" in kwargs:
+            # pusta/bez współrzędnych pozycja nie może skasować dobrej
+            kwargs["position"] = gwpos.merge_position(self._node_database[node_id].get("position"), kwargs["position"])
         self._node_database[node_id].update(**kwargs)
         self._emit_node_changed(node_id)
         await self._notify_node_update(node_id)

@@ -801,6 +801,8 @@ const EXTRA_PL = {
   chart_hint_pointer: 'Dotknij wykresu lub przeciągnij palcem, aby odczytać wartości.',
   pdf_failed: 'Nie udało się utworzyć raportu PDF.',
   panel_resize: 'Szerokość panelu',
+  tech_details: 'Szczegóły techniczne',
+  precise_radius_reduced: 'Obszar %1$d km był za duży dla serwera OpenStreetMap — użyto promienia %2$s km.',
 };
 const EXTRA_EN = {
   layer_coverage: 'Estimated coverage',
@@ -825,6 +827,8 @@ const EXTRA_EN = {
   chart_hint_pointer: 'Tap the chart or drag to read values.',
   pdf_failed: 'Could not create the PDF report.',
   panel_resize: 'Panel width',
+  tech_details: 'Technical details',
+  precise_radius_reduced: 'The %1$d km area was too large for the OpenStreetMap server - a radius of %2$s km was used.',
 };
 for (const [k, v] of Object.entries(EXTRA_PL)) PL['ha_' + k] = v;
 for (const [k, v] of Object.entries(EXTRA_EN)) EN['ha_' + k] = v;

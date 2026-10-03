@@ -2,6 +2,7 @@
 // Przy błędzie planner wraca do atmosfery standardowej (k = 4/3, N0 = 301).
 import { analyzeProfile } from './atmosphere.js';
 import { fmt, abortError, throwIfAborted } from './util.js';
+import { plannerFetch } from './net.js';
 
 export const WEATHER_BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 export const WEATHER_TIMEOUT_MS = 15000;
@@ -103,7 +104,7 @@ export class PlannerWeather {
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
     let body = null;
     try {
-      const res = await this._fetch(url, { signal: ctrl.signal });
+      const res = await plannerFetch(this._fetch, url, { signal: ctrl.signal });
       if (res.ok) body = await res.text();
     } catch (e) {
       if (signal && signal.aborted) throw e.name === 'AbortError' ? e : abortError();

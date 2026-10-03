@@ -3,6 +3,7 @@
 // Port: PlannerElevation.kt + MapterhornEndpoints.kt + TerrainTileMath.kt + ElevationTile.kt + czytnik PMTiles.
 import { profileFromSampler } from './profile.js';
 import { clamp, throwIfAborted } from './util.js';
+import { plannerFetch } from './net.js';
 
 // ---------------------------------------------------------------- Mapterhorn
 
@@ -220,7 +221,7 @@ export class PmTilesReader {
   }
 
   async _range(offset, length) {
-    const res = await this._fetch(this.url, { headers: { Range: `bytes=${offset}-${offset + length - 1}` } });
+    const res = await plannerFetch(this._fetch, this.url, { headers: { Range: `bytes=${offset}-${offset + length - 1}` } });
     if (res.status !== 206 && res.status !== 200) throw new Error(`HTTP ${res.status}`);
     const buf = new Uint8Array(await res.arrayBuffer());
     if (res.status === 200) {

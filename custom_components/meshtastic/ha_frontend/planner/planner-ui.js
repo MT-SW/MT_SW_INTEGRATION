@@ -16,6 +16,7 @@ import {
   PlannerStore, SIDES, endOf, otherSide, isEndComplete, isLinkReady, hintsOf, nodeOptionsFromHaNodes,
 } from './planner-state.js';
 import { createWidgets, buildInfoDialog, h } from './planner-widgets.js';
+import { setPlannerProxy, createHassProxy } from './net.js';
 import { buildProfileChart, buildCoveragePlan } from './planner-chart.js';
 import { CoverageLayerRegistry, PlannerMapLayer, coverageToImage } from './planner-map-layer.js';
 import { makeReportStrings, buildReport, csvSummary, csvProfile, renderKml, renderGeoJson, profileToPngBlob } from './planner-exports.js';
@@ -80,6 +81,32 @@ function downloadBlob(blob, name) {
   setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
 }
 
+let clutterDetailsOpen = false;
+
+/** Szczegóły techniczne błędu pobierania OSM jako zwykły tekst (do wklejenia w zgłoszeniu). */
+export function clutterDetailText(status) {
+  if (!status || status.kind !== 'failed') return '';
+  const d = status.detail || {};
+  const lines = [`failure: ${status.failure}`];
+  if (d.status !== undefined) lines.push(`HTTP: ${d.status}`);
+  if (d.errorName || d.errorMessage) lines.push(`error: ${[d.errorName, d.errorMessage].filter(Boolean).join(': ')}`);
+  if (d.remark) lines.push(`server: ${d.remark}`);
+  if (d.proxyError) lines.push(`proxy: ${d.proxyError}`);
+  if (d.radiusKm !== undefined) lines.push(`radius: ${d.requestedRadiusKm} km -> ${d.radiusKm} km`);
+  for (const a of d.attempts || []) {
+    const bits = [a.mirror];
+    if (a.status !== undefined) bits.push(`HTTP ${a.status}`);
+    if (a.timedOut) bits.push('timeout');
+    if (a.errorName) bits.push(`${a.errorName}: ${a.errorMessage || ''}`);
+    if (a.remark) bits.push(a.remark);
+    if (a.viaProxy) bits.push('via proxy');
+    if (a.proxyError) bits.push(`proxy: ${a.proxyError}`);
+    bits.push(`${a.ms} ms`);
+    lines.push(`- ${bits.join(' | ')}`);
+  }
+  return lines.join('\n');
+}
+
 class PlannerController {
   /**
    * @param {{host:HTMLElement, map:object, L:object, container:HTMLElement, hass:object, nodes?:Array}} o
@@ -92,6 +119,9 @@ class PlannerController {
     this.container = container;
     this.mount = container.parentElement || host;
     this.hass = hass;
+    // Awaryjna droga przez backend integracji, gdy bezpośrednie zapytanie do Overpass/Mapterhorn/Open-Meteo
+    // padnie na CORS/sieci (patrz net.js, planner_proxy.py).
+    setPlannerProxy(createHassProxy(() => this.hass));
     this.session = getPlannerSession();
     this.store = this.session.store;
     this.registry = this.session.registry;
@@ -232,7 +262,7 @@ class PlannerController {
       {
         id: 'env',
         deps: (s) => [s.useWeather, s.weather, s.kFactor, s.surfaceRefractivity, s.atmosphericLossDb, s.preciseTerrain, s.clutterRadiusKm,
-          s.forestHeightM, s.buildingHeightM, s.clutter, s.clutterPreset, s.extraLossDb],
+          s.forestHeightM, s.buildingHeightM, s.clutter, s.clutterNote, s.clutterPreset, s.extraLossDb],
         render: (s) => this._secEnv(s),
       },
       {
@@ -764,6 +794,7 @@ class PlannerController {
         key: 'buildingH', label: tr('precise_building_height'), value: s.buildingHeightM, onValue: (v) => store.setBuildingHeight(v), decimals: 0, suffix: this._unit('m'), min: 0, max: 200,
       }));
       out.push(this._clutterStatus(s.clutter));
+      if (s.clutterNote) out.push(W.small(tr('ha_precise_radius_reduced', Math.round(s.clutterNote.requestedKm), fmtTrim(s.clutterNote.usedKm, 1)), 'mlp-warn-text'));
       out.push(W.small(tr('precise_coverage_note')));
     }
     if (!s.preciseTerrain || (s.clutter && s.clutter.kind === 'failed')) {
@@ -786,7 +817,14 @@ class PlannerController {
     if (status.kind === 'loading') return W.h('div', { class: 'mlp-status' }, W.h('span', { class: 'mlp-spin' }), W.small(tr('precise_loading')));
     if (status.kind === 'ready') return W.small(tr('precise_ready', status.stats.buildings, status.stats.forests, status.stats.areas));
     const key = status.failure === 'NETWORK' ? 'precise_failed_network' : status.failure === 'TOO_LARGE' ? 'precise_failed_large' : 'precise_failed_data';
-    return W.small(tr(key), 'mlp-err-text');
+    const msg = W.small(tr(key), 'mlp-err-text');
+    const text = clutterDetailText(status);
+    if (!text) return msg;
+    // Szczegóły techniczne zwijane; stan otwarcia zapamiętany, bo panel jest przebudowywany przy każdej zmianie.
+    return W.h('div', null, msg, W.h('details', {
+      class: 'mlp-details', open: clutterDetailsOpen,
+      onToggle: (e) => { clutterDetailsOpen = !!e.target.open; },
+    }, W.h('summary', null, tr('ha_tech_details')), W.h('pre', { class: 'mlp-pre' }, text)));
   }
 
   _weatherBlock(s) {

@@ -119,6 +119,15 @@
     "step": {
       "init": {
         "title": "MT_SW_INTEGRATION options",
+        "description": "Choose what you want to do.",
+        "menu_options": {
+          "settings": "Settings (mode, tracked nodes, notifications, servers)",
+          "devices": "Added devices — open details",
+          "merge": "Merge duplicate nodes (number change)"
+        }
+      },
+      "settings": {
+        "title": "MT_SW_INTEGRATION options",
         "description": "Sniffer mode (radio and MQTT) and the radio's own configuration are changed in the MT_SW panel, not here.\n\nThe integration consists of two parts that work independently — you can use both or just one. A failure in one part never stops the other.\n\n**MT_SW panel** — an app in the Home Assistant sidebar that works like the Meshtastic app on your phone: channel and direct messages, a list of all nodes with favourites, map, neighbours, radio settings, sniffer and OnDemand diagnostics. It creates no entities.\n\n**Statistics** — Home Assistant devices and entities for the selected nodes: battery, voltage, signal (SNR/RSSI), channel utilisation, environment telemetry, position on the HA map and notify entities for sending messages. History, graphs, dashboard cards and automations are built on them.",
         "data": {
           "mode": "Mode",
@@ -166,6 +175,24 @@
             }
           }
         }
+      },
+      "devices": {
+        "title": "Added devices",
+        "description": "Pick a device to see its details, jump to its Home Assistant device page or stop tracking it.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "device_details": {
+        "title": "Device: {name}",
+        "description": "**{name}** ({node})\n\nShort name: {short_name}\nModel: {hw_model}\nIdentity: `{identity}`\n\nHome Assistant device page: {device_link}\n\nChoose an action:",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "merge": {
+        "title": "Merge duplicate nodes",
+        "description": "Looks for devices of the same node that came back under a NEW node number (same public key or — without a key — same names and hardware model), moves the entities with their history onto one device and removes the duplicate. Never merges nodes that are live at the same time with different keys. Safe to run repeatedly."
       }
     },
     "error": {
@@ -174,6 +201,11 @@
       "unknown": "Unknown error occurred.",
       "option_invalid": "Option configuration invalid",
       "port_in_use": "Port already in use"
+    },
+    "abort": {
+      "no_devices": "No devices have been added yet.",
+      "not_loaded": "Statistics are disabled or the integration has not started yet.",
+      "merge_done": "Done. Entity registry entries changed: {count}. Details are in the Home Assistant log (INFO)."
     }
   },
   "services": {
@@ -618,6 +650,12 @@
         "panel_and_stats": "Panel and statistics (recommended)",
         "panel_only": "Panel only — no devices or entities in Home Assistant",
         "stats_only": "Statistics only — no sidebar panel"
+      }
+    },
+    "option_device_action_selector": {
+      "options": {
+        "back": "Back (change nothing)",
+        "untrack": "Stop tracking this device and remove it"
       }
     }
   },

@@ -27,6 +27,12 @@ export const PlannerError = Object.freeze({
 
 const idleStatus = () => ({ kind: 'idle' });
 
+/** Stan „nie udało się” dla przeszkód OSM: kod + szczegóły techniczne (status HTTP, komunikat błędu, uwaga serwera). */
+function clutterFailureStatus(e) {
+  if (e instanceof PlannerClutterError) return { kind: 'failed', failure: e.failure, detail: e.detail || {} };
+  return { kind: 'failed', failure: PlannerClutterFailure.BAD_RESPONSE, detail: { errorName: e && e.name, errorMessage: String((e && e.message) || e).slice(0, 300) } };
+}
+
 /** Strata feedera końca (dB): tryb dokładny (złącza+kable) albo wartość ręczna. */
 export function feederLossOf(end, fMHz) {
   return end.feederPrecise ? computeFeeder(end.feederConfig, fMHz).totalDb : end.feederManualDb;
@@ -215,7 +221,7 @@ export class PlannerComputer {
         clutterStatus = { kind: 'ready', stats: map.stats };
       } catch (e) {
         if (isAbortError(e)) throw e;
-        clutterStatus = { kind: 'failed', failure: e instanceof PlannerClutterError ? e.failure : PlannerClutterFailure.BAD_RESPONSE };
+        clutterStatus = clutterFailureStatus(e);
       }
     }
     const used = makeProfile(profile.stepM, ground);
@@ -246,12 +252,13 @@ export class PlannerComputer {
   /**
    * Prognoza zasięgu wokół końca `coverageSide`. Rzuca PlannerElevationError (brak terenu), Error z
    * code PlannerError.COVERAGE_NEEDS_POINT (brak punktu) lub AbortError. Brak przeszkód OSM nie jest błędem:
-   * wołany jest onClutterFailure(failure) i obliczenie idzie dalej bez nich.
+   * wołany jest onClutterFailure(failure, detail) i obliczenie idzie dalej bez nich; gdy obszar był za duży i pobrano
+   * połowę promienia - onClutterRadius({requestedKm, usedKm, failure}).
    * @param {Object} rawInput  jak w compute (+ kFactor, surfaceRefractivity, clutterStatus z ostatniego compute)
    * @param {{onProgress?:(f:number)=>void, signal?:AbortSignal, onClutterFailure?:(f:string)=>void}} [o]
    * @returns {Promise<CoverageResult>}
    */
-  async computeCoverage(rawInput, { onProgress, signal, onClutterFailure } = {}) {
+  async computeCoverage(rawInput, { onProgress, signal, onClutterFailure, onClutterRadius } = {}) {
     const inp = normalizePlannerInput(rawInput);
     const end = inp.coverageSide === 'B' ? inp.b : inp.a;
     if (!isComplete(end)) {
@@ -265,10 +272,10 @@ export class PlannerComputer {
     let clutterMap = null;
     if (inp.preciseTerrain) {
       try {
-        clutterMap = await this.clutter.forArea(center, Math.min(inp.coverageMaxRangeKm, inp.clutterRadiusKm), { signal });
+        clutterMap = await this.clutter.forArea(center, Math.min(inp.coverageMaxRangeKm, inp.clutterRadiusKm), { signal, onRadiusReduced: onClutterRadius });
       } catch (e) {
         if (isAbortError(e)) throw e;
-        if (onClutterFailure) onClutterFailure(e instanceof PlannerClutterError ? e.failure : PlannerClutterFailure.BAD_RESPONSE);
+        if (onClutterFailure) { const st = clutterFailureStatus(e); onClutterFailure(st.failure, st.detail); }
         clutterMap = null;
       }
     }
@@ -366,7 +373,8 @@ export function planLink(input, options = {}) {
 /**
  * Prognoza zasięgu (raster polarny) wokół końca input.coverageSide.
  * @param {Object} input stan plannera; dla zgodności z ostatnim planLink dodaj kFactor, surfaceRefractivity, clutterStatus
- * @param {{onProgress?:(f:number)=>void, signal?:AbortSignal, onClutterFailure?:(f:string)=>void, computer?:PlannerComputer}} [options]
+ * @param {{onProgress?:(f:number)=>void, signal?:AbortSignal, onClutterFailure?:(f:string, detail?:Object)=>void,
+ *   onClutterRadius?:(info:{requestedKm:number, usedKm:number, failure:string})=>void, computer?:PlannerComputer}} [options]
  * @returns {Promise<CoverageResult>}
  */
 export function planCoverage(input, options = {}) {

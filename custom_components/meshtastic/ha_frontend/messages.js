@@ -10,6 +10,7 @@ import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatRelative, formatHops } from "./i18n.js";
 import { relayLabel } from "./hops.js";
+import { signalValue } from "./signal-quality.js";
 import { splitLinks, imageUrls, canEmbed } from "./link-preview.js";
 import { preparePhoto } from "./photo.js";
 import "./components.js";
@@ -379,10 +380,10 @@ class MeshMessagesTab extends LitElement {
     const hops = message.hops_away;
     if (hops === 0) {
       if (typeof message.rx_snr === "number") {
-        meta.push(`SNR ${message.rx_snr.toFixed(1)} dB`);
+        meta.push(signalValue(this.hass, "snr", message.rx_snr, `SNR ${message.rx_snr.toFixed(1)} dB`));
       }
       if (typeof message.rx_rssi === "number" && message.rx_rssi !== 0) {
-        meta.push(`RSSI ${message.rx_rssi} dBm`);
+        meta.push(signalValue(this.hass, "rssi", message.rx_rssi, `RSSI ${message.rx_rssi} dBm`));
       }
       meta.push(t(this.hass, "hops.direct"));
     } else if (typeof hops === "number") {
@@ -419,7 +420,7 @@ class MeshMessagesTab extends LitElement {
             <span title=${new Date(message.ts).toLocaleString(this.hass.language)}>
               ${formatRelative(this.hass, message.ts)}
             </span>
-            ${meta.length ? html`<span class="dot">·</span><span>${meta.join(" · ")}</span>` : ""}
+            ${meta.length ? html`<span class="dot">·</span><span>${meta.map((m, i) => (i ? html` · ${m}` : m))}</span>` : ""}
             ${message.xeddsa_signed
               ? html`<ha-icon class="signed-icon" icon="mdi:shield-check" title=${t(this.hass, "messages.signed")}></ha-icon>`
               : ""}

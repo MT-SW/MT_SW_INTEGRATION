@@ -85,6 +85,7 @@ from .helpers import (
 from .image_upload import async_register_upload_view
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
+from .node_merge import async_reconcile_nodes
 from .store import async_setup_store, async_unload_store
 from .websocket_api import async_register_websocket_api
 
@@ -544,6 +545,22 @@ async def _setup_meshtastic_devices(
         except Exception:  # noqa: BLE001
             LOGGER.warning("Could not create device for node %s", node_id, exc_info=True)
             failed.append(node_id)
+
+    # between the passes: merge devices/entities of a node that came back under a
+    # new node number (same public key, or — without a key — same names + model).
+    # Must never break the rest of the start-up, so it is fully guarded.
+    try:
+        try:
+            live_nodes = await client.async_get_all_nodes() or nodes
+        except Exception:  # noqa: BLE001
+            live_nodes = nodes
+        changed = await async_reconcile_nodes(hass, entry, live_nodes, gateway_node.get("num"))
+        if changed and entry.runtime_data.stats.platforms_forwarded and entry.state is ConfigEntryState.LOADED:
+            # already-loaded platforms still hold entities under the old unique_id
+            LOGGER.info("Entity registry changed by node merge (%d) — reloading %s", changed, entry.title)
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+    except Exception:  # noqa: BLE001
+        LOGGER.warning("Node merge step failed", exc_info=True)
 
     # pass 2: now link via_device / closest-gateway, all targets already exist
     for node_id, node in nodes.items():

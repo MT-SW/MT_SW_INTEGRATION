@@ -23,6 +23,9 @@ surowe `encrypted`. Tutaj:
    kanałów, do których pasuje (np. „MediumFast — inny klucz”), informacja o
    szyfrowaniu PKI (wiadomość prywatna — nie da się jej odczytać bez klucza
    prywatnego odbiorcy), rozmiar i zrzut bajtów z podglądem ASCII.
+4. **Dane strukturalne** — `decode_structured()` oddaje tę samą treść jako
+   słownik z listami (sąsiedzi, skoki traceroute z SNR, grupy telemetrii…),
+   z którego panel rysuje czytelne widoki zamiast jednej linii tekstu.
 """
 
 from __future__ import annotations
@@ -489,3 +492,331 @@ def b64_bytes(value: Any) -> bytes:
         return base64.b64decode(value)
     except (binascii.Error, ValueError):
         return b""
+
+
+# ── dane strukturalne dla panelu ──────────────────────────────────────────
+
+_NODE_UNKNOWN = 0xFFFFFFFF  # w trasie traceroute oznacza węzeł, którego nie znamy
+_SNR_UNKNOWN_RAW = -128  # INT8_MIN w snr_towards / snr_back = brak pomiaru
+MAX_STRUCT_ITEMS = 200
+
+_UNITS = {
+    "batteryLevel": "%",
+    "voltage": "V",
+    "channelUtilization": "%",
+    "airUtilTx": "%",
+    "temperature": "°C",
+    "relativeHumidity": "%",
+    "barometricPressure": "hPa",
+    "gasResistance": "MΩ",
+    "current": "mA",
+    "distance": "mm",
+    "lux": "lx",
+    "whiteLux": "lx",
+    "irLux": "lx",
+    "uvLux": "lx",
+    "windDirection": "°",
+    "windSpeed": "m/s",
+    "windGust": "m/s",
+    "windLull": "m/s",
+    "weight": "kg",
+    "radiation": "µR/h",
+    "rainfall1H": "mm",
+    "rainfall24H": "mm",
+    "soilMoisture": "%",
+    "soilTemperature": "°C",
+    "uptimeSeconds": "s",
+    "pm10Standard": "µg/m³",
+    "pm25Standard": "µg/m³",
+    "pm100Standard": "µg/m³",
+    "pm10Environmental": "µg/m³",
+    "pm25Environmental": "µg/m³",
+    "pm100Environmental": "µg/m³",
+    "heapTotalBytes": "B",
+    "heapFreeBytes": "B",
+    "freememBytes": "B",
+    "diskfree1": "B",
+    "diskfree2": "B",
+    "diskfree3": "B",
+}
+
+
+def _snr(raw: int | float | None, *, scaled: bool = True) -> float | None:
+    """SNR z traceroute jest zapisany w ćwiartkach dB; -128 to brak pomiaru."""
+    if raw is None or (scaled and raw == _SNR_UNKNOWN_RAW):
+        return None
+    return round(raw / 4, 2) if scaled else round(raw, 2)
+
+
+def _node_or_none(value: int) -> int | None:
+    return None if value in (0, _NODE_UNKNOWN) else int(value)
+
+
+def _item_value(descriptor: Any, value: Any) -> Any:
+    """Wartość pola protobufa w postaci prostej do JSON-a (enum → nazwa, bytes → rozmiar)."""
+    if descriptor.enum_type is not None:
+        enum_value = descriptor.enum_type.values_by_number.get(value)
+        return enum_value.name if enum_value is not None else value
+    if isinstance(value, float):
+        return round(value, 3)
+    if isinstance(value, (bytes, bytearray)):
+        return f"{len(value)} B"
+    if isinstance(value, (int, str, bool)):
+        return value
+    return str(value)
+
+
+def _is_repeated(descriptor: Any) -> bool:
+    """`is_repeated` jest w nowych wydaniach protobufa, `label` w starszych (3 = LABEL_REPEATED)."""
+    repeated = getattr(descriptor, "is_repeated", None)
+    if repeated is not None:
+        return bool(repeated)
+    return getattr(descriptor, "label", None) == 3
+
+
+def _message_items(message: Any, *, skip: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """Ustawione pola wiadomości jako [{"k", "v", "u"?}] — do tabeli klucz/wartość w panelu."""
+    skipped = set(skip)
+    items: list[dict[str, Any]] = []
+    for descriptor, value in message.ListFields():
+        key = descriptor.json_name
+        if key in skipped:
+            continue
+        if _is_repeated(descriptor):
+            value = [_item_value(descriptor, element) for element in list(value)[:MAX_STRUCT_ITEMS]]
+        elif descriptor.message_type is not None:
+            value = str(value).strip().replace("\n", " ")[:200]
+        else:
+            value = _item_value(descriptor, value)
+        item: dict[str, Any] = {"k": key, "v": value}
+        if key in _UNITS:
+            item["u"] = _UNITS[key]
+        items.append(item)
+    return items
+
+
+def _struct_text(payload: bytes, **_: Any) -> dict[str, Any]:
+    return {"type": "text", "text": payload.decode("utf-8", errors="replace")[:MAX_TEXT]}
+
+
+def _struct_position(payload: bytes, **_: Any) -> dict[str, Any]:
+    position = mesh_pb2.Position()
+    position.ParseFromString(payload)
+    detail: dict[str, Any] = {"type": "position"}
+    if position.latitude_i or position.longitude_i:
+        detail["lat"] = _coordinate(position.latitude_i)
+        detail["lon"] = _coordinate(position.longitude_i)
+    if position.HasField("altitude"):
+        detail["alt"] = position.altitude
+    bits = position.precision_bits
+    if bits:
+        detail["precision_bits"] = bits
+        if 0 < bits < 32:
+            # komórka siatki: 2^(32-bity) jednostek po 1e-7 stopnia, 1° ≈ 111 320 m
+            detail["precision_m"] = round(2 ** (32 - bits) * 1e-7 * 111320)
+    for src, dst in (
+        ("sats_in_view", "sats"),
+        ("ground_speed", "speed"),
+        ("ground_track", "track"),
+        ("PDOP", "pdop"),
+        ("time", "time"),
+        ("timestamp", "gps_time"),
+    ):
+        value = getattr(position, src, 0)
+        if value:
+            detail[dst] = value
+    return detail
+
+
+def _struct_nodeinfo(payload: bytes, **_: Any) -> dict[str, Any]:
+    user = mesh_pb2.User()
+    user.ParseFromString(payload)
+    detail: dict[str, Any] = {
+        "type": "nodeinfo",
+        "id": user.id,
+        "long_name": user.long_name,
+        "short_name": user.short_name,
+        "hw": mesh_pb2.HardwareModel.Name(user.hw_model) if user.hw_model in mesh_pb2.HardwareModel.values() else "UNSET",
+        "has_key": bool(user.public_key),
+        "licensed": bool(user.is_licensed),
+    }
+    try:
+        from .aiomeshtastic.protobuf import config_pb2  # noqa: PLC0415
+
+        detail["role"] = config_pb2.Config.DeviceConfig.Role.Name(user.role)
+    except ValueError:
+        detail["role"] = None
+    return detail
+
+
+def _struct_telemetry(payload: bytes, **_: Any) -> dict[str, Any]:
+    telemetry = telemetry_pb2.Telemetry()
+    telemetry.ParseFromString(payload)
+    variant = telemetry.WhichOneof("variant") or ""
+    detail: dict[str, Any] = {"type": "telemetry", "variant": variant, "items": []}
+    if variant:
+        detail["items"] = _message_items(getattr(telemetry, variant))
+    if telemetry.time:
+        detail["time"] = telemetry.time
+    return detail
+
+
+def _struct_routing(payload: bytes, **_: Any) -> dict[str, Any]:
+    routing = mesh_pb2.Routing()
+    routing.ParseFromString(payload)
+    variant = routing.WhichOneof("variant") or ""
+    detail: dict[str, Any] = {"type": "routing", "variant": variant}
+    if variant == "error_reason":
+        detail["error"] = mesh_pb2.Routing.Error.Name(routing.error_reason)
+    elif variant in ("route_request", "route_reply"):
+        route = getattr(routing, variant)
+        detail["route"] = [_node_or_none(node) for node in route.route]
+        detail["route_back"] = [_node_or_none(node) for node in route.route_back]
+        detail["snr_towards"] = [_snr(value) for value in route.snr_towards]
+        detail["snr_back"] = [_snr(value) for value in route.snr_back]
+    return detail
+
+
+def _hop_chain(first: int | None, route: Iterable[int], last: int | None, snr: list[int]) -> list[dict[str, Any]]:
+    """
+    Łańcuch węzłów: nadawca, kolejne skoki, odbiorca. SNR dopisany do węzła,
+    DO KTÓREGO prowadzi dane łącze (snr[0] — do pierwszego skoku itd.; firmware
+    zapisuje o jeden pomiar więcej niż skoków: ostatni to łącze do celu).
+    """
+    nodes = [first, *(_node_or_none(node) for node in route), last]
+    chain: list[dict[str, Any]] = []
+    for index, node in enumerate(nodes):
+        link = snr[index - 1] if 0 < index <= len(snr) else None
+        chain.append({"node": node, "snr": _snr(link) if link is not None else None})
+    return chain
+
+
+def _struct_traceroute(
+    payload: bytes, *, sender: int | None = None, dest: int | None = None, reply: bool = False, **_: Any
+) -> dict[str, Any]:
+    route = mesh_pb2.RouteDiscovery()
+    route.ParseFromString(payload)
+    # Odpowiedź idzie od celu do pytającego; zapytanie od pytającego do celu.
+    origin, target = (dest, sender) if reply else (sender, dest)
+    detail: dict[str, Any] = {
+        "type": "traceroute",
+        "reply": reply,
+        "towards": _hop_chain(origin, route.route, target, list(route.snr_towards)),
+    }
+    if reply or route.route_back or route.snr_back:
+        detail["back"] = _hop_chain(target, route.route_back, origin, list(route.snr_back))
+    return detail
+
+
+def _struct_neighborinfo(payload: bytes, **_: Any) -> dict[str, Any]:
+    info = mesh_pb2.NeighborInfo()
+    info.ParseFromString(payload)
+    return {
+        "type": "neighbors",
+        "node": int(info.node_id) or None,
+        "interval": info.node_broadcast_interval_secs or None,
+        "neighbors": [
+            {"node": int(neighbor.node_id), "snr": round(neighbor.snr, 2), "interval": neighbor.node_broadcast_interval_secs or None}
+            for neighbor in list(info.neighbors)[:MAX_STRUCT_ITEMS]
+        ],
+    }
+
+
+def _struct_admin(payload: bytes, **_: Any) -> dict[str, Any]:
+    admin = admin_pb2.AdminMessage()
+    admin.ParseFromString(payload)
+    # treść celowo pomijamy: set_config / set_channel niosą klucze i hasła
+    return {"type": "admin", "variant": admin.WhichOneof("payload_variant") or ""}
+
+
+def _struct_waypoint(payload: bytes, **_: Any) -> dict[str, Any]:
+    waypoint = mesh_pb2.Waypoint()
+    waypoint.ParseFromString(payload)
+    detail: dict[str, Any] = {"type": "waypoint", "id": waypoint.id, "name": waypoint.name}
+    if waypoint.description:
+        detail["description"] = waypoint.description
+    if waypoint.latitude_i or waypoint.longitude_i:
+        detail["lat"] = _coordinate(waypoint.latitude_i)
+        detail["lon"] = _coordinate(waypoint.longitude_i)
+    if waypoint.expire:
+        detail["expire"] = waypoint.expire
+    if waypoint.locked_to:
+        detail["locked_to"] = int(waypoint.locked_to)
+    if waypoint.icon:
+        detail["icon"] = chr(waypoint.icon) if 0x20 < waypoint.icon < 0x110000 else str(waypoint.icon)
+    return detail
+
+
+def _struct_ondemand(payload: bytes, **_: Any) -> dict[str, Any]:
+    message = ondemand_pb2.OnDemand()
+    message.ParseFromString(payload)
+    variant = message.WhichOneof("variant") or ""
+    detail: dict[str, Any] = {"type": "ondemand", "variant": variant}
+    if variant == "request":
+        detail["name"] = ondemand_pb2.OnDemandType.Name(message.request.request_type)
+    elif variant == "response":
+        detail["name"] = ondemand_pb2.OnDemandType.Name(message.response.response_type)
+    return detail
+
+
+def _struct_generic(kind: str, message_cls: Any) -> Callable[..., dict[str, Any]]:
+    def build(payload: bytes, **_: Any) -> dict[str, Any]:
+        message = message_cls()
+        message.ParseFromString(payload)
+        items = _message_items(message)
+        if kind == "map_report":
+            # współrzędne w MapReport to liczby całkowite (1e-7 stopnia)
+            for item in items:
+                if item["k"] in ("latitudeI", "longitudeI"):
+                    item["k"] = item["k"][:-1]
+                    item["v"] = _coordinate(item["v"])
+        return {"type": kind, "items": items}
+
+    return build
+
+
+_STRUCTURED: dict[int, Callable[..., dict[str, Any]]] = {
+    portnums_pb2.PortNum.TEXT_MESSAGE_APP: _struct_text,
+    portnums_pb2.PortNum.DETECTION_SENSOR_APP: _struct_text,
+    portnums_pb2.PortNum.RANGE_TEST_APP: _struct_text,
+    portnums_pb2.PortNum.ALERT_APP: _struct_text,
+    portnums_pb2.PortNum.POSITION_APP: _struct_position,
+    portnums_pb2.PortNum.NODEINFO_APP: _struct_nodeinfo,
+    portnums_pb2.PortNum.TELEMETRY_APP: _struct_telemetry,
+    portnums_pb2.PortNum.ROUTING_APP: _struct_routing,
+    portnums_pb2.PortNum.TRACEROUTE_APP: _struct_traceroute,
+    portnums_pb2.PortNum.NEIGHBORINFO_APP: _struct_neighborinfo,
+    portnums_pb2.PortNum.ADMIN_APP: _struct_admin,
+    portnums_pb2.PortNum.WAYPOINT_APP: _struct_waypoint,
+    portnums_pb2.PortNum.MAP_REPORT_APP: _struct_generic("map_report", mqtt_pb2.MapReport),
+    portnums_pb2.PortNum.PAXCOUNTER_APP: _struct_generic("paxcounter", paxcount_pb2.Paxcount),
+    portnums_pb2.PortNum.STORE_FORWARD_APP: _struct_generic("store_forward", storeforward_pb2.StoreAndForward),
+    ON_DEMAND_PORT: _struct_ondemand,
+}
+
+
+def decode_structured(
+    port: int | None,
+    payload: bytes,
+    *,
+    sender: int | None = None,
+    dest: int | None = None,
+    reply: bool = False,
+) -> dict[str, Any] | None:
+    """
+    Treść pakietu jako dane strukturalne ({"type": ..., listy, słowniki}) albo
+    None, gdy port jest nieznany / treść nie daje się odczytać. Obok krótkiego
+    opisu z decode_payload — panel rysuje z tego listy sąsiadów, skoki
+    traceroute, tabele telemetrii itd. `sender`/`dest`/`reply` potrzebuje tylko
+    traceroute, żeby dopisać do trasy jej końce.
+    """
+    if port is None or not payload:
+        return None
+    builder = _STRUCTURED.get(port)
+    if builder is None:
+        return None
+    try:
+        return builder(payload, sender=sender, dest=dest, reply=reply)
+    except Exception:  # noqa: BLE001 - uszkodzony pakiet nie może zepsuć logu
+        LOGGER.debug("Sniffer: nie udało się zdekodować struktury portu %s", port, exc_info=True)
+        return None

@@ -19,6 +19,7 @@
 
 import { html } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
+import { signalQuality, snrBands, snrLimit, setSignalPreset } from "./signal-quality.js";
 
 /* ------------------------------------------------------------------ */
 /* 1. Czysta logika                                                    */
@@ -39,64 +40,13 @@ export const QUALITY = {
 export const UNKNOWN_COLOR = "#9E9E9E";
 export const QUALITY_ORDER = [QUALITY.GOOD, QUALITY.FAIR, QUALITY.BAD, QUALITY.NONE];
 
-/* Współczynnik rozpiętości (SF) presetów — z ChannelOption.kt. Dolna granica
-   demodulacji to -7.5 dB dla SF7 i o 2.5 dB niżej na każdy kolejny SF. */
-const PRESET_SF = {
-  VERY_LONG_SLOW: 12,
-  LONG_TURBO: 11,
-  LONG_FAST: 11,
-  LONG_MODERATE: 11,
-  LONG_SLOW: 12,
-  MEDIUM_FAST: 9,
-  MEDIUM_SLOW: 10,
-  MEDIUM_TURBO: 9,
-  SHORT_FAST: 7,
-  SHORT_SLOW: 8,
-  SHORT_TURBO: 7,
-  LITE_FAST: 9,
-  LITE_SLOW: 10,
-  NARROW_FAST: 7,
-  NARROW_SLOW: 8,
-  TINY_FAST: 7,
-  TINY_SLOW: 8,
-};
-const DEFAULT_PRESET = "LONG_FAST";
-const SNR_FAIR_OFFSET = 5.5;
-const SNR_BAD_OFFSET = 7.5;
-const NARROW_BANDS = { good: -3, fair: -7, bad: -12 };
-const LITE_BANDS = { good: -5, fair: -10, bad: -15 };
-
-/** Dolna granica demodulacji presetu (dB); nieznany preset = domyślny (LongFast). */
-export function snrLimit(preset) {
-  const sf = PRESET_SF[preset] ?? PRESET_SF[DEFAULT_PRESET];
-  return -7.5 - 2.5 * (sf - 7);
-}
-
-/** Progi SNR (dB) dla presetu: powyżej good = dobry, powyżej fair = wystarczający, od bad w górę = słaby. */
-export function snrBands(preset) {
-  if (preset === "NARROW_FAST" || preset === "NARROW_SLOW") {
-    return NARROW_BANDS;
-  }
-  if (preset === "LITE_FAST" || preset === "LITE_SLOW") {
-    return LITE_BANDS;
-  }
-  const limit = snrLimit(preset);
-  return { good: limit, fair: limit - SNR_FAIR_OFFSET, bad: limit - SNR_BAD_OFFSET };
-}
+/* Progi i presety: jedno źródło prawdy w signal-quality.js (te same wartości
+   co w aplikacji). Tu zostają tylko re-eksporty dla dotychczasowych importów. */
+export { snrLimit, snrBands };
 
 /** determineSignalQuality z aplikacji (sam SNR): zwraca jeden z QUALITY. */
 export function determineSignalQuality(snr, preset) {
-  const bands = snrBands(preset);
-  if (snr > bands.good) {
-    return QUALITY.GOOD;
-  }
-  if (snr > bands.fair) {
-    return QUALITY.FAIR;
-  }
-  if (snr >= bands.bad) {
-    return QUALITY.BAD;
-  }
-  return QUALITY.NONE;
+  return QUALITY[signalQuality(snr, null, preset).toUpperCase()];
 }
 
 /** Kolor odcinka: jakość SNR albo szary, gdy SNR nieznany (null). */
@@ -134,6 +84,9 @@ function intList(value) {
 export function buildTraceView(result, nodeId, gatewayId) {
   if (!result || typeof result !== "object") {
     return null;
+  }
+  if (result.modemPreset) {
+    setSignalPreset(result.modemPreset); // preset bramki znany reszcie panelu (signal-quality.js)
   }
   const route = intList(result.route);
   const routeBack = intList(result.routeBack);

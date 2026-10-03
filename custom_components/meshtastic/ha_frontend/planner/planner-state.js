@@ -88,6 +88,7 @@ export class PlannerStore {
       surfaceRefractivity: this.engine.DEFAULT_N0 ?? 301,
       atmosphericLossDb: 0,
       clutter: { kind: 'idle' },
+      clutterNote: null, // { requestedKm, usedKm, failure } - obszar przeszkód był za duży, użyto mniejszego promienia
       computing: false,
       link: null,
       series: null,
@@ -253,11 +254,11 @@ export class PlannerStore {
 
   setExtraLossDb(db) { if (!Number.isNaN(db)) this._set(this.engine.applyExtraLoss(this.state, db), { recompute: true }); }
   setClutterPreset(id) { this._set(this.engine.applyClutterPreset(this.state, id), { recompute: true }); }
-  setPreciseTerrain(on) { this._set({ preciseTerrain: !!on, clutter: { kind: 'idle' } }, { recompute: true }); }
+  setPreciseTerrain(on) { this._set({ preciseTerrain: !!on, clutter: { kind: 'idle' }, clutterNote: null }, { recompute: true }); }
   setClutterRadius(km) {
     if (Number.isNaN(km)) return;
     const [lo, hi] = this.engine.PLANNER_LIMITS.clutterRadiusKm;
-    this._set({ clutterRadiusKm: clamp(km, lo, hi), clutter: { kind: 'idle' } }, { recompute: true });
+    this._set({ clutterRadiusKm: clamp(km, lo, hi), clutter: { kind: 'idle' }, clutterNote: null }, { recompute: true });
   }
   setForestHeight(m) { if (!Number.isNaN(m)) this._set({ forestHeightM: clamp(m, 0, 200) }, { recompute: true }); }
   setBuildingHeight(m) { if (!Number.isNaN(m)) this._set({ buildingHeightM: clamp(m, 0, 200) }, { recompute: true }); }
@@ -356,7 +357,7 @@ export class PlannerStore {
     if (this._covAbort) this._covAbort.abort();
     const ctl = new AbortController();
     this._covAbort = ctl;
-    this._set({ coverageComputing: true, coverageProgress: 0, coverageError: null });
+    this._set({ coverageComputing: true, coverageProgress: 0, coverageError: null, clutterNote: null });
     const input = { ...snap, clutterStatus: snap.clutter };
     let lastTick = 0;
     try {
@@ -370,7 +371,8 @@ export class PlannerStore {
           lastTick = now;
           for (const fn of [...this._progressListeners]) fn(p);
         },
-        onClutterFailure: (f) => { if (this._covAbort === ctl) this._set({ clutter: { kind: 'failed', failure: f } }); },
+        onClutterFailure: (f, detail) => { if (this._covAbort === ctl) this._set({ clutter: { kind: 'failed', failure: f, detail: detail || {} } }); },
+        onClutterRadius: (info) => { if (this._covAbort === ctl) this._set({ clutterNote: info }); },
       });
       if (this._covAbort !== ctl) return null;
       this._covAbort = null;

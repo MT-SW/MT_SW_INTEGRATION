@@ -574,25 +574,35 @@ class MeshtasticPanel extends LitElement {
         }
         case "node_names": {
           const names = {};
+          const longNames = {};
           for (const node of this._nodes || []) {
             if (node.short_name) {
               names[node.node_id] = node.short_name;
             }
+            if (node.long_name) {
+              longNames[node.node_id] = node.long_name;
+            }
           }
-          return { ok: true, names };
+          return { ok: true, names, long_names: longNames };
         }
         case "sniffer_state":
           return this._softWs({ type: "meshtastic/sniffer_state", entry_id: entryId, force: Boolean(data.force) });
         case "sniffer_set":
           return this._softWs({ type: "meshtastic/sniffer_set", entry_id: entryId, enabled: Boolean(data.enabled) });
         case "sniffer_log":
-          return this._softWs({ type: "meshtastic/sniffer_log", entry_id: entryId, since: data.since || 0 });
+          return this._softWs({ ...data, type: "meshtastic/sniffer_log", entry_id: entryId, since: data.since || 0 });
         case "sniffer_clear":
           return this._softWs({ type: "meshtastic/sniffer_clear", entry_id: entryId });
         case "sniffer_mqtt_set":
           return this._softWs({ type: "meshtastic/sniffer_mqtt_set", entry_id: entryId, enabled: Boolean(data.enabled) });
         case "debug_logs_status":
         case "debug_logs_list":
+        case "debug_logs_index":
+        case "debug_logs_get":
+        case "sniffer_query":
+        case "sniffer_entries":
+        case "log_capacity_get":
+        case "log_capacity_set":
         case "debug_logs_clear":
         case "debug_logs_collect":
         case "debug_logs_firmware_api":

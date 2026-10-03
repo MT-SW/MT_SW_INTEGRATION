@@ -39,10 +39,12 @@ from .api import (
     EVENT_MESHTASTIC_API_TEXT_MESSAGE_OUT,
     EventMeshtasticApiTelemetryType,
 )
+from .aiomeshtastic.gateway_position import normalize_position, position_from_packet_dict
 from .aiomeshtastic.protobuf import mesh_pb2
 from .const import DOMAIN, EVENT_MESHTASTIC_MESSAGE_ACK, LOGGER, CONF_OPTION_MQTT_SNIFFER, CONF_OPTION_MQTT_SNIFFER_ENABLE, CONF_OPTION_MQTT_SNIFFER_ENABLE_DEFAULT
 from .nodedb_cleanup import DAY_SECONDS, CleanupJob, normalize_auto, select_candidates
-from .sniffer import SnifferLog
+from . import debug_logs
+from .sniffer import CAPACITY_CHOICES, DEFAULT_CAPACITY, SnifferLog
 from .sniffer_decode import ChannelKeys
 from .mqtt_sniffer import MqttSniffer
 
@@ -181,6 +183,9 @@ class PanelStore:
         # Historia w czasie per węzeł: neighbor_count, position,
         # device_metrics, environment_metrics, power_metrics.
         self._node_history: dict[str, dict[str, list[dict[str, Any]]]] = {}
+        # Ostatnia dobra pozycja własnej bramki — przeżywa restart i ponowne łączenie
+        # (radio nie odsyła nam własnych rozgłoszeń, patrz aiomeshtastic/gateway_position.py).
+        self.gateway_position: dict[str, Any] | None = None
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
         # klucze kanałów bramki + publiczne kanały domyślne — do odszyfrowania
@@ -188,6 +193,8 @@ class PanelStore:
         self.sniffer.channel_keys = ChannelKeys(
             lambda: getattr(getattr(getattr(entry, "runtime_data", None), "client", None), "interface", None)
         )
+        # wybrany rozmiar buforów: sniffera i logów debugowania (zapisywany na dysku)
+        self.log_capacity: dict[str, int] = {"sniffer": DEFAULT_CAPACITY, "debug": DEFAULT_CAPACITY}
         self._mqtt_sniffer = MqttSniffer(hass, lambda: getattr(entry.runtime_data, "client", None))
         self._mqtt_sniffer_stored: bool | None = None
         # czyszczenie bazy węzłów radia: stan bieżącego zadania (tylko w pamięci) i ustawienia
@@ -209,8 +216,16 @@ class PanelStore:
         self._node_state = data.get("node_state", {})
         self._traceroutes = data.get("traceroutes", {})
         self._node_history = data.get("node_history", {})
+        saved_position = data.get("gateway_position")
+        self.gateway_position = saved_position if isinstance(saved_position, dict) else None
         self.auto_clean = normalize_auto(data.get("auto_clean"))
         self._mqtt_sniffer_stored = data.get("mqtt_sniffer_enabled")
+        stored_capacity = data.get("log_capacity") or {}
+        for kind in self.log_capacity:
+            if stored_capacity.get(kind) in CAPACITY_CHOICES:
+                self.log_capacity[kind] = stored_capacity[kind]
+        self.sniffer.set_capacity(self.log_capacity["sniffer"])
+        debug_logs.set_capacity(self.log_capacity["debug"])
         # Wcześniejsza wersja zapisywała też pakiety po skokach (pola snrVia/rssiVia);
         # nie mówią nic o łączu z samym węzłem, więc znikają z historii.
         for kinds in self._node_history.values():
@@ -268,8 +283,10 @@ class PanelStore:
             "node_state": self._node_state,
             "traceroutes": self._traceroutes,
             "node_history": self._node_history,
+            "gateway_position": self.gateway_position,
             "auto_clean": self.auto_clean,
             "mqtt_sniffer_enabled": self.sniffer.mqtt_enabled,
+            "log_capacity": self.log_capacity,
         }
 
     def _schedule_save(self) -> None:
@@ -566,13 +583,37 @@ class PanelStore:
         local_node = gateway_node.get("num")
         self._remember_via(packet, local_node)
         self._remember_status(packet, local_node)
+        self._spot_own_position(packet, local_node)
         if self.sniffer.enabled:
             self.sniffer.add_packet(packet, _now_ms(), local_node)
+
+    def _spot_own_position(self, packet: dict[str, Any], local_node: int | None) -> None:
+        """Pakiet POSITION_APP od własnej bramki (z łącza albo MQTT) — źródło pozycji bramki."""
+        try:
+            if local_node is None or packet.get("from") != local_node:
+                return
+            position = position_from_packet_dict(packet)
+            if position is None:
+                return
+            client = getattr(getattr(self._entry, "runtime_data", None), "client", None)
+            if client is not None:
+                client.interface.note_own_position(position)
+            self.remember_gateway_position(position)
+        except Exception:  # noqa: BLE001 - best-effort
+            LOGGER.debug("Nie udało się odczytać własnej pozycji z pakietu", exc_info=True)
 
     def _handle_mqtt_entry(self, packet: dict[str, Any]) -> None:
         gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
         local_node = gateway_node.get("num")
+        self._spot_own_position(packet, local_node)
         self.sniffer.add_mqtt_packet(packet, _now_ms(), local_node)
+
+    def set_log_capacity(self, kind: str, capacity: int) -> int:
+        """Zmień rozmiar bufora sniffera ("sniffer") albo logów debugowania ("debug"); zwraca liczbę usuniętych wpisów."""
+        self.log_capacity[kind] = capacity
+        removed = self.sniffer.set_capacity(capacity) if kind == "sniffer" else debug_logs.set_capacity(capacity)
+        self._schedule_save()
+        return removed
 
     async def async_set_mqtt_sniffer(self, enabled: bool) -> None:
         """Włącz/wyłącz na żywo z panelu — bez reloadu integracji (radio nie jest ruszane)."""
@@ -678,9 +719,36 @@ class PanelStore:
             self._signal_saved_at = now
             self._schedule_save()
 
+    def remember_gateway_position(self, position: dict[str, Any] | None) -> bool:
+        """Zapisz dobrą pozycję bramki; pustej/niepoprawnej nie przyjmujemy (nie nadpisuje dobrej)."""
+        normalized = normalize_position(position)
+        if normalized is None:
+            return False
+        current = self.gateway_position or {}
+        if all(current.get(k) == normalized.get(k) for k in ("latitude", "longitude", "altitude")):
+            return False
+        self.gateway_position = {**normalized, "saved_at": _now_ms()}
+        self._schedule_save()
+        return True
+
+    def _sync_gateway_position(self) -> None:
+        """Dociągnij pozycję bramki z łącza (baza węzłów / pakiety / pozycja stała) do zapisu."""
+        client = getattr(getattr(self._entry, "runtime_data", None), "client", None)
+        if client is None:
+            return
+        try:
+            position, source = client.get_gateway_position(None)
+        except Exception:  # noqa: BLE001 - pozycja jest best-effort
+            return
+        if position is not None and source != "persisted":
+            self.remember_gateway_position(position)
+
     def _handle_position(self, event: Event) -> None:
         node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)
         data = event.data.get(ATTR_EVENT_MESHTASTIC_API_DATA)
+        gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
+        if node_id is not None and node_id == gateway_node.get("num") and isinstance(data, dict):
+            self.remember_gateway_position(data)
         if node_id is None or not data or "latitude" not in data:
             return
         self._record_node_point(
@@ -732,6 +800,7 @@ class PanelStore:
 
     def _sample_gateway(self, _now: Any = None) -> None:
         """Dopisz próbkę telemetrii bramki z danych koordynatora."""
+        self._sync_gateway_position()
         data = getattr(self._entry, "runtime_data", None)
         if data is None or not data.coordinator.data:
             return
