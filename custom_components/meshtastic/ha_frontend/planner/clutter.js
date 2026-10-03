@@ -8,11 +8,15 @@ import { plannerFetch, hostOf } from './net.js';
 export const ClutterKind = Object.freeze({ BUILDING: 'BUILDING', FOREST: 'FOREST', RESIDENTIAL: 'RESIDENTIAL', COMMERCIAL: 'COMMERCIAL' });
 
 /** Powód braku danych o przeszkodach (UI tłumaczy na komunikat; przy TOO_LARGE: zmniejsz zasięg). */
-export const PlannerClutterFailure = Object.freeze({ NETWORK: 'NETWORK', BAD_RESPONSE: 'BAD_RESPONSE', TOO_LARGE: 'TOO_LARGE' });
+export const PlannerClutterFailure = Object.freeze({
+  NETWORK: 'NETWORK', BAD_RESPONSE: 'BAD_RESPONSE', TOO_LARGE: 'TOO_LARGE',
+  /** Serwer odmówił albo nie dał rady (przeciążony, limit czasu, „out of memory” po jego stronie) - to nie pamięć urządzenia. */
+  SERVER_LIMIT: 'SERVER_LIMIT',
+});
 
 export class PlannerClutterError extends Error {
   /**
-   * @param {'NETWORK'|'BAD_RESPONSE'|'TOO_LARGE'} failure
+   * @param {'NETWORK'|'BAD_RESPONSE'|'TOO_LARGE'|'SERVER_LIMIT'} failure
    * @param {*} [cause]
    * @param {Object} [detail]  dane diagnostyczne (JSON-owe): status HTTP, nazwa/komunikat błędu, uwaga serwera,
    *   lista prób po kolejnych serwerach; UI pokazuje je w „Szczegóły techniczne”
@@ -198,15 +202,81 @@ export function withClutter(ground, stepM, clutterAt, clearStartM = PlannerClutt
 
 const sampleCount = (lengthM, spacingM, maxCount) => clamp(Math.trunc(Math.ceil(lengthM / spacingM)) || 0, 2, maxCount);
 
+// ---------------------------------------------------------------- prostokąty i kafelki
+
+const KM_PER_DEG_LAT = 110.574;
+const KM_PER_DEG_LON_AT_EQUATOR = 111.320;
+const MIN_COS = 0.05;
+
+/** Prostokąt szerokości/długości geograficznej (stopnie), dla którego dane przeszkód pobiera się jednym zapytaniem. */
+export class ClutterBox {
+  constructor(south, west, north, east) {
+    this.south = south; this.west = west; this.north = north; this.east = east;
+  }
+
+  get heightKm() { return (this.north - this.south) * KM_PER_DEG_LAT; }
+
+  get widthKm() {
+    return (this.east - this.west) * KM_PER_DEG_LON_AT_EQUATOR * Math.max(MIN_COS, Math.cos((((this.north + this.south) / 2.0) * Math.PI) / 180.0));
+  }
+
+  get maxSideKm() { return Math.max(this.heightKm, this.widthKm); }
+
+  /** Cztery ćwiartki (do podziału kafelka, który serwer uznał za zbyt ciężki). */
+  quarters() {
+    const midLat = (this.south + this.north) / 2.0;
+    const midLon = (this.west + this.east) / 2.0;
+    return [
+      new ClutterBox(this.south, this.west, midLat, midLon),
+      new ClutterBox(this.south, midLon, midLat, this.east),
+      new ClutterBox(midLat, this.west, this.north, midLon),
+      new ClutterBox(midLat, midLon, this.north, this.east),
+    ];
+  }
+
+  /** `south,west,north,east` tak, jak chce Overpass. */
+  asQueryBox() {
+    return `${fmt(this.south, 5)},${fmt(this.west, 5)},${fmt(this.north, 5)},${fmt(this.east, 5)}`;
+  }
+
+  /** Kwadrat o połowie boku radiusKm wokół punktu. */
+  static around(lat, lon, radiusKm) {
+    const dLat = radiusKm / KM_PER_DEG_LAT;
+    const dLon = radiusKm / (KM_PER_DEG_LON_AT_EQUATOR * Math.max(MIN_COS, Math.cos((lat * Math.PI) / 180.0)));
+    return new ClutterBox(lat - dLat, lon - dLon, lat + dLat, lon + dLon);
+  }
+}
+
+/** `box` pocięty na równą siatkę kafelków o boku najwyżej ok. maxSideKm (co najmniej jeden kafelek). */
+export function clutterGrid(box, maxSideKm) {
+  const rows = Math.max(1, Math.ceil(box.heightKm / maxSideKm));
+  const cols = Math.max(1, Math.ceil(box.widthKm / maxSideKm));
+  const dLat = (box.north - box.south) / rows;
+  const dLon = (box.east - box.west) / cols;
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      out.push(new ClutterBox(box.south + dLat * r, box.west + dLon * c, box.south + dLat * (r + 1), box.west + dLon * (c + 1)));
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- zapytania Overpass
 
 export const OsmQueries = (() => {
   const CORRIDOR_M = 30;
+  // Limit czasu i pamięci zapisywane w każdym zapytaniu. SERVER_MAX_BYTES to RAM SERWERA Overpass (jego własny
+  // domyślny limit to 512 MiB), nie pamięć przeglądarki; zbyt niski (kiedyś 16 MiB) daje „out of memory” nawet
+  // dla małego obszaru. Rozmiar pobieranej odpowiedzi ogranicza osobno MAX_BODY_BYTES klienta.
   const SERVER_TIMEOUT_S = 40;
-  const SERVER_MAX_BYTES = 16777216;
+  // Zapytanie wzdłuż trasy sięga kilkadziesiąt kilometrów i może trwać dłużej niż kawałek obszaru zasięgu.
+  const LINK_SERVER_TIMEOUT_S = 60;
+  const SERVER_MAX_BYTES = 268435456;
   const POLYLINE_SPACING_M = 1500.0;
   const MAX_POLYLINE_POINTS = 40;
-  const header = () => `[out:json][timeout:${SERVER_TIMEOUT_S}][maxsize:${SERVER_MAX_BYTES}];`;
+  const AREA_LANDUSE = ['forest', 'residential', 'commercial', 'industrial', 'retail'];
+  const header = (timeoutS = SERVER_TIMEOUT_S) => `[out:json][timeout:${timeoutS}][maxsize:${SERVER_MAX_BYTES}];`;
 
   /** lat,lon,lat,lon,... punktów wzdłuż trasy między ułamkami f0 i f1 (oba końce włącznie). */
   function polyline(a, b, f0, f1) {
@@ -221,43 +291,67 @@ export const OsmQueries = (() => {
     return parts.join(',');
   }
 
-  /** Lasy wzdłuż całej trasy i budynki; na łączu dłuższym niż LONG_LINK_M budynki tylko przy końcach. */
-  function link(a, b) {
+  function forestStatements(whole) {
+    return `way["natural"="wood"](around:${CORRIDOR_M},${whole});`
+      + `way["landuse"="forest"](around:${CORRIDOR_M},${whole});`
+      + `relation["natural"="wood"]["type"="multipolygon"](around:${CORRIDOR_M},${whole});`
+      + `relation["landuse"="forest"]["type"="multipolygon"](around:${CORRIDOR_M},${whole});`;
+  }
+
+  function buildingStatements(line) {
+    return `way["building"](around:${CORRIDOR_M},${line});`
+      + `relation["building"]["type"="multipolygon"](around:${CORRIDOR_M},${line});`;
+  }
+
+  /** Ułamki trasy, wzdłuż których szuka się budynków: cała albo tylko okolice obu końców na długim łączu. */
+  function buildingStretches(a, b) {
     const d = distanceM(a, b);
-    let s = header() + '(';
-    const whole = polyline(a, b, 0.0, 1.0);
-    s += `way["natural"="wood"](around:${CORRIDOR_M},${whole});`;
-    s += `way["landuse"="forest"](around:${CORRIDOR_M},${whole});`;
-    s += `relation["natural"="wood"]["type"="multipolygon"](around:${CORRIDOR_M},${whole});`;
-    s += `relation["landuse"="forest"]["type"="multipolygon"](around:${CORRIDOR_M},${whole});`;
-    let stretches;
     if (d > PlannerClutter.LONG_LINK_M) {
       const f = PlannerClutter.BUILDINGS_NEAR_END_M / d;
-      stretches = [[0.0, f], [1.0 - f, 1.0]];
-    } else stretches = [[0.0, 1.0]];
-    for (const [f0, f1] of stretches) {
-      const line = polyline(a, b, f0, f1);
-      s += `way["building"](around:${CORRIDOR_M},${line});`;
-      s += `relation["building"]["type"="multipolygon"](around:${CORRIDOR_M},${line});`;
+      return [[0.0, f], [1.0 - f, 1.0]];
     }
-    return s + ');out tags geom;';
+    return [[0.0, 1.0]];
+  }
+
+  /** Lasy wzdłuż całej trasy i budynki; na łączu dłuższym niż LONG_LINK_M budynki tylko przy końcach. Jedno zapytanie. */
+  function link(a, b) {
+    let s = `${header()}(${forestStatements(polyline(a, b, 0.0, 1.0))}`;
+    for (const [f0, f1] of buildingStretches(a, b)) s += buildingStatements(polyline(a, b, f0, f1));
+    return `${s});out tags geom;`;
+  }
+
+  /**
+   * Te same przeszkody co link(), jako kilka lżejszych zapytań: lasy całej trasy, potem budynki każdego odcinka osobno.
+   * Jedno ciężkie zapytanie wpadało w limit czasu serwera na długim łączu; części są odpowiadane po kolei,
+   * każda z dłuższym limitem LINK_SERVER_TIMEOUT_S.
+   */
+  function linkParts(a, b) {
+    const parts = [`${header(LINK_SERVER_TIMEOUT_S)}(${forestStatements(polyline(a, b, 0.0, 1.0))});out tags geom;`];
+    for (const [f0, f1] of buildingStretches(a, b)) {
+      parts.push(`${header(LINK_SERVER_TIMEOUT_S)}(${buildingStatements(polyline(a, b, f0, f1))});out tags geom;`);
+    }
+    return parts;
   }
 
   /** Lasy i zabudowa w prostokącie wokół center (promień obcięty do 0.1..100 km). */
   function area(center, radiusKm) {
     const r = clamp(radiusKm, 0.1, PlannerClutter.MAX_AREA_RADIUS_KM);
-    const dLat = r / 110.574;
-    const dLon = r / (111.320 * Math.max(0.05, Math.cos((center.lat * Math.PI) / 180.0)));
-    const box = `${fmt(center.lat - dLat, 5)},${fmt(center.lon - dLon, 5)},${fmt(center.lat + dLat, 5)},${fmt(center.lon + dLon, 5)}`;
-    let s = header() + '(';
-    s += `way["natural"="wood"](${box});`;
-    s += `way["landuse"~"^(forest|residential|commercial|industrial|retail)$"](${box});`;
-    s += `relation["natural"="wood"]["type"="multipolygon"](${box});`;
-    s += `relation["landuse"~"^(forest|residential|commercial|industrial|retail)$"]["type"="multipolygon"](${box});`;
-    return s + ');out tags geom;';
+    return box(ClutterBox.around(center.lat, center.lon, r));
   }
 
-  return Object.freeze({ CORRIDOR_M, SERVER_TIMEOUT_S, SERVER_MAX_BYTES, link, area, polyline });
+  /** Lasy i zabudowa w prostokącie: kawałek dużego obszaru zasięgu, o który pyta się osobno. */
+  function box(b) {
+    const q = b.asQueryBox();
+    // Dokładne dopasowania klucz=wartość, nie wyrażenie regularne: serwer odpowiada na nie z indeksu i patrzy
+    // tylko na lasy i zabudowę, a wzorzec zmusza go do przeczytania każdego landuse (wszystkich pól i łąk).
+    let s = `${header()}(way["natural"="wood"](${q});`;
+    for (const v of AREA_LANDUSE) s += `way["landuse"="${v}"](${q});`;
+    s += `relation["natural"="wood"]["type"="multipolygon"](${q});`;
+    for (const v of AREA_LANDUSE) s += `relation["landuse"="${v}"]["type"="multipolygon"](${q});`;
+    return `${s});out tags geom;`;
+  }
+
+  return Object.freeze({ CORRIDOR_M, SERVER_TIMEOUT_S, LINK_SERVER_TIMEOUT_S, SERVER_MAX_BYTES, link, linkParts, area, box, polyline });
 })();
 
 // ---------------------------------------------------------------- parser odpowiedzi Overpass
@@ -389,17 +483,56 @@ export function assembleRings(pieces) {
   return rings;
 }
 
-function wayPolygon(o) {
+const METERS_PER_DEG = 111320.0;
+
+/** true, gdy cały obrys mieści się w kwadracie thinM metrów: przy takiej skali jest niewidoczny. */
+function isNegligible(p, thinM) {
+  if (!(thinM > 0.0)) return false;
+  const heightM = (p.maxLat - p.minLat) * METERS_PER_DEG;
+  const widthM = (p.maxLon - p.minLon) * METERS_PER_DEG * Math.cos((p.minLat * Math.PI) / 180.0);
+  return heightM < thinM && widthM < thinM;
+}
+
+/**
+ * Obrys bez punktów leżących bliżej niż tolM metrów od ostatnio zachowanego; pierwszy punkt (będący też ostatnim
+ * zamkniętego obrysu) zawsze zostaje. Obrys, który zostałby z mniej niż czterema punktami, wraca bez zmian.
+ */
+export function thinRing(ring, tolM) {
+  const n = ring.length >> 1;
+  if (!(tolM > 0.0) || n <= MIN_RING_POINTS) return ring;
+  const tolDeg = tolM / METERS_PER_DEG;
+  const tol2 = tolDeg * tolDeg;
+  const cosLat = Math.cos((ring[0] * Math.PI) / 180.0);
+  const out = new Float64Array(ring.length);
+  out[0] = ring[0];
+  out[1] = ring[1];
+  let kept = 1;
+  for (let i = 1; i < n - 1; i++) {
+    const dy = ring[2 * i] - out[2 * (kept - 1)];
+    const dx = (ring[2 * i + 1] - out[2 * (kept - 1) + 1]) * cosLat;
+    if (dx * dx + dy * dy >= tol2) {
+      out[2 * kept] = ring[2 * i];
+      out[2 * kept + 1] = ring[2 * i + 1];
+      kept++;
+    }
+  }
+  out[2 * kept] = ring[2 * (n - 1)];
+  out[2 * kept + 1] = ring[2 * (n - 1) + 1];
+  kept++;
+  return kept < MIN_RING_POINTS ? ring : out.slice(0, 2 * kept);
+}
+
+function wayPolygon(o, thinM) {
   const tags = tagsOf(o);
   const kind = classifyTags(tags);
   if (kind === null) return null;
   const ring = geometryOf(o.geometry);
   if (!ring || !isClosed(ring)) return null;
   const explicit = kind === ClutterKind.BUILDING ? buildingHeight(tags) : null;
-  return new ClutterPolygon(kind, explicit, ring);
+  return new ClutterPolygon(kind, explicit, thinRing(ring, thinM));
 }
 
-function relationPolygons(o) {
+function relationPolygons(o, thinM) {
   const tags = tagsOf(o);
   const kind = classifyTags(tags);
   if (kind === null) return [];
@@ -415,8 +548,8 @@ function relationPolygons(o) {
     if (role === 'outer' || role === '') outers.push(geom);
     else if (role === 'inner') inners.push(geom);
   }
-  const outerRings = assembleRings(outers);
-  const innerRings = assembleRings(inners);
+  const outerRings = assembleRings(outers).map((r) => thinRing(r, thinM));
+  const innerRings = assembleRings(inners).map((r) => thinRing(r, thinM));
   if (outerRings.length === 0) return [];
   const holesFor = outerRings.map(() => []);
   for (const h of innerRings) {
@@ -430,8 +563,14 @@ function relationPolygons(o) {
 /**
  * Zamienia odpowiedź Overpass (`[out:json]`, `out tags geom`) w ClutterMap.
  * Rzuca wyjątek, gdy tekst nie jest odpowiedzią Overpass albo serwer się poddał (`remark`).
+ * @param {string} text
+ * @param {Set<number>|null} [seen]  klucze (`id*2+1` relacji, `id*2` drogi) elementów z wcześniejszych kawałków dużego
+ *   obszaru: element na granicy dwóch kawałków odpowiada każdy z nich i ma być policzony raz. Klucze tej odpowiedzi
+ *   trafiają do zbioru dopiero po przeczytaniu całości.
+ * @param {number} [thinM]  gdy > 0, punkty obrysu bliższe niż thinM metrów od poprzednio zachowanego są pomijane,
+ *   a obiekty mieszczące się w kwadracie thinM metrów odpadają (przy dużym obszarze są niewidoczne, a punkty zajmują pamięć)
  */
-export function parseOverpass(text) {
+export function parseOverpass(text, seen = null, thinM = 0.0) {
   const root = JSON.parse(text);
   if (!isObj(root)) throw new Error('not an object');
   const remark = primContent(root.remark);
@@ -441,12 +580,22 @@ export function parseOverpass(text) {
     throw new Error(`overpass: ${remark}`);
   }
   const out = [];
+  const fresh = seen ? [] : null;
   for (const o of elements) {
     if (!isObj(o)) continue;
     const t = primContent(o.type);
-    if (t === 'way') { const p = wayPolygon(o); if (p) out.push(p); }
-    else if (t === 'relation') out.push(...relationPolygons(o));
+    if (seen && (t === 'way' || t === 'relation')) {
+      const id = primNumber(o.id);
+      if (id !== null) {
+        const key = id * 2 + (t === 'relation' ? 1 : 0);
+        if (seen.has(key)) continue;
+        fresh.push(key);
+      }
+    }
+    if (t === 'way') { const p = wayPolygon(o, thinM); if (p && !isNegligible(p, thinM)) out.push(p); }
+    else if (t === 'relation') for (const p of relationPolygons(o, thinM)) if (!isNegligible(p, thinM)) out.push(p);
   }
+  if (seen && fresh) for (const k of fresh) seen.add(k);
   return new ClutterMap(out);
 }
 
@@ -459,28 +608,56 @@ const MIRRORS = Object.freeze([
   'https://overpass.kumi.systems/api/interpreter',
 ]);
 const BASE_URL = MIRRORS[0];
-const TIMEOUT_MS = 60000;
+// Overpass nic nie wysyła, dopóki nie policzy całej odpowiedzi, więc limit musi przewyższać limit serwera
+// (40 s dla kafelka, 60 s dla części trasy) z zapasem na sieć.
+const TIMEOUT_MS = 95000;
 const RETRY_DELAY_MS = 2000;
 const CACHE_MS = 30 * 60 * 1000;
 const MAX_BODY_BYTES = 12000000;
-const CACHE_ENTRIES = 6;
+const CACHE_ENTRIES = 3;
 const MIN_RADIUS_KM = 0.5;
 const MAX_ATTEMPTS_LOGGED = 8;
 
+// Duży zasięg to wiele zapytań, po jednym naraz (publiczny serwer ogranicza równoległe użycie).
+/** Do tego promienia obszar to jedno zapytanie. */
+const SINGLE_REQUEST_KM = 10.0;
+/** Rozmiar pierwszych kafelków dużego obszaru i najmniejszy kafelek, do którego dzieli się ciężki (km boku). */
+const TILE_START_KM = 30.0;
+const MIN_TILE_KM = 4.0;
+/** Punkty obrysu bliższe niż tyle metrów są pomijane w obszarach kafelkowanych - tym mocniej, im większy promień. */
+const THIN_M = 25.0;
+const THIN_M_PER_KM = 0.8;
+/** Punkty obrysów trzymane w pamięci dla dużego obszaru (każdy to dwie liczby), zanim uzna się go za za duży. */
+const MAX_POINTS = 6000000;
+/** Cały duży obszar musi dotrzeć w tym czasie. */
+const TILED_BUDGET_MS = 12 * 60 * 1000;
+const PAUSE_BETWEEN_TILES_MS = 250;
+const BUSY_WAIT_MS = 5000;
+const BUSY_RETRIES = 4;
+const NETWORK_RETRIES = 2;
+const NETWORK_RETRY_WAIT_MS = 2000;
+const OVERLOAD_RETRIES = 2;
+const OVERLOAD_WAIT_MS = 8000;
+const LINK_RETRY_WAIT_MS = 3000;
+
 const pointKey = (p) => `${fmt(p.lat, 5)},${fmt(p.lon, 5)}`;
 const sleepMs = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal && signal.aborted) { reject(abortError()); return; }
   const t = setTimeout(resolve, ms);
   if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(abortError()); }, { once: true });
 });
 const errInfo = (e) => ({ errorName: (e && e.name) || typeof e, errorMessage: shorten(e && e.message !== undefined ? e.message : e) });
 /** Odpowiedzi, po których warto spróbować innego serwera. */
 const isNextMirrorStatus = (s) => s === 403 || s === 408 || s === 429 || s >= 500;
-/** Uwagi serwera przy HTTP 200, które znaczą „spróbuj gdzie indziej / później” (przeciążenie, limit czasu). */
-const isBusyRemark = (msg) => /timed out|rate_limit|too busy|too many|slot|dispatcher|overload/i.test(msg);
+/** Statusy znaczące „serwer zajęty / poddał się”. */
+const isBusyStatus = (s) => s === 429 || s === 502 || s === 503 || s === 504;
+/** Uwagi serwera przy HTTP 200 znaczące „zajęty, spróbuj gdzie indziej” (przeciążenie, limit zapytań). */
+const isBusyRemark = (msg) => /rate_limit|too busy|too many|slot|dispatcher|overload/i.test(msg);
 
 /**
- * Źródło przeszkód z serwerów Overpass. Odpowiedzi trzymane w pamięci przez 30 min (maks. 6 wpisów),
- * jedno zapytanie naraz. Rzuca PlannerClutterError (NETWORK / BAD_RESPONSE / TOO_LARGE) z polem `detail`.
+ * Źródło przeszkód z serwerów Overpass. Odpowiedzi trzymane w pamięci przez 30 min (maks. 3 wpisy),
+ * jedno zapytanie naraz (blokada obejmuje pojedyncze żądanie, nigdy cały obszar). Rzuca PlannerClutterError
+ * (NETWORK / BAD_RESPONSE / TOO_LARGE / SERVER_LIMIT) z polem `detail`.
  * Zapytanie idzie POST-em (`data=` w treści, application/x-www-form-urlencoded - bez preflight CORS).
  */
 export class PlannerOverpass {
@@ -489,7 +666,7 @@ export class PlannerOverpass {
    * @param {typeof fetch} [o.fetch]
    * @param {string} [o.baseUrl]   jeden serwer (zamiast listy mirrorów)
    * @param {string[]} [o.mirrors] lista serwerów po kolei (domyślnie 3 publiczne)
-   * @param {number} [o.timeoutMs]  limit czasu jednej próby (pobranie), domyślnie 60 s
+   * @param {number} [o.timeoutMs]  limit czasu jednej próby (pobranie), domyślnie 95 s
    * @param {number} [o.retryDelayMs]  przerwa przed jednym ponowieniem po HTTP 429/504 (domyślnie 2 s)
    * @param {(ms:number, signal?:AbortSignal)=>Promise<void>} [o.sleep]
    * @param {((...a:any[])=>void)|null} [o.log]  domyślnie console.warn; null wyłącza
@@ -505,24 +682,49 @@ export class PlannerOverpass {
     this._sleep = sleep;
     this._log = log === undefined ? (...a) => { if (globalThis.console && console.warn) console.warn(...a); } : log;
     this._clockMs = clockMs;
-    this._lock = new Mutex();
+    this._reqLock = new Mutex(); // jedno żądanie naraz; trzymana na czas żądania, nie całego obszaru
     this._cache = new Map();
     this._tooBig = new Map(); // klucz obszaru -> { at, usedKm }: promień, który wcześniej okazał się za duży
+    this._lastGood = null;    // serwer, który odpowiedział ostatnio - pytany pierwszy
   }
 
-  /** Przeszkody wzdłuż linii prostej a-b. */
+  /** Przeszkody wzdłuż linii prostej a-b (lasy, potem budynki każdego odcinka - osobnymi, lżejszymi zapytaniami). */
   forLink(a, b, { signal } = {}) {
-    return this._cached(`L:${pointKey(a)}:${pointKey(b)}`, () => OsmQueries.link(a, b), signal);
+    return this._cached(`L:${pointKey(a)}:${pointKey(b)}`, () => this._fetchLink(a, b, signal), signal);
+  }
+
+  async _fetchLink(a, b, signal) {
+    const seen = new Set();
+    const polygons = [];
+    for (const query of OsmQueries.linkParts(a, b)) {
+      let map;
+      try {
+        map = await this._fetch1(query, signal, seen);
+      } catch (e) {
+        // Serwer, który raz przekroczył czas albo zerwał połączenie, często odpowiada za drugim razem.
+        if (!(e instanceof PlannerClutterError) || (e.failure !== PlannerClutterFailure.SERVER_LIMIT && e.failure !== PlannerClutterFailure.NETWORK)) throw e;
+        await this._sleep(LINK_RETRY_WAIT_MS, signal);
+        map = await this._fetch1(query, signal, seen);
+      }
+      for (const poly of map.polygons) polygons.push(poly);
+    }
+    return new ClutterMap(polygons);
   }
 
   /**
-   * Lasy i zabudowa w promieniu radiusKm (0.1..100) wokół center. Gdy serwer zgłosi błąd po swojej stronie
-   * albo odpowiedź jest za duża (TOO_LARGE), robi JEDNĄ ponowną próbę z połową promienia i wywołuje
-   * `onRadiusReduced({requestedKm, usedKm, failure})`, żeby UI powiedziało, jaki promień zastosowano.
+   * Lasy i zabudowa w promieniu radiusKm (0.1..100) wokół center. Do 10 km to jedno zapytanie; większy obszar
+   * (50 albo 100 km to prostokąt 100-200 km) jest pobierany kawałkami. Przy jednym zapytaniu, gdy serwer zgłosi błąd
+   * po swojej stronie albo odpowiedź jest za duża (TOO_LARGE), jest JEDNA ponowna próba z połową promienia
+   * i wywołanie `onRadiusReduced({requestedKm, usedKm, failure})`.
+   * `onProgress({done, total})` informuje o postępie pobierania kawałkami (po zakończeniu: `onProgress(null)`).
    */
-  async forArea(center, radiusKm, { signal, onRadiusReduced } = {}) {
+  async forArea(center, radiusKm, { signal, onRadiusReduced, onProgress } = {}) {
     const r = clamp(radiusKm, 0.1, PlannerClutter.MAX_AREA_RADIUS_KM);
-    const load = (km) => this._cached(`A:${pointKey(center)}:${fmt(km, 1)}`, () => OsmQueries.area(center, km), signal);
+    if (r > SINGLE_REQUEST_KM) {
+      return this._cached(`A:${pointKey(center)}:${fmt(r, 1)}`,
+        () => this._fetchTiled(ClutterBox.around(center.lat, center.lon, r), signal, onProgress), signal);
+    }
+    const load = (km) => this._cached(`A:${pointKey(center)}:${fmt(km, 1)}`, () => this._fetch1(OsmQueries.area(center, km), signal), signal);
     const areaKey = `${pointKey(center)}:${fmt(r, 1)}`;
     const known = this._tooBig.get(areaKey);
     if (known && this._clockMs() - known.at < CACHE_MS) {
@@ -550,42 +752,132 @@ export class PlannerOverpass {
   }
 
   /** Czyści pamięć podręczną ("odśwież"). */
-  invalidate() { return this._lock.run(async () => { this._cache.clear(); this._tooBig.clear(); }); }
+  invalidate() { this._cache.clear(); this._tooBig.clear(); return Promise.resolve(); }
 
-  _cached(key, query, signal) {
-    return this._lock.run(async () => {
+  async _cached(key, load, signal) {
+    throwIfAborted(signal);
+    const hit = this._cache.get(key);
+    if (hit && this._clockMs() - hit.at < CACHE_MS) return hit.map;
+    const map = await load();
+    this._cache.delete(key);
+    this._cache.set(key, { at: this._clockMs(), map });
+    while (this._cache.size > CACHE_ENTRIES) this._cache.delete(this._cache.keys().next().value);
+    return map;
+  }
+
+  /**
+   * Duży obszar jako wiele zapytań, po jednym naraz: prostokąt jest cięty na kafelki ok. TILE_START_KM; kafelek, który
+   * serwer uznał za zbyt ciężki (albo którego odpowiedź jest za duża), dzieli się na cztery i pyta ponownie, aż do
+   * MIN_TILE_KM - gęste miejsca kończą w małych kawałkach, pustki w dużych. Element na granicy dwóch kafelków liczy
+   * się raz, obrysy są rzedniejsze, żeby zmieścić się w pamięci, a serwer mówiący „za dużo zapytań” jest cierpliwie
+   * czekany. Wszystko albo błąd: pół mapy wyglądałoby na otwarty teren tam, gdzie go nie ma.
+   */
+  async _fetchTiled(whole, signal, onProgress) {
+    const report = (p) => { if (onProgress) { try { onProgress(p); } catch { /* UI nie może psuć pobierania */ } } };
+    try {
+      return await this._fetchTiledPieces(whole, signal, report);
+    } finally {
+      report(null);
+    }
+  }
+
+  async _fetchTiledPieces(whole, signal, report) {
+    const deadline = this._clockMs() + TILED_BUDGET_MS;
+    const pending = clutterGrid(whole, TILE_START_KM).map((box) => ({ box, tries: 0 }));
+    let done = 0;
+    report({ done: 0, total: pending.length });
+    const seen = new Set();
+    const polygons = [];
+    let points = 0;
+    // Im dalej sięga obszar, tym grubszy może być obraz: raster zasięgu 100 km ma komórki setek metrów, więc obrysy są
+    // rzedniejsze (a małe lasy odpadają) tym mocniej, im większy obszar.
+    const thinM = Math.max(THIN_M, (whole.maxSideKm / 2.0) * THIN_M_PER_KM);
+    const withPieces = (e) => {
+      if (e instanceof PlannerClutterError) e.detail = { ...e.detail, piecesDone: done, piecesTotal: done + pending.length + 1 };
+      return e;
+    };
+    while (pending.length > 0) {
       throwIfAborted(signal);
-      const now = this._clockMs();
-      const hit = this._cache.get(key);
-      if (hit && now - hit.at < CACHE_MS) return hit.map;
-      const map = await this._fetch1(query(), signal);
-      this._cache.delete(key);
-      this._cache.set(key, { at: now, map });
-      while (this._cache.size > CACHE_ENTRIES) this._cache.delete(this._cache.keys().next().value);
-      return map;
+      if (this._clockMs() > deadline) {
+        throw withPieces(new PlannerClutterError(PlannerClutterFailure.SERVER_LIMIT, undefined, { errorName: 'TimeLimit', errorMessage: 'time limit' }));
+      }
+      const work = pending.shift();
+      let part;
+      try {
+        part = await this._fetch1(OsmQueries.box(work.box), signal, seen, thinM);
+      } catch (e) {
+        if (!(e instanceof PlannerClutterError)) throw e;
+        const busy = !!(e.detail && e.detail.busy);
+        const flaky = e.failure === PlannerClutterFailure.NETWORK;
+        const splittable = (e.failure === PlannerClutterFailure.TOO_LARGE || e.failure === PlannerClutterFailure.SERVER_LIMIT)
+          && !busy && work.box.maxSideKm > MIN_TILE_KM;
+        if (busy && work.tries < BUSY_RETRIES) {
+          await this._sleep(BUSY_WAIT_MS, signal);
+          pending.unshift({ box: work.box, tries: work.tries + 1 });
+        } else if (flaky && work.tries < NETWORK_RETRIES) {
+          await this._sleep(NETWORK_RETRY_WAIT_MS, signal);
+          pending.unshift({ box: work.box, tries: work.tries + 1 });
+        } else if (splittable) {
+          pending.unshift(...work.box.quarters().map((box) => ({ box, tries: 0 })));
+        } else if (e.failure === PlannerClutterFailure.SERVER_LIMIT && work.tries < OVERLOAD_RETRIES) {
+          // Najmniejszy kawałek przekroczył czas: serwer jest raczej przeciążony niż kawałek ciężki - czekamy i pytamy ponownie.
+          await this._sleep(OVERLOAD_WAIT_MS, signal);
+          pending.unshift({ box: work.box, tries: work.tries + 1 });
+        } else {
+          throw withPieces(e);
+        }
+        continue;
+      }
+      done++;
+      report({ done, total: done + pending.length });
+      for (const polygon of part.polygons) {
+        polygons.push(polygon);
+        points += polygon.outer.length >> 1;
+        for (const hole of polygon.holes) points += hole.length >> 1;
+      }
+      if (points > MAX_POINTS) {
+        throw withPieces(new PlannerClutterError(PlannerClutterFailure.TOO_LARGE, undefined, { errorName: 'TooManyPoints', errorMessage: 'too many points' }));
+      }
+      if (pending.length > 0) await this._sleep(PAUSE_BETWEEN_TILES_MS, signal);
+    }
+    return new ClutterMap(polygons);
+  }
+
+  /**
+   * Pobiera i parsuje odpowiedź, przechodząc po serwerach (ostatnio sprawny pierwszy); rzuca PlannerClutterError z `detail`.
+   * Odpowiedź zbyt duża albo odmowa z powodu samego zapytania („out of memory”, „timed out”) kończy od razu: inny
+   * serwer powiedziałby to samo, a wołający może podzielić obszar.
+   */
+  _fetch1(query, signal, seen = null, thinM = 0.0) {
+    return this._reqLock.run(async () => {
+      const attempts = [];
+      let last = null;
+      const good = this._lastGood;
+      const ordered = good && this._mirrors.includes(good) ? [good, ...this._mirrors.filter((m) => m !== good)] : this._mirrors;
+      for (const mirror of ordered) {
+        throwIfAborted(signal);
+        const out = await this._tryMirror(mirror, query, signal, attempts, seen, thinM);
+        if (out.map) { this._lastGood = mirror; return out.map; }
+        last = out;
+        if (out.stop) break;
+      }
+      const detail = { ...(last && last.detail), attempts: attempts.slice(-MAX_ATTEMPTS_LOGGED) };
+      if (attempts.some((a) => a.status === 429 || a.status >= 500 || a.timedOut || a.busy)) detail.serverSide = true;
+      // „Zajęty” (429/503) różni się od „nie dał rady” (przekroczony czas, 502/504): pierwszego warto poczekać, drugiego nie.
+      if (attempts.some((a) => a.status === 429 || a.status === 503 || a.busy)) detail.busy = true;
+      let failure = (last && last.failure) || PlannerClutterFailure.NETWORK;
+      if (failure === PlannerClutterFailure.NETWORK
+        && attempts.some((a) => a.timedOut || (a.status !== undefined && isBusyStatus(a.status)))) {
+        failure = PlannerClutterFailure.SERVER_LIMIT;
+      }
+      const err = new PlannerClutterError(failure, last && last.cause, detail);
+      if (this._log) this._log('MT_SW planner: pobieranie danych OSM nie powiodło się', err.failure, detail);
+      throw err;
     });
   }
 
-  /** Pobiera i parsuje odpowiedź, przechodząc po serwerach; rzuca PlannerClutterError z `detail`. */
-  async _fetch1(query, signal) {
-    const attempts = [];
-    let last = null;
-    for (const mirror of this._mirrors) {
-      throwIfAborted(signal);
-      const out = await this._tryMirror(mirror, query, signal, attempts);
-      if (out.map) return out.map;
-      last = out;
-      if (out.stop) break;
-    }
-    const detail = { ...(last && last.detail), attempts: attempts.slice(-MAX_ATTEMPTS_LOGGED) };
-    if (attempts.some((a) => a.status === 429 || a.status >= 500 || a.timedOut || a.busy)) detail.serverSide = true;
-    const err = new PlannerClutterError((last && last.failure) || PlannerClutterFailure.NETWORK, last && last.cause, detail);
-    if (this._log) this._log('MT_SW planner: pobieranie danych OSM nie powiodło się', err.failure, detail);
-    throw err;
-  }
-
   /** Jedna runda dla jednego serwera (z jednym ponowieniem po 429/504). Zwraca {map} albo {failure, detail, stop?}. */
-  async _tryMirror(mirror, query, signal, attempts) {
+  async _tryMirror(mirror, query, signal, attempts, seen, thinM) {
     const mirrorHost = hostOf(mirror) || mirror;
     for (let pass = 0; pass < 2; pass++) {
       const t0 = Date.now();
@@ -602,15 +894,21 @@ export class PlannerOverpass {
       if (r.tooLarge) throw this._tooLarge(r.error, attempts);
       if (r.body !== undefined) {
         try {
-          return { map: parseOverpass(r.body) };
+          return { map: parseOverpass(r.body, seen, thinM) };
         } catch (e) {
           const msg = String((e && e.message) || '');
           const low = msg.toLowerCase();
           rec.remark = shorten(msg);
-          if (e instanceof RangeError || low.includes('memory') || low.includes('maxsize')) throw this._tooLarge(e, attempts);
-          if (msg.startsWith('overpass:') && isBusyRemark(msg)) {
-            rec.busy = true;
-            return { failure: PlannerClutterFailure.BAD_RESPONSE, cause: e, detail: { remark: rec.remark, ...errInfo(e) } };
+          const fromServer = msg.startsWith('overpass:');
+          // „out of memory” lub „timed out” w uwadze serwera to odmowa SERWERA, nie brak pamięci tego urządzenia.
+          if (e instanceof RangeError || (!fromServer && (low.includes('memory') || low.includes('maxsize')))) throw this._tooLarge(e, attempts);
+          if (fromServer) {
+            const detail = { remark: rec.remark, ...errInfo(e) };
+            if (isBusyRemark(msg)) {
+              rec.busy = true; // przeciążenie - warto zapytać inny serwer
+              return { failure: PlannerClutterFailure.SERVER_LIMIT, cause: e, detail };
+            }
+            return { failure: PlannerClutterFailure.SERVER_LIMIT, cause: e, stop: true, detail };
           }
           return { failure: PlannerClutterFailure.BAD_RESPONSE, cause: e, stop: true, detail: { remark: rec.remark, ...errInfo(e) } };
         }
@@ -621,12 +919,12 @@ export class PlannerOverpass {
           continue;
         }
         const detail = { status: r.status, remark: r.remark || '', errorName: 'HttpError', errorMessage: `HTTP ${r.status}` };
-        return { failure: PlannerClutterFailure.NETWORK, detail, stop: !isNextMirrorStatus(r.status) };
+        return { failure: isBusyStatus(r.status) ? PlannerClutterFailure.SERVER_LIMIT : PlannerClutterFailure.NETWORK, detail, stop: !isNextMirrorStatus(r.status) };
       }
       // błąd sieci / CORS / przekroczony czas
       const detail = r.timedOut ? { errorName: 'TimeoutError', errorMessage: `no answer within ${this._timeoutMs} ms` } : errInfo(r.error);
       if (r.timedOut) detail.timedOut = true;
-      return { failure: PlannerClutterFailure.NETWORK, cause: r.error, detail };
+      return { failure: r.timedOut ? PlannerClutterFailure.SERVER_LIMIT : PlannerClutterFailure.NETWORK, cause: r.error, detail };
     }
     return { failure: PlannerClutterFailure.NETWORK, detail: {} };
   }
@@ -660,6 +958,8 @@ export class PlannerOverpass {
         signal: ctrl.signal,
       });
       const viaProxy = !!res.viaProxy;
+      // 413 z proxy backendu: odpowiedź serwera przekroczyła limit proxy - tak samo za duża, jak ponad MAX_BODY_BYTES
+      if (res.status === 413 && viaProxy) return { tooLarge: true, viaProxy };
       if (!res.ok) {
         let remark = '';
         try { if (typeof res.text === 'function') remark = shorten(await res.text()); } catch { /* brak treści */ }
@@ -709,3 +1009,6 @@ PlannerOverpass.RETRY_DELAY_MS = RETRY_DELAY_MS;
 PlannerOverpass.CACHE_MS = CACHE_MS;
 PlannerOverpass.MAX_BODY_BYTES = MAX_BODY_BYTES;
 PlannerOverpass.CACHE_ENTRIES = CACHE_ENTRIES;
+PlannerOverpass.SINGLE_REQUEST_KM = SINGLE_REQUEST_KM;
+PlannerOverpass.TILE_START_KM = TILE_START_KM;
+PlannerOverpass.MIN_TILE_KM = MIN_TILE_KM;

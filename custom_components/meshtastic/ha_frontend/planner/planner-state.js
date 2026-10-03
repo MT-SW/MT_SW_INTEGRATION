@@ -97,6 +97,7 @@ export class PlannerStore {
       coverage: null,
       coverageComputing: false,
       coverageProgress: 0,
+      clutterProgress: null, // { done, total } - postęp pobierania danych terenu kawałkami podczas liczenia zasięgu
       coverageError: null,
       coverageCenterName: '',
     };
@@ -357,7 +358,7 @@ export class PlannerStore {
     if (this._covAbort) this._covAbort.abort();
     const ctl = new AbortController();
     this._covAbort = ctl;
-    this._set({ coverageComputing: true, coverageProgress: 0, coverageError: null, clutterNote: null });
+    this._set({ coverageComputing: true, coverageProgress: 0, coverageError: null, clutterNote: null, clutterProgress: null });
     const input = { ...snap, clutterStatus: snap.clutter };
     let lastTick = 0;
     try {
@@ -373,10 +374,16 @@ export class PlannerStore {
         },
         onClutterFailure: (f, detail) => { if (this._covAbort === ctl) this._set({ clutter: { kind: 'failed', failure: f, detail: detail || {} } }); },
         onClutterRadius: (info) => { if (this._covAbort === ctl) this._set({ clutterNote: info }); },
+        onClutterProgress: (info) => {
+          if (this._covAbort !== ctl) return;
+          // bez przebudowy panelu: tylko stan i odświeżenie paska/tekstu postępu
+          this.state = { ...this.state, clutterProgress: info };
+          for (const fn of [...this._progressListeners]) fn(this.state.coverageProgress || 0);
+        },
       });
       if (this._covAbort !== ctl) return null;
       this._covAbort = null;
-      this._set({ coverage: result, coverageComputing: false, coverageProgress: 1, coverageCenterName: end.name || '' });
+      this._set({ coverage: result, coverageComputing: false, clutterProgress: null, coverageProgress: 1, coverageCenterName: end.name || '' });
       return result;
     } catch (e) {
       if (this._covAbort !== ctl) return null; // anulowane / zastąpione
@@ -386,9 +393,9 @@ export class PlannerStore {
         if (e && e.code === 'COVERAGE_NEEDS_POINT') code = 'COVERAGE_NEEDS_POINT';
         else if (e && e.failure === 'NETWORK') code = 'ELEVATION_OFFLINE';
         else if (e && e.failure === 'DECODE') code = 'ELEVATION_DECODE';
-        this._set({ coverageComputing: false, coverageError: code });
+        this._set({ coverageComputing: false, clutterProgress: null, coverageError: code });
       } else {
-        this._set({ coverageComputing: false });
+        this._set({ coverageComputing: false, clutterProgress: null });
       }
       return null;
     }
@@ -397,7 +404,7 @@ export class PlannerStore {
   /** Anuluje trwające obliczanie zasięgu i usuwa wynik. */
   clearCoverage() {
     if (this._covAbort) { this._covAbort.abort(); this._covAbort = null; }
-    this._set({ coverage: null, coverageComputing: false, coverageProgress: 0, coverageError: null });
+    this._set({ coverage: null, coverageComputing: false, coverageProgress: 0, coverageError: null, clutterProgress: null });
   }
 
   reset() {

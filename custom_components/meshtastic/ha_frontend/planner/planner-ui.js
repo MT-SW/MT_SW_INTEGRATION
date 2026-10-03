@@ -92,6 +92,7 @@ export function clutterDetailText(status) {
   if (d.errorName || d.errorMessage) lines.push(`error: ${[d.errorName, d.errorMessage].filter(Boolean).join(': ')}`);
   if (d.remark) lines.push(`server: ${d.remark}`);
   if (d.proxyError) lines.push(`proxy: ${d.proxyError}`);
+  if (d.piecesTotal !== undefined) lines.push(`piece: ${d.piecesDone + 1} of ${d.piecesTotal}`);
   if (d.radiusKm !== undefined) lines.push(`radius: ${d.requestedRadiusKm} km -> ${d.radiusKm} km`);
   for (const a of d.attempts || []) {
     const bits = [a.mirror];
@@ -386,6 +387,13 @@ class PlannerController {
   _progress(p) {
     if (this._progressEl) this._progressEl.value = p;
     if (this._progressText) this._progressText.textContent = this.tr('ha_coverage_progress', Math.round(p * 100));
+    if (this._clutterProgText) this._clutterProgText.textContent = this._clutterProgressLabel();
+  }
+
+  /** Napis o pobieraniu danych terenu kawałkami (pusty, gdy nic się nie pobiera). */
+  _clutterProgressLabel() {
+    const cp = this.store.state.clutterProgress;
+    return cp ? this.tr('precise_progress', cp.done, cp.total) : '';
   }
 
   _toast(text, isError = false) {
@@ -795,7 +803,7 @@ class PlannerController {
       }));
       out.push(this._clutterStatus(s.clutter));
       if (s.clutterNote) out.push(W.small(tr('ha_precise_radius_reduced', Math.round(s.clutterNote.requestedKm), fmtTrim(s.clutterNote.usedKm, 1)), 'mlp-warn-text'));
-      out.push(W.small(tr('precise_coverage_note')));
+      out.push(W.small(tr('precise_coverage_note', Math.round(s.clutterRadiusKm))));
     }
     if (!s.preciseTerrain || (s.clutter && s.clutter.kind === 'failed')) {
       out.push(W.dropdown('clutter.preset', tr('clutter'), CLUTTER_PRESETS.map((p) => [p.id, this._clutterLabel(p)]), s.clutterPreset, (id) => store.setClutterPreset(id)));
@@ -816,7 +824,8 @@ class PlannerController {
     if (!status || status.kind === 'idle') return W.h('span');
     if (status.kind === 'loading') return W.h('div', { class: 'mlp-status' }, W.h('span', { class: 'mlp-spin' }), W.small(tr('precise_loading')));
     if (status.kind === 'ready') return W.small(tr('precise_ready', status.stats.buildings, status.stats.forests, status.stats.areas));
-    const key = status.failure === 'NETWORK' ? 'precise_failed_network' : status.failure === 'TOO_LARGE' ? 'precise_failed_large' : 'precise_failed_data';
+    const key = status.failure === 'NETWORK' ? 'precise_failed_network' : status.failure === 'TOO_LARGE' ? 'precise_failed_large'
+      : status.failure === 'SERVER_LIMIT' ? 'precise_failed_server' : 'precise_failed_data';
     const msg = W.small(tr(key), 'mlp-err-text');
     const text = clutterDetailText(status);
     if (!text) return msg;
@@ -981,10 +990,12 @@ class PlannerController {
     out.push(W.h('div', { class: 'mlp-flow' }, buttons));
     this._progressEl = null;
     this._progressText = null;
+    this._clutterProgText = null;
     if (s.coverageComputing) {
       this._progressEl = W.h('progress', { class: 'mlp-progress', max: '1', value: String(store.state.coverageProgress || 0) });
       this._progressText = W.small(tr('ha_coverage_progress', Math.round((store.state.coverageProgress || 0) * 100)));
-      out.push(this._progressEl, this._progressText);
+      this._clutterProgText = W.small(this._clutterProgressLabel());
+      out.push(this._progressEl, this._progressText, this._clutterProgText);
     }
     if (s.coverageError) out.push(W.notice(tr(errorKey(s.coverageError)), true));
     if (s.coverage && !s.coverageComputing) {

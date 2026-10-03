@@ -55,6 +55,6 @@ export {
 export { PlannerWeather, PlannerWeatherError, parseOpenMeteo, buildWeatherUrl } from './weather.js';
 export {
   PlannerOverpass, PlannerClutterError, PlannerClutterFailure, PlannerClutter, ClutterMap, ClutterPolygon, ClutterKind,
-  OsmQueries, parseOverpass, withClutter, NoClutterSource, CLUTTER_HEIGHT_DEFAULTS,
+  OsmQueries, ClutterBox, clutterGrid, parseOverpass, withClutter, NoClutterSource, CLUTTER_HEIGHT_DEFAULTS,
 } from './clutter.js';
 export { setPlannerProxy, hasPlannerProxy, createHassProxy, plannerFetch, PLANNER_PROXY_PATH, PLANNER_PROXY_HOSTS } from './net.js';

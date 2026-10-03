@@ -253,12 +253,13 @@ export class PlannerComputer {
    * Prognoza zasięgu wokół końca `coverageSide`. Rzuca PlannerElevationError (brak terenu), Error z
    * code PlannerError.COVERAGE_NEEDS_POINT (brak punktu) lub AbortError. Brak przeszkód OSM nie jest błędem:
    * wołany jest onClutterFailure(failure, detail) i obliczenie idzie dalej bez nich; gdy obszar był za duży i pobrano
-   * połowę promienia - onClutterRadius({requestedKm, usedKm, failure}).
+   * połowę promienia - onClutterRadius({requestedKm, usedKm, failure}); przy dużym zasięgu (pobieranie kawałkami) postęp
+   * zgłasza onClutterProgress({done, total}) (na końcu null).
    * @param {Object} rawInput  jak w compute (+ kFactor, surfaceRefractivity, clutterStatus z ostatniego compute)
    * @param {{onProgress?:(f:number)=>void, signal?:AbortSignal, onClutterFailure?:(f:string)=>void}} [o]
    * @returns {Promise<CoverageResult>}
    */
-  async computeCoverage(rawInput, { onProgress, signal, onClutterFailure, onClutterRadius } = {}) {
+  async computeCoverage(rawInput, { onProgress, signal, onClutterFailure, onClutterRadius, onClutterProgress } = {}) {
     const inp = normalizePlannerInput(rawInput);
     const end = inp.coverageSide === 'B' ? inp.b : inp.a;
     if (!isComplete(end)) {
@@ -272,7 +273,7 @@ export class PlannerComputer {
     let clutterMap = null;
     if (inp.preciseTerrain) {
       try {
-        clutterMap = await this.clutter.forArea(center, Math.min(inp.coverageMaxRangeKm, inp.clutterRadiusKm), { signal, onRadiusReduced: onClutterRadius });
+        clutterMap = await this.clutter.forArea(center, Math.min(inp.coverageMaxRangeKm, inp.clutterRadiusKm), { signal, onRadiusReduced: onClutterRadius, onProgress: onClutterProgress });
       } catch (e) {
         if (isAbortError(e)) throw e;
         if (onClutterFailure) { const st = clutterFailureStatus(e); onClutterFailure(st.failure, st.detail); }

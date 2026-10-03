@@ -12,7 +12,8 @@ from urllib.parse import urlsplit
 
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 MAX_REQUEST_BODY_CHARS = 200_000
-UPSTREAM_TIMEOUT_SECONDS = 60
+# Overpass nic nie wysyła, dopóki nie policzy całej odpowiedzi (zapytania ma limit 40-60 s po stronie serwera)
+UPSTREAM_TIMEOUT_SECONDS = 100
 OVERPASS_PATH = "/api/interpreter"
 OVERPASS_HOSTS = ("overpass-api.de", "overpass.private.coffee", "overpass.kumi.systems")
 OPEN_METEO_HOST = "api.open-meteo.com"

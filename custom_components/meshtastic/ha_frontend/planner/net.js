@@ -91,6 +91,9 @@ export function createHassProxy(getHass) {
       body: JSON.stringify(payload),
       signal: init.signal,
     });
+    // 413: odpowiedź zewnętrznego serwera przekroczyła limit proxy; przekazujemy to jako „za duża”, żeby planer
+    // podzielił obszar na mniejsze kawałki, zamiast uznać to za awarię sieci
+    if (res.status === 413) return new Response(null, { status: 413 });
     if (!res.ok) {
       let text = '';
       try { text = (await res.text()).slice(0, 200); } catch { /* brak treści */ }
