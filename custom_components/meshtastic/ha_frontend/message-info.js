@@ -18,6 +18,7 @@
  */
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
+import { outgoingStatus, combineStatuses } from "./message-status.js";
 import { t, resolveLanguage } from "./i18n.js";
 import { signalValue } from "./signal-quality.js";
 
@@ -119,17 +120,9 @@ class MeshMessageInfo extends LitElement {
   }
 
   _statusText(message) {
-    if (!message.ack) {
-      return t(this.hass, "messages.ack.pending");
-    }
-    if (message.ack === "SENT") {
-      return t(this.hass, "messages.ack.sent");
-    }
-    if (message.ack === "ACK") {
-      return t(this.hass, "messages.ack.ok");
-    }
-    const failed = t(this.hass, "messages.ack.failed");
-    return message.ack_error ? `${failed} (${message.ack_error})` : failed;
+    const parts = message.split ? message.split.parts : [message];
+    const status = combineStatuses(parts.map((part) => outgoingStatus(this.hass, part)));
+    return status.detail ? `${status.text} — ${status.detail}` : status.text;
   }
 
   _renderOut(message) {
@@ -279,4 +272,4 @@ class MeshMessageInfo extends LitElement {
 
 if (!customElements.get("mesh-message-info")) {
   customElements.define("mesh-message-info", MeshMessageInfo);
-}
+}

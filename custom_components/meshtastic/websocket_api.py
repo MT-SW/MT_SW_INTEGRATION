@@ -32,6 +32,7 @@ from .helpers import panel_enabled, preset_channel_name
 from .planner_proxy import async_register_planner_proxy
 from .node_action_errors import classify_node_action_error
 from .aiomeshtastic.gateway_position import valid_coordinates
+from .message_split import CHUNK_SEND_SPACING_SECONDS, COMPOSER_MAX_BYTES, split_for_mesh
 from .nodedb_cleanup import NoCriteriaError
 from .ondemand import OnDemandError
 from .store import get_store
@@ -612,7 +613,7 @@ async def ws_timeseries(
     {
         vol.Required("type"): f"{WS_PREFIX}/send_message",
         vol.Required("entry_id"): str,
-        vol.Required("text"): vol.All(str, vol.Length(min=1, max=228)),
+        vol.Required("text"): vol.All(str, vol.Length(min=1, max=1400)),
         vol.Optional("channel_index"): vol.All(int, vol.Range(min=0, max=7)),
         vol.Optional("node_id"): int,
     }
@@ -636,17 +637,39 @@ async def ws_send_message(
         return
 
     client = entry.runtime_data.client
-    try:
+    text = msg["text"]
+    if len(text.encode("utf-8")) > COMPOSER_MAX_BYTES:
+        connection.send_error(msg["id"], "too_long", f"Wiadomość przekracza {COMPOSER_MAX_BYTES} bajtów")
+        return
+    # Długi tekst dzielimy tak samo jak aplikacja MT_SW: części ze znacznikiem „[xx i/n] ”.
+    chunks = split_for_mesh(text)
+
+    async def _send(chunk: str) -> Any:
         if node_id is not None:
-            sent = await client.send_text(msg["text"], destination_id=node_id, want_ack=True)
-        else:
-            sent = await client.send_text(msg["text"], channel_index=channel_index, want_ack=True)
+            return await client.send_text(chunk, destination_id=node_id, want_ack=True)
+        return await client.send_text(chunk, channel_index=channel_index, want_ack=True)
+
+    try:
+        sent = await _send(chunks[0])
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
         _LOGGER.warning("Nie udało się wysłać wiadomości: %s", err)
         connection.send_error(msg["id"], "send_failed", str(err))
         return
 
-    connection.send_result(msg["id"], {"sent": bool(sent)})
+    if len(chunks) > 1:
+
+        async def _send_rest() -> None:
+            for chunk in chunks[1:]:
+                await asyncio.sleep(CHUNK_SEND_SPACING_SECONDS)
+                try:
+                    await _send(chunk)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("Nie udało się wysłać części wiadomości: %s", err)
+                    return
+
+        entry.async_create_background_task(hass, _send_rest(), "mt_sw_send_split_chunks")
+
+    connection.send_result(msg["id"], {"sent": bool(sent), "parts": len(chunks)})
 
 
 @websocket_api.websocket_command(
@@ -796,7 +819,10 @@ async def ws_config(
 
     local_config = dict(local_config or {})
     module_config = dict(module_config or {})
-    await _augment_config_for_panel(client, local_config, module_config)
+    store = get_store(entry.entry_id)
+    await _augment_config_for_panel(
+        client, local_config, module_config, store.gateway_position if store is not None else None
+    )
 
     connection.send_result(
         msg["id"],
@@ -808,13 +834,17 @@ async def ws_config(
     )
 
 
-async def _augment_config_for_panel(client: Any, local_config: dict, module_config: dict) -> None:
+async def _augment_config_for_panel(
+    client: Any, local_config: dict, module_config: dict, persisted_position: Any = None
+) -> None:
     """
     Dołóż do konfiguracji to, co formularze panelu pokazują, a czego nie ma w
     samych sekcjach — bez tego pola były puste, a ich zapis ginął po cichu.
 
     - ekran dotykowy (DeviceUIConfig) — radio wysyła go osobno od configu,
-    - stała pozycja (szerokość, długość, wysokość) — z pozycji własnego węzła,
+    - stała pozycja (szerokość, długość, wysokość) — z pozycji własnego węzła, a gdy radio jej
+      akurat nie podaje (np. zaraz po restarcie), z ostatniej zapamiętanej pozycji bramki —
+      tak samo jak aplikacja, która czyta pozycję z trwałej bazy węzłów,
     - port MQTT — radio trzyma go w adresie jako „host:port”,
     - gotowe wiadomości — osobna wiadomość administracyjna, pobierana raz.
     """
@@ -827,6 +857,14 @@ async def _augment_config_for_panel(client: Any, local_config: dict, module_conf
     with contextlib.suppress(Exception):
         position = dict(local_config.get("position") or {})
         fixed = interface.connected_node_fixed_position() if position.get("fixedPosition") else None
+        if fixed is None and position.get("fixedPosition") and isinstance(persisted_position, dict):
+            lat, lon = persisted_position.get("latitude"), persisted_position.get("longitude")
+            if valid_coordinates(lat, lon):
+                fixed = {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "altitude": persisted_position.get("altitude") or 0,
+                }
         if fixed is not None:
             position["fixedLat"] = fixed["latitude"]
             position["fixedLng"] = fixed["longitude"]

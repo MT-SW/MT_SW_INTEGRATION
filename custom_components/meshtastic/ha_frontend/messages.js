@@ -16,8 +16,11 @@ import { preparePhoto } from "./photo.js";
 import "./components.js";
 import "./image-viewer.js";
 import "./message-info.js";
+import { outgoingStatus, combineStatuses } from "./message-status.js";
+import { reassemble, byteLength, splitPartCount, COMPOSER_MAX_BYTES } from "./message-split.js";
 
-const MAX_TEXT_LENGTH = 228;
+/* Co ile odświeżamy widok, żeby wiadomość bez potwierdzenia sama zmieniła się w „limit czasu” (5 min). */
+const TICK_MS = 30 * 1000;
 
 class MeshMessagesTab extends LitElement {
   static get properties() {
@@ -71,6 +74,13 @@ class MeshMessagesTab extends LitElement {
     // Ustawienie zmienia się w Ustawieniach → Inne → Czat, więc czytamy je przy każdym otwarciu zakładki.
     this._settingsRequested = false;
     this._loadUiSettings();
+    this._tick = setInterval(() => this.requestUpdate(), TICK_MS);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    clearInterval(this._tick);
+    this._tick = null;
   }
 
   async _loadUiSettings() {
@@ -197,6 +207,8 @@ class MeshMessagesTab extends LitElement {
 
     const list = [...map.values()];
     for (const conversation of list) {
+      // Długie wiadomości przyszły jako części „[xx i/n] …” — składamy je w jedną, jak w aplikacji.
+      conversation.messages = reassemble(conversation.messages, (m) => this._conversationKey(m));
       const last = conversation.messages[conversation.messages.length - 1];
       conversation.lastTs = last ? last.ts : 0;
       conversation.preview = last ? last.text : "";
@@ -356,20 +368,33 @@ class MeshMessagesTab extends LitElement {
     }
   }
 
+  /* Stan wiadomości wychodzącej; dla złożonej z części — najgorszy ze wszystkich części. */
+  _statusOf(message) {
+    const parts = message.split ? message.split.parts : [message];
+    return combineStatuses(parts.map((part) => outgoingStatus(this.hass, part)));
+  }
+
   _renderAck(message) {
     if (message.direction !== "out") {
       return html``;
     }
-    if (!message.ack) {
-      return html`<span class="ack pending" title=${t(this.hass, "messages.ack.pending")}>○</span>`;
+    const status = this._statusOf(message);
+    const title = status.detail ? `${status.text} — ${status.detail}` : status.text;
+    return html`<span class="ack ${status.kind}" title=${title}>${status.icon}</span>`;
+  }
+
+  /* Podpis pod długą wiadomością, gdy nie wszystkie części są już u nas. */
+  _renderSplitNote(message) {
+    const split = message.split;
+    if (!split || split.complete) {
+      return "";
     }
-    if (message.ack === "SENT") {
-      return html`<span class="ack sent" title=${t(this.hass, "messages.ack.sent")}>✓</span>`;
+    const vars = { have: split.have, total: split.total, missing: split.total - split.have };
+    let key = message.direction === "out" ? "msgstatus.split_sending" : "msgstatus.split_receiving";
+    if (split.giveUp) {
+      key = "msgstatus.split_incomplete";
     }
-    if (message.ack === "ACK") {
-      return html`<span class="ack ok" title=${t(this.hass, "messages.ack.ok")}>✓✓</span>`;
-    }
-    return html`<span class="ack nak" title=${message.ack_error || t(this.hass, "messages.ack.failed")}>✗</span>`;
+    return html`<div class="split-note">${t(this.hass, key, vars)}</div>`;
   }
 
   _renderMessage(message) {
@@ -415,6 +440,7 @@ class MeshMessagesTab extends LitElement {
             <ha-icon icon="mdi:trash-can-outline"></ha-icon>
           </button>
           <div class="text">${this._renderText(message.text)}</div>
+          ${this._renderSplitNote(message)}
           ${this._renderImages(message.text)}
           <div class="meta">
             <span title=${new Date(message.ts).toLocaleString(this.hass.language)}>
@@ -488,7 +514,8 @@ class MeshMessagesTab extends LitElement {
       </div>`;
     }
 
-    const remaining = MAX_TEXT_LENGTH - (this._draft || "").length;
+    const remaining = COMPOSER_MAX_BYTES - byteLength(this._draft);
+    const parts = splitPartCount(this._draft || "");
     // Miniatury obrazków z linków w pisanej wiadomości — widać, co odbiorcy zobaczą pod tekstem.
     const draftImages = this._autoImages
       ? imageUrls(this._draft || "").filter((url) => canEmbed(url, this._pageProtocol()))
@@ -531,17 +558,25 @@ class MeshMessagesTab extends LitElement {
             <input id="photo-input" type="file" accept="image/*" hidden @change=${(e) => this._onPhotoChosen(e)} />
             <textarea
               rows="2"
-              maxlength=${MAX_TEXT_LENGTH}
               .value=${this._draft}
               placeholder=${t(this.hass, "messages.placeholder")}
               ?disabled=${this._sending}
               @input=${(e) => {
-                this._draft = e.target.value;
+                let value = e.target.value;
+                // Limit liczymy w bajtach UTF-8 (polskie litery i emoji zajmują więcej niż 1 bajt).
+                while (byteLength(value) > COMPOSER_MAX_BYTES) {
+                  value = Array.from(value).slice(0, -1).join("");
+                }
+                if (value !== e.target.value) {
+                  e.target.value = value;
+                }
+                this._draft = value;
               }}
               @keydown=${(e) => this._onKeyDown(e, active)}
             ></textarea>
             <div class="composer-side">
               <span class="counter ${remaining < 20 ? "low" : ""}">${remaining}</span>
+              ${parts > 1 ? html`<span class="split-hint">${t(this.hass, "msgstatus.split_hint", { n: parts })}</span>` : ""}
               <ha-button
                 unelevated
                 ?disabled=${this._sending || !(this._draft || "").trim()}
@@ -568,7 +603,7 @@ class MeshMessagesTab extends LitElement {
         ? html`<mesh-message-info
             .hass=${this.hass}
             .nodes=${this.nodes}
-            .message=${(this.messages || []).find((m) => m.ts === this._info.ts && m.id === this._info.id)}
+            .message=${conversations.flatMap((c) => c.messages).find((m) => m.ts === this._info.ts && m.id === this._info.id)}
             @close=${() => (this._info = null)}
           ></mesh-message-info>`
         : ""}
@@ -867,6 +902,7 @@ class MeshMessagesTab extends LitElement {
           color: var(--secondary-text-color);
         }
 
+        .ack.error,
         .ack.nak {
           color: var(--error-color, #db4437);
         }
@@ -904,6 +940,13 @@ class MeshMessagesTab extends LitElement {
           align-items: flex-end;
           justify-content: space-between;
           gap: 4px;
+        }
+
+        .split-note,
+        .split-hint {
+          font-size: 11px;
+          color: var(--secondary-text-color);
+          font-style: italic;
         }
 
         .counter {

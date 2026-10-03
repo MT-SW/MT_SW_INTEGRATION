@@ -585,11 +585,40 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # and might be interrupting the connection)
             await self.async_set_unique_id(matching_entry.unique_id)
         else:
+            # Zmiana adresu IP: radio ogłasza się z innego hosta, ale w ogłoszeniu mDNS jest jego identyfikator
+            # („!xxxxxxxx” = numer węzła). Jeśli pasuje do istniejącego wpisu, tylko aktualizujemy jego adres
+            # zamiast proponować drugie, zdublowane urządzenie.
+            known_entry = self._entry_for_announced_node(all_entries, discovery_info)
+            if known_entry is not None:
+                await self.async_set_unique_id(known_entry.unique_id)
+                self._abort_if_unique_id_configured(updates={CONF_CONNECTION_TCP_HOST: discovery_info.host})
             await self.async_set_unique_id(discovery_info.host)
 
         self._abort_if_unique_id_configured()
 
         return await self.async_step_discovery_zeroconf_confirm()
+
+    @staticmethod
+    def _entry_for_announced_node(entries: list[Any], discovery_info: Any) -> Any | None:
+        """Wpis TCP, którego numer węzła zgadza się z identyfikatorem w ogłoszeniu mDNS (albo None)."""
+        try:
+            raw = (discovery_info.properties or {}).get("id")
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8", "ignore")
+            raw = str(raw or "").strip().lstrip("!")
+            if len(raw) != 8:
+                return None
+            num = str(int(raw, 16))
+        except (TypeError, ValueError):
+            return None
+        return next(
+            (
+                entry
+                for entry in entries
+                if entry.unique_id == num and entry.data.get(CONF_CONNECTION_TYPE) == ConnectionType.TCP.value
+            ),
+            None,
+        )
 
     async def async_step_discovery_zeroconf_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         title = self._zeroconf_discovery_info.host

@@ -357,6 +357,7 @@ class MeshMapTab extends LitElement {
       showLinks: { type: Boolean },
       showLabels: { type: Boolean },
       showPrecision: { type: Boolean },
+      showMqtt: { type: Boolean },
       _tiles: { type: Object },
       _showTileSettings: { type: Boolean },
     };
@@ -370,6 +371,7 @@ class MeshMapTab extends LitElement {
     this.showLinks = true;
     this.showLabels = true;
     this.showPrecision = true;
+    this.showMqtt = true;
     this._tiles = loadTileSettings();
     this._showTileSettings = false;
     this._map = null;
@@ -442,6 +444,7 @@ class MeshMapTab extends LitElement {
   _positioned() {
     return (this.nodes || []).filter(
       (node) =>
+        (this.showMqtt || !node.via_mqtt) &&
         Number.isFinite(node.latitude) &&
         Number.isFinite(node.longitude) &&
         Math.abs(node.latitude) <= 90 &&
@@ -923,6 +926,17 @@ class MeshMapTab extends LitElement {
               }}
             />
             ${t(this.hass, "map.show_precision")}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              .checked=${this.showMqtt}
+              @change=${(e) => {
+                this.showMqtt = e.target.checked;
+                this._redraw();
+              }}
+            />
+            ${t(this.hass, "map.show_mqtt")}
           </label>
           <span class="map-toolbar-right">
             <span class="mlp-slot"></span>
