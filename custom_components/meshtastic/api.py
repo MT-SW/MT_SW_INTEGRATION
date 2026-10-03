@@ -436,6 +436,12 @@ class MeshtasticApiClient:
                 event_data["rx_snr"] = mesh_packet.rx_snr
             if mesh_packet.hop_start > 0:
                 event_data["hops_away"] = mesh_packet.hop_start - mesh_packet.hop_limit
+            # Firmware 2.8+: dowód w ACK sprawdzony kluczem adresata. INVALID = ktoś podrobił potwierdzenie.
+            proof = mesh_packet.ack_proof_status
+            if proof == mesh_pb2.MeshPacket.AckProofStatus.ACK_PROOF_INVALID:
+                event_data["ack_proof"] = "INVALID"
+            elif proof == mesh_pb2.MeshPacket.AckProofStatus.ACK_PROOF_VALID:
+                event_data["ack_proof"] = "VALID"
         if error != mesh_pb2.Routing.Error.NONE:
             event_data["error"] = mesh_pb2.Routing.Error.Name(error)
 

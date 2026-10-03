@@ -49,7 +49,7 @@ from .sniffer_decode import ChannelKeys
 from .mqtt_sniffer import MqttSniffer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from homeassistant.core import Event, HomeAssistant
 
@@ -63,6 +63,7 @@ MAX_TIMESERIES_POINTS = 1500
 # Wykres skoków w czasie potrzebuje dłuższej historii niż lista ostatnich tras.
 MAX_TRACEROUTES_PER_NODE = 50
 MAX_NODE_HISTORY_POINTS = 300
+KEY_LENGTH = 32  # długość klucza publicznego X25519
 NODE_STATUS_PORT = 36  # PortNum.NODE_STATUS_APP: nazwa może być nieznana starszemu protobufowi
 # Jakość sygnału zbieramy z każdego pakietu od węzła, więc serii jest więcej niż
 # w telemetrii; na dysk trafia jednak nie częściej niż co 5 minut, żeby ciągły
@@ -156,7 +157,11 @@ def _apply_ack(message: dict[str, Any], data: Any, now: int) -> None:
         elif len(relays) < MAX_RELAYS_PER_MESSAGE and (relay or not any(not r.get("relay_node") for r in relays)):
             relays.append(info)
     elif ack_type == "ACK":
-        message["ack_info"] = {**info, "from": data.get("from_node")}
+        if data.get("ack_proof") == "INVALID":
+            # Dowód w ACK się nie zgadza: potwierdzenie mogło zostać podrobione — nie traktujemy go jak dostarczenia.
+            message["ack_forged"] = True
+            return
+        message["ack_info"] = {**info, "from": data.get("from_node"), "verified": data.get("ack_proof") == "VALID"}
 
     if _ACK_RANK[ack_type] >= _ACK_RANK.get(message.get("ack"), 0):
         message["ack"] = ack_type
@@ -392,6 +397,7 @@ class PanelStore:
     async def _cleanup_task(self, client: Any, node_ids: list[int]) -> None:
         try:
             await self.cleanup.run(client, node_ids)
+            self.forget_keys(self.cleanup.removed_ids)
         finally:
             self.cleanup.finish()
             if self.cleanup.source == "auto":
@@ -583,6 +589,7 @@ class PanelStore:
         local_node = gateway_node.get("num")
         self._remember_via(packet, local_node)
         self._remember_status(packet, local_node)
+        self._remember_key(packet, local_node)
         self._spot_own_position(packet, local_node)
         if self.sniffer.enabled:
             self.sniffer.add_packet(packet, _now_ms(), local_node)
@@ -659,6 +666,58 @@ class PanelStore:
         state["status"] = {"text": text, "ts": now}
         # Ten sam tekst powtarzany co jakiś czas nie jest wart zapisu na dysk częściej niż raz na minutę.
         if previous.get("text") != text or now - previous.get("ts", 0) >= 60_000:  # noqa: PLR2004
+            self._schedule_save()
+
+    def _remember_key(self, packet: dict[str, Any], local_node: int | None) -> None:
+        """NODEINFO_APP: zapamiętaj pierwszy klucz publiczny węzła i oznacz, gdy później przyjdzie inny.
+
+        Zmieniony klucz to sygnał ostrzegawczy (podszywanie się albo węzeł po resecie): wiadomości
+        szyfrowane kluczem się nie odszyfrują. Flaga zostaje do usunięcia węzła z bazy.
+        """
+        decoded = packet.get("decoded")
+        sender = packet.get("from")
+        if not isinstance(decoded, dict) or decoded.get("portnum") != "NODEINFO_APP":
+            return
+        if not isinstance(sender, int) or sender == local_node:
+            return
+        try:
+            user = mesh_pb2.User()
+            user.ParseFromString(base64.b64decode(decoded.get("payload") or ""))
+        except Exception:  # noqa: BLE001 - uszkodzony albo obcy pakiet nie może zatrzymać przetwarzania reszty
+            return
+        if len(user.public_key) != KEY_LENGTH:
+            return
+        key = base64.b64encode(user.public_key).decode()
+        state = self._node_state.setdefault(str(sender), {})
+        known = state.get("public_key")
+        if known is None:
+            state["public_key"] = key
+            self._schedule_save()
+        elif known != key and not state.get("key_mismatch"):
+            state["key_mismatch"] = True
+            self._schedule_save()
+
+    def key_mismatch_nodes(self) -> set[int]:
+        """Węzły, u których klucz publiczny zmienił się od pierwszego zapamiętanego."""
+        result: set[int] = set()
+        for node_id, state in self._node_state.items():
+            if state.get("key_mismatch"):
+                try:
+                    result.add(int(node_id))
+                except ValueError:
+                    continue
+        return result
+
+    def forget_keys(self, node_ids: Iterable[int]) -> None:
+        """Po usunięciu węzła z radia zapomnij jego klucz — nowy zacznie od zera."""
+        changed = False
+        for node_id in node_ids:
+            state = self._node_state.get(str(node_id))
+            if state and ("public_key" in state or "key_mismatch" in state):
+                state.pop("public_key", None)
+                state.pop("key_mismatch", None)
+                changed = True
+        if changed:
             self._schedule_save()
 
     def _remember_via(self, packet: dict[str, Any], local_node: int | None) -> None:

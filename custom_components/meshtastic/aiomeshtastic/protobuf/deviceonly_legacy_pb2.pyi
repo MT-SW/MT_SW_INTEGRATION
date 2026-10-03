@@ -3,25 +3,19 @@
 isort:skip_file
 """
 
-from collections import abc as _abc
-from google.protobuf import descriptor as _descriptor
-from google.protobuf import message as _message
-from google.protobuf.internal import containers as _containers
-from meshtastic.aiomeshtastic.protobuf import deviceonly_pb2 as _deviceonly_pb2
-from meshtastic.aiomeshtastic.protobuf import telemetry_pb2 as _telemetry_pb2
-import builtins as _builtins
-import sys
-import typing as _typing
+import builtins
+import collections.abc
+import google.protobuf.descriptor
+import google.protobuf.internal.containers
+import google.protobuf.message
+from . import deviceonly_pb2
+from . import telemetry_pb2
+import typing
 
-if sys.version_info >= (3, 11):
-    from typing import TypeAlias as _TypeAlias, Never as _Never
-else:
-    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
+DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
-DESCRIPTOR: _descriptor.FileDescriptor
-
-@_typing.final
-class NodeInfoLite_Legacy(_message.Message):
+@typing.final
+class NodeInfoLite_Legacy(google.protobuf.message.Message):
     """
     Legacy NodeInfoLite descriptor used only to decode pre-split
     /prefs/nodes.proto saves during the v24 -> v25 migration boot.
@@ -33,88 +27,80 @@ class NodeInfoLite_Legacy(_message.Message):
     removed once DEVICESTATE_MIN_VER advances past 24.
     """
 
-    DESCRIPTOR: _descriptor.Descriptor
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    NUM_FIELD_NUMBER: _builtins.int
-    USER_FIELD_NUMBER: _builtins.int
-    POSITION_FIELD_NUMBER: _builtins.int
-    SNR_FIELD_NUMBER: _builtins.int
-    LAST_HEARD_FIELD_NUMBER: _builtins.int
-    DEVICE_METRICS_FIELD_NUMBER: _builtins.int
-    CHANNEL_FIELD_NUMBER: _builtins.int
-    VIA_MQTT_FIELD_NUMBER: _builtins.int
-    HOPS_AWAY_FIELD_NUMBER: _builtins.int
-    IS_FAVORITE_FIELD_NUMBER: _builtins.int
-    IS_IGNORED_FIELD_NUMBER: _builtins.int
-    NEXT_HOP_FIELD_NUMBER: _builtins.int
-    BITFIELD_FIELD_NUMBER: _builtins.int
-    num: _builtins.int
-    snr: _builtins.float
-    last_heard: _builtins.int
-    channel: _builtins.int
-    via_mqtt: _builtins.bool
-    hops_away: _builtins.int
-    is_favorite: _builtins.bool
-    is_ignored: _builtins.bool
-    next_hop: _builtins.int
-    bitfield: _builtins.int
-    @_builtins.property
-    def user(self) -> _deviceonly_pb2.UserLite: ...
-    @_builtins.property
-    def position(self) -> _deviceonly_pb2.PositionLite: ...
-    @_builtins.property
-    def device_metrics(self) -> _telemetry_pb2.DeviceMetrics: ...
+    NUM_FIELD_NUMBER: builtins.int
+    USER_FIELD_NUMBER: builtins.int
+    POSITION_FIELD_NUMBER: builtins.int
+    SNR_FIELD_NUMBER: builtins.int
+    LAST_HEARD_FIELD_NUMBER: builtins.int
+    DEVICE_METRICS_FIELD_NUMBER: builtins.int
+    CHANNEL_FIELD_NUMBER: builtins.int
+    VIA_MQTT_FIELD_NUMBER: builtins.int
+    HOPS_AWAY_FIELD_NUMBER: builtins.int
+    IS_FAVORITE_FIELD_NUMBER: builtins.int
+    IS_IGNORED_FIELD_NUMBER: builtins.int
+    NEXT_HOP_FIELD_NUMBER: builtins.int
+    BITFIELD_FIELD_NUMBER: builtins.int
+    num: builtins.int
+    snr: builtins.float
+    last_heard: builtins.int
+    channel: builtins.int
+    via_mqtt: builtins.bool
+    hops_away: builtins.int
+    is_favorite: builtins.bool
+    is_ignored: builtins.bool
+    next_hop: builtins.int
+    bitfield: builtins.int
+    @property
+    def user(self) -> deviceonly_pb2.UserLite: ...
+    @property
+    def position(self) -> deviceonly_pb2.PositionLite: ...
+    @property
+    def device_metrics(self) -> telemetry_pb2.DeviceMetrics: ...
     def __init__(
         self,
         *,
-        num: _builtins.int = ...,
-        user: _deviceonly_pb2.UserLite | None = ...,
-        position: _deviceonly_pb2.PositionLite | None = ...,
-        snr: _builtins.float = ...,
-        last_heard: _builtins.int = ...,
-        device_metrics: _telemetry_pb2.DeviceMetrics | None = ...,
-        channel: _builtins.int = ...,
-        via_mqtt: _builtins.bool = ...,
-        hops_away: _builtins.int | None = ...,
-        is_favorite: _builtins.bool = ...,
-        is_ignored: _builtins.bool = ...,
-        next_hop: _builtins.int = ...,
-        bitfield: _builtins.int = ...,
+        num: builtins.int = ...,
+        user: deviceonly_pb2.UserLite | None = ...,
+        position: deviceonly_pb2.PositionLite | None = ...,
+        snr: builtins.float = ...,
+        last_heard: builtins.int = ...,
+        device_metrics: telemetry_pb2.DeviceMetrics | None = ...,
+        channel: builtins.int = ...,
+        via_mqtt: builtins.bool = ...,
+        hops_away: builtins.int | None = ...,
+        is_favorite: builtins.bool = ...,
+        is_ignored: builtins.bool = ...,
+        next_hop: builtins.int = ...,
+        bitfield: builtins.int = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["_hops_away", b"_hops_away", "device_metrics", b"device_metrics", "hops_away", b"hops_away", "position", b"position", "user", b"user"]  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_hops_away", b"_hops_away", "bitfield", b"bitfield", "channel", b"channel", "device_metrics", b"device_metrics", "hops_away", b"hops_away", "is_favorite", b"is_favorite", "is_ignored", b"is_ignored", "last_heard", b"last_heard", "next_hop", b"next_hop", "num", b"num", "position", b"position", "snr", b"snr", "user", b"user", "via_mqtt", b"via_mqtt"]  # noqa: Y015
-    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType__hops_away: _TypeAlias = _typing.Literal["hops_away"]  # noqa: Y015
-    _WhichOneofArgType__hops_away: _TypeAlias = _typing.Literal["_hops_away", b"_hops_away"]  # noqa: Y015
-    def WhichOneof(self, oneof_group: _WhichOneofArgType__hops_away) -> _WhichOneofReturnType__hops_away | None: ...
+    def HasField(self, field_name: typing.Literal["_hops_away", b"_hops_away", "device_metrics", b"device_metrics", "hops_away", b"hops_away", "position", b"position", "user", b"user"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_hops_away", b"_hops_away", "bitfield", b"bitfield", "channel", b"channel", "device_metrics", b"device_metrics", "hops_away", b"hops_away", "is_favorite", b"is_favorite", "is_ignored", b"is_ignored", "last_heard", b"last_heard", "next_hop", b"next_hop", "num", b"num", "position", b"position", "snr", b"snr", "user", b"user", "via_mqtt", b"via_mqtt"]) -> None: ...
+    def WhichOneof(self, oneof_group: typing.Literal["_hops_away", b"_hops_away"]) -> typing.Literal["hops_away"] | None: ...
 
-Global___NodeInfoLite_Legacy: _TypeAlias = NodeInfoLite_Legacy  # noqa: Y015
+global___NodeInfoLite_Legacy = NodeInfoLite_Legacy
 
-@_typing.final
-class NodeDatabase_Legacy(_message.Message):
+@typing.final
+class NodeDatabase_Legacy(google.protobuf.message.Message):
     """
     Legacy NodeDatabase shape: one repeated array of fat NodeInfoLite_Legacy
     with no satellite position/telemetry arrays.
     """
 
-    DESCRIPTOR: _descriptor.Descriptor
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    VERSION_FIELD_NUMBER: _builtins.int
-    NODES_FIELD_NUMBER: _builtins.int
-    version: _builtins.int
-    @_builtins.property
-    def nodes(self) -> _containers.RepeatedCompositeFieldContainer[Global___NodeInfoLite_Legacy]: ...
+    VERSION_FIELD_NUMBER: builtins.int
+    NODES_FIELD_NUMBER: builtins.int
+    version: builtins.int
+    @property
+    def nodes(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___NodeInfoLite_Legacy]: ...
     def __init__(
         self,
         *,
-        version: _builtins.int = ...,
-        nodes: _abc.Iterable[Global___NodeInfoLite_Legacy] | None = ...,
+        version: builtins.int = ...,
+        nodes: collections.abc.Iterable[global___NodeInfoLite_Legacy] | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["nodes", b"nodes", "version", b"version"]  # noqa: Y015
-    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
+    def ClearField(self, field_name: typing.Literal["nodes", b"nodes", "version", b"version"]) -> None: ...
 
-Global___NodeDatabase_Legacy: _TypeAlias = NodeDatabase_Legacy  # noqa: Y015
+global___NodeDatabase_Legacy = NodeDatabase_Legacy

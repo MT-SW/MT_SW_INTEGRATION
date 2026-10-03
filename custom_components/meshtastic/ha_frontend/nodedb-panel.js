@@ -335,6 +335,7 @@ class MeshNodeDbCleanup extends LitElement {
               { value: "all", label: PL("All nodes") },
               { value: "unknown", label: PL("Only unknown") },
               { value: "known", label: PL("Only known") },
+              { value: "mismatch", label: PL("Only mismatched key") },
             ]}
             @change=${(e) => {
               this._kind = e.detail.value;

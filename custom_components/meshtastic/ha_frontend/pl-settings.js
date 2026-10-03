@@ -803,6 +803,7 @@ const PL_STRINGS = {
   "Node kind": "Rodzaj węzłów",
   "All nodes": "Wszystkie",
   "Only unknown": "Tylko nieznane",
+  "Only mismatched key": "Tylko z niezgodnym kluczem",
   "Only known": "Tylko znane",
   "1 day": "1 dzień",
   "{n} days": "{n} dni",

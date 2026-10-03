@@ -27,6 +27,15 @@ function hasText(hass, key) {
  *  - NAK                     → tekst błędu routingu z aplikacji
  */
 export function outgoingStatus(hass, message, now = Date.now()) {
+  const status = baseStatus(hass, message, now);
+  // Firmware 2.8+: ACK z błędnym dowodem to prawdopodobna podróbka — nie liczymy go jako dostarczenia.
+  if (message.ack_forged && status.kind !== "ok") {
+    return { ...status, detail: t(hass, "msgstatus.forged") };
+  }
+  return status;
+}
+
+function baseStatus(hass, message, now) {
   const isDm = message.to_node !== null && message.to_node !== undefined;
   const ack = message.ack;
 

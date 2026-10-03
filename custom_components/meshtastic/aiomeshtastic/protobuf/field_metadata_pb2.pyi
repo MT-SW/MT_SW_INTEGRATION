@@ -3,23 +3,17 @@
 isort:skip_file
 """
 
-from google.protobuf import descriptor as _descriptor
-from google.protobuf import descriptor_pb2 as _descriptor_pb2
-from google.protobuf import message as _message
-from google.protobuf.internal import extension_dict as _extension_dict
-import builtins as _builtins
-import sys
-import typing as _typing
+import builtins
+import google.protobuf.descriptor
+import google.protobuf.descriptor_pb2
+import google.protobuf.internal.extension_dict
+import google.protobuf.message
+import typing
 
-if sys.version_info >= (3, 11):
-    from typing import TypeAlias as _TypeAlias, Never as _Never
-else:
-    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
+DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
-DESCRIPTOR: _descriptor.FileDescriptor
-
-@_typing.final
-class FieldMetadata(_message.Message):
+@typing.final
+class FieldMetadata(google.protobuf.message.Message):
     """
     Structured, app/UI-relevant metadata describing a protobuf field or enum value.
 
@@ -69,6 +63,14 @@ class FieldMetadata(_message.Message):
     catalog. Do not put machine-readable values (regexes, identifiers, format
     codes) in a string attribute; they would be handed to translators.
 
+    The exception is a short, named set of MACHINE-READABLE string attributes -
+    currently `since_firmware` and `deprecated_since` - which the generators emit
+    as plain literals. A firmware version is compared rather than read, and a
+    translated one would compare wrongly at runtime. The set is deliberately
+    closed and lives in the generators (`machineReadableAttributes`); adding to it
+    is a generator change and should stay rare, because every entry is a string a
+    translator will never see and therefore a place display text can hide.
+
     To tag a field, set the option on it, e.g.
       uint32 rx_gpio = 8 [(meshtastic.aiomeshtastic.protobuf.field_metadata) = { diy_only: true }];
 
@@ -82,43 +84,45 @@ class FieldMetadata(_message.Message):
     on pre-assembled boards) directly from the protobuf schema.
     """
 
-    DESCRIPTOR: _descriptor.Descriptor
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    DIY_ONLY_FIELD_NUMBER: _builtins.int
-    ADMIN_ONLY_FIELD_NUMBER: _builtins.int
-    MIN_VALUE_FIELD_NUMBER: _builtins.int
-    MAX_VALUE_FIELD_NUMBER: _builtins.int
-    UNIT_FIELD_NUMBER: _builtins.int
-    DEPRECATED_FIELD_NUMBER: _builtins.int
-    LABEL_FIELD_NUMBER: _builtins.int
-    DESCRIPTION_FIELD_NUMBER: _builtins.int
-    KEYWORDS_FIELD_NUMBER: _builtins.int
-    diy_only: _builtins.bool
+    DIY_ONLY_FIELD_NUMBER: builtins.int
+    ADMIN_ONLY_FIELD_NUMBER: builtins.int
+    MIN_VALUE_FIELD_NUMBER: builtins.int
+    MAX_VALUE_FIELD_NUMBER: builtins.int
+    UNIT_FIELD_NUMBER: builtins.int
+    DEPRECATED_FIELD_NUMBER: builtins.int
+    LABEL_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    KEYWORDS_FIELD_NUMBER: builtins.int
+    SINCE_FIRMWARE_FIELD_NUMBER: builtins.int
+    DEPRECATED_SINCE_FIELD_NUMBER: builtins.int
+    diy_only: builtins.bool
     """
     Field is only relevant to DIY hardware builds. Apps may hide it when
     connected to a pre-assembled / commercial board.
     """
-    admin_only: _builtins.bool
+    admin_only: builtins.bool
     """
     Field is only relevant in advanced / administrative contexts and may be
     hidden from the default UI.
     """
-    min_value: _builtins.float
+    min_value: builtins.float
     """
     Inclusive lower bound, for PRESENTATION: slider and stepper range, and the
     client-side check that stops a user entering a value the firmware would
     reject anyway. It is NOT the wire contract and nothing enforces it on
     receipt - see the note on bounds below.
     """
-    max_value: _builtins.float
+    max_value: builtins.float
     """
     Inclusive upper bound, for PRESENTATION. Same status as `min_value`.
     """
-    unit: _builtins.str
+    unit: builtins.str
     """
     Human-facing unit label for the value (e.g. "m", "s", "dBm").
     """
-    deprecated: _builtins.bool
+    deprecated: builtins.bool
     """
     Field is deprecated. MIRRORS the field's standard `[deprecated = true]`
     option - the generators populate this automatically from that option so
@@ -128,19 +132,19 @@ class FieldMetadata(_message.Message):
     ERROR; mark the field `[deprecated = true]` as usual and it flows through
     here.
     """
-    label: _builtins.str
+    label: builtins.str
     """
     Short human-facing name for the field, as a UI would label the control that
     edits it (e.g. "Hop Limit"). Source string for localization; see the note on
     string attributes above.
     """
-    description: _builtins.str
+    description: builtins.str
     """
     One-sentence plain-language explanation of what the field does, suitable for
     showing under the control (e.g. "How many times a message may be repeated
     before it stops being forwarded."). Source string for localization.
     """
-    keywords: _builtins.str
+    keywords: builtins.str
     """
     Additional terms a user might search for to find this field, beyond its
     label - abbreviations, older names, and related concepts (e.g. for
@@ -149,37 +153,82 @@ class FieldMetadata(_message.Message):
     ignored. "|" is used rather than "," because a keyword may itself contain a
     comma. Source string for localization.
     """
+    since_firmware: builtins.str
+    """
+    The first firmware version that has this field, e.g. "2.7.12".
+
+    A client showing a control for a field the connected node does not have
+    offers a setting that will be ignored; one hiding a field the node does
+    have loses a setting that works. Today each client answers that from a
+    version constant written into its own UI, so the same boundary is stated
+    independently in each of them - and when firmware adds a field, every
+    client has to learn the number separately.
+
+    MACHINE-READABLE (see the note on string attributes above): a version is
+    compared, not read, and is emitted as a plain literal rather than as
+    localizable text.
+
+    Presentation metadata, like `min_value`: firmware still has to defend
+    itself, since an older client can always write a field a newer firmware
+    ignores, and a newer client a field an older one does not know.
+
+    Unset means "as long as anyone needs to care", which is the common case -
+    annotate a field only where a client genuinely has to make this decision.
+    """
+    deprecated_since: builtins.str
+    """
+    The first firmware version that no longer honours this field, e.g. "2.7.1"
+    on `compass_north_top`: `compass_orientation` replaced it in 2.3.13, but
+    firmware went on reading the old field until 2.7.1. The replacement's
+    arrival and the old field's removal are different releases, which is the
+    whole reason this is worth writing down.
+
+    Distinct from `deprecated`, which says only THAT a field is superseded.
+    That is enough to stop offering it on new firmware but not enough to keep
+    offering it where it still works: a node below this version needs the field,
+    and a client that hides it on the strength of the boolean alone takes a
+    working setting away. Both clients do exactly that today.
+
+    So the intended rule is: show the field below this version; at or above it,
+    treat it as `deprecated` does - hidden unless the node holds a non-default
+    value, which keeps a stale setting visible rather than silently saved.
+
+    Deprecated is not removed. A field firmware has stopped reading entirely is
+    a different statement and wants its own annotation rather than this one.
+
+    MACHINE-READABLE, and presentation metadata, on the same terms as
+    `since_firmware`.
+    """
     def __init__(
         self,
         *,
-        diy_only: _builtins.bool | None = ...,
-        admin_only: _builtins.bool | None = ...,
-        min_value: _builtins.float | None = ...,
-        max_value: _builtins.float | None = ...,
-        unit: _builtins.str | None = ...,
-        deprecated: _builtins.bool | None = ...,
-        label: _builtins.str | None = ...,
-        description: _builtins.str | None = ...,
-        keywords: _builtins.str | None = ...,
+        diy_only: builtins.bool | None = ...,
+        admin_only: builtins.bool | None = ...,
+        min_value: builtins.float | None = ...,
+        max_value: builtins.float | None = ...,
+        unit: builtins.str | None = ...,
+        deprecated: builtins.bool | None = ...,
+        label: builtins.str | None = ...,
+        description: builtins.str | None = ...,
+        keywords: builtins.str | None = ...,
+        since_firmware: builtins.str | None = ...,
+        deprecated_since: builtins.str | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["admin_only", b"admin_only", "deprecated", b"deprecated", "description", b"description", "diy_only", b"diy_only", "keywords", b"keywords", "label", b"label", "max_value", b"max_value", "min_value", b"min_value", "unit", b"unit"]  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["admin_only", b"admin_only", "deprecated", b"deprecated", "description", b"description", "diy_only", b"diy_only", "keywords", b"keywords", "label", b"label", "max_value", b"max_value", "min_value", b"min_value", "unit", b"unit"]  # noqa: Y015
-    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
+    def HasField(self, field_name: typing.Literal["admin_only", b"admin_only", "deprecated", b"deprecated", "deprecated_since", b"deprecated_since", "description", b"description", "diy_only", b"diy_only", "keywords", b"keywords", "label", b"label", "max_value", b"max_value", "min_value", b"min_value", "since_firmware", b"since_firmware", "unit", b"unit"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["admin_only", b"admin_only", "deprecated", b"deprecated", "deprecated_since", b"deprecated_since", "description", b"description", "diy_only", b"diy_only", "keywords", b"keywords", "label", b"label", "max_value", b"max_value", "min_value", b"min_value", "since_firmware", b"since_firmware", "unit", b"unit"]) -> None: ...
 
-Global___FieldMetadata: _TypeAlias = FieldMetadata  # noqa: Y015
+global___FieldMetadata = FieldMetadata
 
-FIELD_METADATA_FIELD_NUMBER: _builtins.int
-ENUM_VALUE_METADATA_FIELD_NUMBER: _builtins.int
-field_metadata: _extension_dict._ExtensionFieldDescriptor[_descriptor_pb2.FieldOptions, Global___FieldMetadata]
+FIELD_METADATA_FIELD_NUMBER: builtins.int
+ENUM_VALUE_METADATA_FIELD_NUMBER: builtins.int
+field_metadata: google.protobuf.internal.extension_dict._ExtensionFieldDescriptor[google.protobuf.descriptor_pb2.FieldOptions, global___FieldMetadata]
 """
 Attach FieldMetadata to a field, e.g.
   uint32 rx_gpio = 8 [(meshtastic.aiomeshtastic.protobuf.field_metadata) = { diy_only: true }];
 
 Private-use extension number range is 50000-99999.
 """
-enum_value_metadata: _extension_dict._ExtensionFieldDescriptor[_descriptor_pb2.EnumValueOptions, Global___FieldMetadata]
+enum_value_metadata: google.protobuf.internal.extension_dict._ExtensionFieldDescriptor[google.protobuf.descriptor_pb2.EnumValueOptions, global___FieldMetadata]
 """
 Attach the same metadata to an ENUM VALUE, e.g.
   LONG_FAST = 0 [(meshtastic.aiomeshtastic.protobuf.enum_value_metadata) = { label: "Long Range - Fast" }];

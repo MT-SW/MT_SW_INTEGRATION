@@ -659,7 +659,9 @@ async def ws_send_message(
         sent = await _send(chunks[0])
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
         _LOGGER.warning("Nie udało się wysłać wiadomości: %s", err)
-        connection.send_error(msg["id"], "send_failed", str(err))
+        reason = f"{err} {err.__cause__ or ''}".lower()
+        code = "queue_full" if any(word in reason for word in ("backlog", "queue", "full")) else "send_failed"
+        connection.send_error(msg["id"], code, str(err))
         return
 
     if len(chunks) > 1:
@@ -675,7 +677,11 @@ async def ws_send_message(
 
         entry.async_create_background_task(hass, _send_rest(), "mt_sw_send_split_chunks")
 
-    connection.send_result(msg["id"], {"sent": bool(sent), "parts": len(chunks)})
+    # outcome: "queued" = radio przyjęło wiadomość do wysłania; "timeout" = brak odpowiedzi radia w czasie.
+    # Dostarczenie do adresata potwierdza dopiero ACK (osobne zdarzenie, pokazywane przy wiadomości).
+    connection.send_result(
+        msg["id"], {"sent": bool(sent), "parts": len(chunks), "outcome": "queued" if sent else "timeout"}
+    )
 
 
 @websocket_api.websocket_command(
@@ -1689,6 +1695,7 @@ async def _nodedb_candidates(
             protected=set(entry.runtime_data.coordinator.data or {}),
             inactive_days=msg.get("inactive_days", 0),
             kind=msg.get("kind", "all"),
+            mismatched=store.key_mismatch_nodes(),
         )
     except NoCriteriaError:
         connection.send_error(msg["id"], "no_criteria", "Wybierz czas nieaktywności albo rodzaj węzłów")

@@ -3,64 +3,64 @@
 isort:skip_file
 """
 
-from google.protobuf import descriptor as _descriptor
-from google.protobuf import message as _message
-from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
-import builtins as _builtins
+import builtins
+import google.protobuf.descriptor
+import google.protobuf.internal.enum_type_wrapper
+import google.protobuf.message
 import sys
-import typing as _typing
+import typing
 
-if sys.version_info >= (3, 11):
-    from typing import TypeAlias as _TypeAlias, Never as _Never
+if sys.version_info >= (3, 10):
+    import typing as typing_extensions
 else:
-    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
+    import typing_extensions
 
-DESCRIPTOR: _descriptor.FileDescriptor
+DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
-@_typing.final
-class LoRaWANBridge(_message.Message):
+@typing.final
+class LoRaWANBridge(google.protobuf.message.Message):
     """
     Payload for LORAWAN_BRIDGE packets. Tunnels raw LoRaWAN PHY payloads and their
     RF metadata so a gateway can reach a network server over a mesh.
     """
 
-    DESCRIPTOR: _descriptor.Descriptor
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    @_typing.final
-    class Uplink(_message.Message):
+    @typing.final
+    class Uplink(google.protobuf.message.Message):
         """
         An uplink heard by the gateway, travelling towards the network server.
         """
 
-        DESCRIPTOR: _descriptor.Descriptor
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        FREQ_HZ_FIELD_NUMBER: _builtins.int
-        TMST_FIELD_NUMBER: _builtins.int
-        RSSI_X10_FIELD_NUMBER: _builtins.int
-        SNR_X10_FIELD_NUMBER: _builtins.int
-        RADIO_PARAMS_FIELD_NUMBER: _builtins.int
-        FSK_BITRATE_FIELD_NUMBER: _builtins.int
-        PAYLOAD_FIELD_NUMBER: _builtins.int
-        PAYLOAD_ID_FIELD_NUMBER: _builtins.int
-        CHUNK_COUNT_FIELD_NUMBER: _builtins.int
-        freq_hz: _builtins.int
+        FREQ_HZ_FIELD_NUMBER: builtins.int
+        TMST_FIELD_NUMBER: builtins.int
+        RSSI_X10_FIELD_NUMBER: builtins.int
+        SNR_X10_FIELD_NUMBER: builtins.int
+        RADIO_PARAMS_FIELD_NUMBER: builtins.int
+        FSK_BITRATE_FIELD_NUMBER: builtins.int
+        PAYLOAD_FIELD_NUMBER: builtins.int
+        PAYLOAD_ID_FIELD_NUMBER: builtins.int
+        CHUNK_COUNT_FIELD_NUMBER: builtins.int
+        freq_hz: builtins.int
         """
         Receive frequency in Hz.
         """
-        tmst: _builtins.int
+        tmst: builtins.int
         """
         Concentrator receive timestamp in microseconds. Free running, wraps about
         every 72 minutes.
         """
-        rssi_x10: _builtins.int
+        rssi_x10: builtins.int
         """
         Received signal strength in tenths of a dBm. Fits signed 16 bit.
         """
-        snr_x10: _builtins.int
+        snr_x10: builtins.int
         """
         Signal to noise ratio in tenths of a dB. Fits signed 16 bit.
         """
-        radio_params: _builtins.int
+        radio_params: builtins.int
         """
         Packed radio settings, 0 to 255. Meaningless when fsk_bitrate is set.
           bits 7-5  0 to 7 for SF5 to SF12
@@ -70,185 +70,173 @@ class LoRaWANBridge(_message.Message):
                     bandwidth takes the next free code rather than sorting in.
           bits 1-0  0 to 3 for 4/5 to 4/8
         """
-        fsk_bitrate: _builtins.int
+        fsk_bitrate: builtins.int
         """
         FSK bit rate in bits per second. Non-zero only for an FSK frame, in which
         case radio_params does not apply. Fits unsigned 16 bit.
         """
-        payload: _builtins.bytes
+        payload: builtins.bytes
         """
         PHY payload, or its first part when chunk_count is 2.
         """
-        payload_id: _builtins.int
+        payload_id: builtins.int
         """
         Groups this head with its continuation. 1 to 255, or 0 when not chunked.
         """
-        chunk_count: _builtins.int
+        chunk_count: builtins.int
         """
         0 when the frame fits one packet, otherwise 2.
         """
         def __init__(
             self,
             *,
-            freq_hz: _builtins.int = ...,
-            tmst: _builtins.int = ...,
-            rssi_x10: _builtins.int = ...,
-            snr_x10: _builtins.int = ...,
-            radio_params: _builtins.int = ...,
-            fsk_bitrate: _builtins.int = ...,
-            payload: _builtins.bytes = ...,
-            payload_id: _builtins.int = ...,
-            chunk_count: _builtins.int = ...,
+            freq_hz: builtins.int = ...,
+            tmst: builtins.int = ...,
+            rssi_x10: builtins.int = ...,
+            snr_x10: builtins.int = ...,
+            radio_params: builtins.int = ...,
+            fsk_bitrate: builtins.int = ...,
+            payload: builtins.bytes = ...,
+            payload_id: builtins.int = ...,
+            chunk_count: builtins.int = ...,
         ) -> None: ...
-        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-        _ClearFieldArgType: _TypeAlias = _typing.Literal["chunk_count", b"chunk_count", "freq_hz", b"freq_hz", "fsk_bitrate", b"fsk_bitrate", "payload", b"payload", "payload_id", b"payload_id", "radio_params", b"radio_params", "rssi_x10", b"rssi_x10", "snr_x10", b"snr_x10", "tmst", b"tmst"]  # noqa: Y015
-        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-        def WhichOneof(self, oneof_group: _Never) -> None: ...
+        def ClearField(self, field_name: typing.Literal["chunk_count", b"chunk_count", "freq_hz", b"freq_hz", "fsk_bitrate", b"fsk_bitrate", "payload", b"payload", "payload_id", b"payload_id", "radio_params", b"radio_params", "rssi_x10", b"rssi_x10", "snr_x10", b"snr_x10", "tmst", b"tmst"]) -> None: ...
 
-    @_typing.final
-    class Downlink(_message.Message):
+    @typing.final
+    class Downlink(google.protobuf.message.Message):
         """
         A downlink from the network server, travelling towards the gateway.
         """
 
-        DESCRIPTOR: _descriptor.Descriptor
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        FREQ_HZ_FIELD_NUMBER: _builtins.int
-        TMST_FIELD_NUMBER: _builtins.int
-        RADIO_PARAMS_FIELD_NUMBER: _builtins.int
-        POWER_DBM_FIELD_NUMBER: _builtins.int
-        IMMEDIATE_FIELD_NUMBER: _builtins.int
-        INVERT_POLARITY_FIELD_NUMBER: _builtins.int
-        NO_CRC_FIELD_NUMBER: _builtins.int
-        MAY_DEFER_FIELD_NUMBER: _builtins.int
-        REQUEST_ID_FIELD_NUMBER: _builtins.int
-        PAYLOAD_FIELD_NUMBER: _builtins.int
-        PAYLOAD_ID_FIELD_NUMBER: _builtins.int
-        CHUNK_COUNT_FIELD_NUMBER: _builtins.int
-        freq_hz: _builtins.int
+        FREQ_HZ_FIELD_NUMBER: builtins.int
+        TMST_FIELD_NUMBER: builtins.int
+        RADIO_PARAMS_FIELD_NUMBER: builtins.int
+        POWER_DBM_FIELD_NUMBER: builtins.int
+        IMMEDIATE_FIELD_NUMBER: builtins.int
+        INVERT_POLARITY_FIELD_NUMBER: builtins.int
+        NO_CRC_FIELD_NUMBER: builtins.int
+        MAY_DEFER_FIELD_NUMBER: builtins.int
+        REQUEST_ID_FIELD_NUMBER: builtins.int
+        PAYLOAD_FIELD_NUMBER: builtins.int
+        PAYLOAD_ID_FIELD_NUMBER: builtins.int
+        CHUNK_COUNT_FIELD_NUMBER: builtins.int
+        freq_hz: builtins.int
         """
         Transmit frequency in Hz.
         """
-        tmst: _builtins.int
+        tmst: builtins.int
         """
         Concentrator timestamp to transmit at. Ignored when immediate is set.
         """
-        radio_params: _builtins.int
+        radio_params: builtins.int
         """
         Packed radio settings, encoded as in Uplink.radio_params. FSK downlink is
         not supported, so there is no bit rate or frequency deviation here.
         """
-        power_dbm: _builtins.int
+        power_dbm: builtins.int
         """
         Transmit power in dBm, 0 to 255. The gateway clamps it to its region.
         """
-        immediate: _builtins.bool
+        immediate: builtins.bool
         """
         Transmit as soon as possible instead of at tmst. Used for Class C.
         """
-        invert_polarity: _builtins.bool
+        invert_polarity: builtins.bool
         """
         Invert LoRa polarity. True for every LoRaWAN downlink.
         """
-        no_crc: _builtins.bool
+        no_crc: builtins.bool
         """
         Disable the physical layer CRC.
         """
-        may_defer: _builtins.bool
+        may_defer: builtins.bool
         """
         Allow the gateway to send this in a later receive window if it arrives too
         late. Leave clear for anything tied to a specific uplink.
         """
-        request_id: _builtins.int
+        request_id: builtins.int
         """
         Identifies this downlink so its TxResult can be matched to it. 1 to 255.
         """
-        payload: _builtins.bytes
+        payload: builtins.bytes
         """
         PHY payload, or its first part when chunk_count is 2.
         """
-        payload_id: _builtins.int
+        payload_id: builtins.int
         """
         Groups this head with its continuation. 1 to 255, or 0 when not chunked.
         """
-        chunk_count: _builtins.int
+        chunk_count: builtins.int
         """
         0 when the frame fits one packet, otherwise 2.
         """
         def __init__(
             self,
             *,
-            freq_hz: _builtins.int = ...,
-            tmst: _builtins.int = ...,
-            radio_params: _builtins.int = ...,
-            power_dbm: _builtins.int = ...,
-            immediate: _builtins.bool = ...,
-            invert_polarity: _builtins.bool = ...,
-            no_crc: _builtins.bool = ...,
-            may_defer: _builtins.bool = ...,
-            request_id: _builtins.int = ...,
-            payload: _builtins.bytes = ...,
-            payload_id: _builtins.int = ...,
-            chunk_count: _builtins.int = ...,
+            freq_hz: builtins.int = ...,
+            tmst: builtins.int = ...,
+            radio_params: builtins.int = ...,
+            power_dbm: builtins.int = ...,
+            immediate: builtins.bool = ...,
+            invert_polarity: builtins.bool = ...,
+            no_crc: builtins.bool = ...,
+            may_defer: builtins.bool = ...,
+            request_id: builtins.int = ...,
+            payload: builtins.bytes = ...,
+            payload_id: builtins.int = ...,
+            chunk_count: builtins.int = ...,
         ) -> None: ...
-        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-        _ClearFieldArgType: _TypeAlias = _typing.Literal["chunk_count", b"chunk_count", "freq_hz", b"freq_hz", "immediate", b"immediate", "invert_polarity", b"invert_polarity", "may_defer", b"may_defer", "no_crc", b"no_crc", "payload", b"payload", "payload_id", b"payload_id", "power_dbm", b"power_dbm", "radio_params", b"radio_params", "request_id", b"request_id", "tmst", b"tmst"]  # noqa: Y015
-        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-        def WhichOneof(self, oneof_group: _Never) -> None: ...
+        def ClearField(self, field_name: typing.Literal["chunk_count", b"chunk_count", "freq_hz", b"freq_hz", "immediate", b"immediate", "invert_polarity", b"invert_polarity", "may_defer", b"may_defer", "no_crc", b"no_crc", "payload", b"payload", "payload_id", b"payload_id", "power_dbm", b"power_dbm", "radio_params", b"radio_params", "request_id", b"request_id", "tmst", b"tmst"]) -> None: ...
 
-    @_typing.final
-    class PayloadChunk(_message.Message):
+    @typing.final
+    class PayloadChunk(google.protobuf.message.Message):
         """
         The remainder of a chunked Uplink or Downlink. Carries no RF metadata.
         """
 
-        DESCRIPTOR: _descriptor.Descriptor
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        PAYLOAD_ID_FIELD_NUMBER: _builtins.int
-        CHUNK_INDEX_FIELD_NUMBER: _builtins.int
-        PAYLOAD_CHUNK_FIELD_NUMBER: _builtins.int
-        payload_id: _builtins.int
+        PAYLOAD_ID_FIELD_NUMBER: builtins.int
+        CHUNK_INDEX_FIELD_NUMBER: builtins.int
+        PAYLOAD_CHUNK_FIELD_NUMBER: builtins.int
+        payload_id: builtins.int
         """
         Matches payload_id in the head message. Reassembly keys on the sending
         node and this value.
         """
-        chunk_index: _builtins.int
+        chunk_index: builtins.int
         """
         Position of this chunk. Always 1.
         """
-        payload_chunk: _builtins.bytes
+        payload_chunk: builtins.bytes
         """
         This part of the PHY payload.
         """
         def __init__(
             self,
             *,
-            payload_id: _builtins.int = ...,
-            chunk_index: _builtins.int = ...,
-            payload_chunk: _builtins.bytes = ...,
+            payload_id: builtins.int = ...,
+            chunk_index: builtins.int = ...,
+            payload_chunk: builtins.bytes = ...,
         ) -> None: ...
-        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-        _ClearFieldArgType: _TypeAlias = _typing.Literal["chunk_index", b"chunk_index", "payload_chunk", b"payload_chunk", "payload_id", b"payload_id"]  # noqa: Y015
-        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-        def WhichOneof(self, oneof_group: _Never) -> None: ...
+        def ClearField(self, field_name: typing.Literal["chunk_index", b"chunk_index", "payload_chunk", b"payload_chunk", "payload_id", b"payload_id"]) -> None: ...
 
-    @_typing.final
-    class TxResult(_message.Message):
+    @typing.final
+    class TxResult(google.protobuf.message.Message):
         """
         The outcome of a downlink, reported back towards the network server.
         """
 
-        DESCRIPTOR: _descriptor.Descriptor
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
         class _Status:
-            ValueType = _typing.NewType("ValueType", _builtins.int)
-            V: _TypeAlias = ValueType  # noqa: Y015
+            ValueType = typing.NewType("ValueType", builtins.int)
+            V: typing_extensions.TypeAlias = ValueType
 
-        class _StatusEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[LoRaWANBridge.TxResult._Status.ValueType], _builtins.type):
-            DESCRIPTOR: _descriptor.EnumDescriptor
+        class _StatusEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[LoRaWANBridge.TxResult._Status.ValueType], builtins.type):
+            DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
             NONE: LoRaWANBridge.TxResult._Status.ValueType  # 0
             TOO_LATE: LoRaWANBridge.TxResult._Status.ValueType  # 1
             TOO_EARLY: LoRaWANBridge.TxResult._Status.ValueType  # 2
@@ -289,61 +277,53 @@ class LoRaWANBridge(_message.Message):
         Discarded, either undeferrable or refused by an authorization check.
         """
 
-        TMST_FIELD_NUMBER: _builtins.int
-        STATUS_FIELD_NUMBER: _builtins.int
-        REQUEST_ID_FIELD_NUMBER: _builtins.int
-        tmst: _builtins.int
+        TMST_FIELD_NUMBER: builtins.int
+        STATUS_FIELD_NUMBER: builtins.int
+        REQUEST_ID_FIELD_NUMBER: builtins.int
+        tmst: builtins.int
         """
         The tmst the downlink was scheduled for. Zero when it was immediate, so
         diagnostic only; correlate on request_id.
         """
-        status: Global___LoRaWANBridge.TxResult.Status.ValueType
+        status: global___LoRaWANBridge.TxResult.Status.ValueType
         """
         What happened to it.
         """
-        request_id: _builtins.int
+        request_id: builtins.int
         """
         Echoes Downlink.request_id.
         """
         def __init__(
             self,
             *,
-            tmst: _builtins.int = ...,
-            status: Global___LoRaWANBridge.TxResult.Status.ValueType = ...,
-            request_id: _builtins.int = ...,
+            tmst: builtins.int = ...,
+            status: global___LoRaWANBridge.TxResult.Status.ValueType = ...,
+            request_id: builtins.int = ...,
         ) -> None: ...
-        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-        _ClearFieldArgType: _TypeAlias = _typing.Literal["request_id", b"request_id", "status", b"status", "tmst", b"tmst"]  # noqa: Y015
-        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-        def WhichOneof(self, oneof_group: _Never) -> None: ...
+        def ClearField(self, field_name: typing.Literal["request_id", b"request_id", "status", b"status", "tmst", b"tmst"]) -> None: ...
 
-    UPLINK_FIELD_NUMBER: _builtins.int
-    DOWNLINK_FIELD_NUMBER: _builtins.int
-    TX_RESULT_FIELD_NUMBER: _builtins.int
-    CHUNK_FIELD_NUMBER: _builtins.int
-    @_builtins.property
-    def uplink(self) -> Global___LoRaWANBridge.Uplink: ...
-    @_builtins.property
-    def downlink(self) -> Global___LoRaWANBridge.Downlink: ...
-    @_builtins.property
-    def tx_result(self) -> Global___LoRaWANBridge.TxResult: ...
-    @_builtins.property
-    def chunk(self) -> Global___LoRaWANBridge.PayloadChunk: ...
+    UPLINK_FIELD_NUMBER: builtins.int
+    DOWNLINK_FIELD_NUMBER: builtins.int
+    TX_RESULT_FIELD_NUMBER: builtins.int
+    CHUNK_FIELD_NUMBER: builtins.int
+    @property
+    def uplink(self) -> global___LoRaWANBridge.Uplink: ...
+    @property
+    def downlink(self) -> global___LoRaWANBridge.Downlink: ...
+    @property
+    def tx_result(self) -> global___LoRaWANBridge.TxResult: ...
+    @property
+    def chunk(self) -> global___LoRaWANBridge.PayloadChunk: ...
     def __init__(
         self,
         *,
-        uplink: Global___LoRaWANBridge.Uplink | None = ...,
-        downlink: Global___LoRaWANBridge.Downlink | None = ...,
-        tx_result: Global___LoRaWANBridge.TxResult | None = ...,
-        chunk: Global___LoRaWANBridge.PayloadChunk | None = ...,
+        uplink: global___LoRaWANBridge.Uplink | None = ...,
+        downlink: global___LoRaWANBridge.Downlink | None = ...,
+        tx_result: global___LoRaWANBridge.TxResult | None = ...,
+        chunk: global___LoRaWANBridge.PayloadChunk | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["chunk", b"chunk", "downlink", b"downlink", "tx_result", b"tx_result", "uplink", b"uplink", "variant", b"variant"]  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["chunk", b"chunk", "downlink", b"downlink", "tx_result", b"tx_result", "uplink", b"uplink", "variant", b"variant"]  # noqa: Y015
-    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType_variant: _TypeAlias = _typing.Literal["uplink", "downlink", "tx_result", "chunk"]  # noqa: Y015
-    _WhichOneofArgType_variant: _TypeAlias = _typing.Literal["variant", b"variant"]  # noqa: Y015
-    def WhichOneof(self, oneof_group: _WhichOneofArgType_variant) -> _WhichOneofReturnType_variant | None: ...
+    def HasField(self, field_name: typing.Literal["chunk", b"chunk", "downlink", b"downlink", "tx_result", b"tx_result", "uplink", b"uplink", "variant", b"variant"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["chunk", b"chunk", "downlink", b"downlink", "tx_result", b"tx_result", "uplink", b"uplink", "variant", b"variant"]) -> None: ...
+    def WhichOneof(self, oneof_group: typing.Literal["variant", b"variant"]) -> typing.Literal["uplink", "downlink", "tx_result", "chunk"] | None: ...
 
-Global___LoRaWANBridge: _TypeAlias = LoRaWANBridge  # noqa: Y015
+global___LoRaWANBridge = LoRaWANBridge

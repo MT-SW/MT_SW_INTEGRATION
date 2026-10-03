@@ -244,7 +244,10 @@ class MeshMessagesTab extends LitElement {
       return true;
     } catch (err) {
       console.error("MT_SW: wysyłka nie powiodła się", err);
-      this._error = (err && err.message) || t(this.hass, "messages.send_failed");
+      this._error =
+        err && err.code === "queue_full"
+          ? t(this.hass, "messages.queue_full")
+          : (err && err.message) || t(this.hass, "messages.send_failed");
       return false;
     } finally {
       this._sending = false;

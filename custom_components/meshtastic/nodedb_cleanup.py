@@ -27,7 +27,9 @@ if TYPE_CHECKING:
 DAY_SECONDS = 86400
 REMOVE_TIMEOUT_SECONDS = 20
 PREVIEW_LIMIT = 100
-KINDS = ("all", "unknown", "known")
+KINDS = ("all", "unknown", "known", "mismatch")
+REMOVE_ATTEMPTS = 3
+REMOVE_RETRY_DELAY_SECONDS = 1.0
 
 AUTO_DEFAULTS: dict[str, Any] = {
     "enabled": False,
@@ -60,6 +62,7 @@ def select_candidates(  # noqa: PLR0913
     protected: Iterable[int] = (),
     inactive_days: int = 0,
     kind: str = "all",
+    mismatched: Iterable[int] = (),
     now: float | None = None,
 ) -> list[dict[str, Any]]:
     """Węzły do usunięcia, od najdłużej nieaktywnych; węzeł musi spełnić wszystkie wybrane warunki.
@@ -67,6 +70,10 @@ def select_candidates(  # noqa: PLR0913
     inactive_days to czas od ostatniego odezwania się węzła (lastHeard). Węzeł, którego
     radio nigdy nie słyszało (brak lastHeard), jest nieaktywny od zawsze — przy filtrze
     nieaktywności wpada do wyniku.
+
+    kind "mismatch" wybiera tylko węzły, których klucz publiczny zmienił się względem
+    pierwszego zapamiętanego (lista `mismatched`) — ich wiadomości szyfrowane kluczem
+    nie mają szans się odszyfrować.
     """
     if kind not in KINDS:
         msg = f"kind must be one of {KINDS}"
@@ -76,6 +83,7 @@ def select_candidates(  # noqa: PLR0913
     now = time.time() if now is None else now
     cutoff = now - inactive_days * DAY_SECONDS if inactive_days else None
     skip = set(protected)
+    bad_keys = set(mismatched)
 
     found: list[dict[str, Any]] = []
     for node_id, node in nodes.items():
@@ -83,6 +91,8 @@ def select_candidates(  # noqa: PLR0913
             continue
         unknown = node_is_unknown(node)
         if (kind == "unknown" and not unknown) or (kind == "known" and unknown):
+            continue
+        if kind == "mismatch" and node_id not in bad_keys:
             continue
         heard = _last_heard(node)
         if cutoff is not None and heard is not None and heard >= cutoff:
@@ -129,6 +139,7 @@ class CleanupJob:
         self.processed = 0
         self.removed = 0
         self.failed = 0
+        self.removed_ids: list[int] = []
         self.started_at: int | None = None
         self.finished_at: int | None = None
 
@@ -141,6 +152,7 @@ class CleanupJob:
         self.source = source
         self.total = total
         self.processed = self.removed = self.failed = 0
+        self.removed_ids = []
         self.started_at = int(time.time() * 1000)
         self.finished_at = None
 
@@ -151,12 +163,23 @@ class CleanupJob:
     async def run(self, client: Any, node_ids: Iterable[int]) -> None:
         """Usuwaj po kolei; błąd jednego węzła (brak ACK, przekroczenie czasu) nie przerywa reszty."""
         for node_id in node_ids:
-            try:
-                removed = await asyncio.wait_for(client.async_remove_node(node_id), timeout=REMOVE_TIMEOUT_SECONDS)
-            except Exception:  # noqa: BLE001 - jeden nieodpowiadający węzeł nie może zatrzymać czyszczenia
-                removed = False
+            removed = False
+            # Radio (zwłaszcza przez Bluetooth) potrafi chwilowo odrzucić polecenie, bo kolejka
+            # zapisu jest pełna — wtedy po krótkiej przerwie próbujemy jeszcze raz.
+            for attempt in range(REMOVE_ATTEMPTS):
+                try:
+                    removed = bool(
+                        await asyncio.wait_for(client.async_remove_node(node_id), timeout=REMOVE_TIMEOUT_SECONDS)
+                    )
+                except Exception:  # noqa: BLE001 - jeden nieodpowiadający węzeł nie może zatrzymać czyszczenia
+                    removed = False
+                if removed:
+                    break
+                if attempt < REMOVE_ATTEMPTS - 1:
+                    await asyncio.sleep(REMOVE_RETRY_DELAY_SECONDS)
             if removed:
                 self.removed += 1
+                self.removed_ids.append(node_id)
             else:
                 self.failed += 1
             self.processed += 1
