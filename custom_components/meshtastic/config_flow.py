@@ -880,25 +880,142 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             },
         )
 
+    # --- Scalanie duplikatów: lista znalezionych grup -> wybór, który węzeł zostaje -> potwierdzenie ---
+
+    def _merge_live_nodes(self) -> dict[int, Any]:
+        return dict(getattr(self, "_merge_nodes", {}) or {})
+
+    def _merge_node_label(self, num: int) -> str:
+        import time  # noqa: PLC0415
+
+        node_hex = f"!{num:08x}"
+        info = self._merge_live_nodes().get(num)
+        if info is None:
+            tracked = next(
+                (e for e in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []) if e["id"] == num), None
+            )
+            name = (tracked or {}).get("name") or node_hex
+            return f"{name} ({node_hex}) — brak w bazie radia"
+        user = info.get("user") or {}
+        name = user.get("longName") or user.get("shortName") or node_hex
+        heard = info.get("lastHeard") or 0
+        if heard:
+            minutes = max(0, int((time.time() - heard) // 60))
+            ago = f"{minutes} min temu" if minutes < 120 else f"{minutes // 60} h temu"  # noqa: PLR2004
+            return f"{name} ({node_hex}) — słyszany {ago}"
+        return f"{name} ({node_hex}) — nigdy nie słyszany"
+
     async def async_step_merge(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Ręczne scalenie duplikatów (węzeł, który wrócił pod nowym numerem)."""
+        """Krok 1: lista znalezionych duplikatów — użytkownik zaznacza, które grupy scalić."""
+        from .node_merge import find_merge_plans  # noqa: PLC0415
+
         runtime = getattr(self.config_entry, "runtime_data", None)
         if runtime is None or not runtime.stats.enabled:
             return self.async_abort(reason="not_loaded")
         if user_input is None:
-            return self.async_show_form(step_id="merge", data_schema=vol.Schema({}))
-        from .node_merge import async_reconcile_nodes  # noqa: PLC0415
+            try:
+                self._merge_nodes = dict(await runtime.client.async_get_all_nodes())
+            except Exception:  # noqa: BLE001
+                self._merge_nodes = dict(runtime.coordinator.data or {})
+            gateway = (runtime.gateway_node or {}).get("num")
+            self._merge_plans = find_merge_plans(self.hass, self.config_entry, self._merge_nodes, gateway)
+            self._merge_gateway = gateway
+            self._merge_options = deepcopy(dict(self.config_entry.options))
+            self._merge_removals: list[int] = []
+            self._merge_changed = 0
+            if not self._merge_plans:
+                return self.async_abort(reason="merge_none")
+            options = []
+            for index, plan in enumerate(self._merge_plans):
+                names = ", ".join(f"!{n:08x}" for n in sorted(plan.nums))
+                options.append(SelectOptionDict(value=str(index), label=f"{plan.name or '?'} — {names} ({plan.reason})"))
+            schema = vol.Schema(
+                {
+                    vol.Required("groups", default=[o["value"] for o in options]): SelectSelector(
+                        SelectSelectorConfig(options=options, multiple=True, mode=SelectSelectorMode.LIST)
+                    )
+                }
+            )
+            return self.async_show_form(
+                step_id="merge", data_schema=schema, description_placeholders={"count": str(len(options))}
+            )
+        chosen = [int(i) for i in user_input.get("groups", [])]
+        self._merge_queue = [self._merge_plans[i] for i in chosen if 0 <= i < len(self._merge_plans)]
+        return await self.async_step_merge_pick()
 
-        try:
-            nodes = await runtime.client.async_get_all_nodes()
-        except Exception:  # noqa: BLE001
-            nodes = runtime.coordinator.data or {}
-        changed = await async_reconcile_nodes(
-            self.hass, self.config_entry, nodes, (runtime.gateway_node or {}).get("num")
+    async def async_step_merge_pick(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Krok 2 (dla każdej grupy): który węzeł zostaje; pozostałe znikają z listy i (opcjonalnie) z bazy radia."""
+        from .node_merge import apply_merge_plan, plan_with_kept_node  # noqa: PLC0415
+
+        queue = getattr(self, "_merge_queue", [])
+        if not queue:
+            return await self._merge_finish()
+        plan = queue[0]
+        nodes = self._merge_live_nodes()
+        gateway = getattr(self, "_merge_gateway", None)
+        nums = sorted(plan.nums, key=lambda n: (nodes.get(n) or {}).get("lastHeard") or 0, reverse=True)
+
+        if user_input is not None:
+            kept = int(user_input["keep"])
+            plan = plan_with_kept_node(plan, kept, nodes)
+            self._merge_changed += apply_merge_plan(self.hass, self.config_entry, plan)
+            dropped = [n for n in plan.nums if n != kept and n != gateway]
+            options = self._merge_options
+            tracked = list(options.get(CONF_OPTION_FILTER_NODES, []))
+            info = nodes.get(kept) or {}
+            user = info.get("user") or {}
+            was_tracked = any(e["id"] in plan.nums for e in tracked)
+            new_tracked, seen_kept = [], False
+            for entry_el in tracked:
+                if entry_el["id"] == kept:
+                    seen_kept = True
+                    new_tracked.append({**entry_el, "identity_key": plan.target_key})
+                elif entry_el["id"] in dropped:
+                    continue
+                else:
+                    new_tracked.append(entry_el)
+            if was_tracked and not seen_kept:
+                template = next((e for e in tracked if e["id"] in dropped), {})
+                new_tracked.append(
+                    {
+                        **template,
+                        "id": kept,
+                        "name": user.get("longName") or template.get("name"),
+                        "short_name": user.get("shortName") or template.get("short_name"),
+                        "identity_key": plan.target_key,
+                    }
+                )
+            options[CONF_OPTION_FILTER_NODES] = new_tracked
+            if user_input.get("remove_from_radio", True):
+                self._merge_removals.extend(n for n in dropped if n in nodes)
+            self._merge_queue = queue[1:]
+            return await self.async_step_merge_pick()
+
+        options = [SelectOptionDict(value=str(n), label=self._merge_node_label(n)) for n in nums]
+        schema = vol.Schema(
+            {
+                vol.Required("keep", default=str(nums[0])): SelectSelector(
+                    SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
+                ),
+                vol.Required("remove_from_radio", default=True): bool,
+            }
         )
-        if changed:
-            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
-        return self.async_abort(reason="merge_done", description_placeholders={"count": str(changed)})
+        return self.async_show_form(
+            step_id="merge_pick",
+            data_schema=schema,
+            description_placeholders={"name": plan.name or "?", "reason": plan.reason, "left": str(len(queue))},
+        )
+
+    async def _merge_finish(self) -> FlowResult:
+        from .node_merge import canonicalise_keys  # noqa: PLC0415
+
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        if runtime is not None:
+            canonicalise_keys(self.hass, self.config_entry, self._merge_live_nodes())
+            for num in dict.fromkeys(self._merge_removals):
+                self.hass.async_create_task(runtime.coordinator.async_request_node_removal(num))
+        # zapis opcji przeładowuje wpis, więc encje dostaną nowe unique_id
+        return self.async_create_entry(title="", data=self._merge_options)
 
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: PLR0912
         errors: dict[str, str] = {}

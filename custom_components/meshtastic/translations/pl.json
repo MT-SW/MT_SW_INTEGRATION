@@ -192,7 +192,18 @@
       },
       "merge": {
         "title": "Scal duplikaty węzłów",
-        "description": "Szuka urządzeń tego samego węzła, który wrócił pod NOWYM numerem (ten sam klucz publiczny albo — bez klucza — te same nazwy i model), przenosi encje wraz z historią na jedno urządzenie i usuwa duplikat. Węzłów, które są jednocześnie aktywne z różnymi kluczami, nigdy nie skleja. Bezpieczne do wielokrotnego uruchamiania."
+        "description": "Znaleziono grupy urządzeń, które wyglądają na ten sam węzeł pod różnymi numerami (ten sam klucz publiczny albo — bez klucza — te same nazwy i model): {count}. Zaznacz te, które chcesz scalić. W następnym kroku wskażesz dla każdej grupy, który węzeł zostaje. Encje i historia przechodzą na jedno urządzenie.",
+        "data": {
+          "groups": "Grupy do scalenia"
+        }
+      },
+      "merge_pick": {
+        "title": "Który węzeł zostaje?",
+        "description": "Grupa: **{name}** (dopasowanie: {reason}). Pozostało grup do obsłużenia (z tą): {left}.\n\nWybrany węzeł zostaje na liście śledzonych. Pozostałe numery znikają z listy, a opcjonalnie także z bazy węzłów w radiu. Historia i encje zostają na jednym urządzeniu.",
+        "data": {
+          "keep": "Węzeł, który zostaje",
+          "remove_from_radio": "Usuń pozostałe też z bazy węzłów w radiu"
+        }
       }
     },
     "error": {
@@ -205,7 +216,8 @@
     "abort": {
       "no_devices": "Nie dodano jeszcze żadnych urządzeń.",
       "not_loaded": "Statystyki są wyłączone lub integracja jeszcze się nie uruchomiła.",
-      "merge_done": "Gotowe. Zmienionych wpisów encji: {count}. Szczegóły w logu Home Assistanta (INFO)."
+      "merge_done": "Gotowe. Zmienionych wpisów encji: {count}. Szczegóły w logu Home Assistanta (INFO).",
+      "merge_none": "Nie znaleziono duplikatów do scalenia."
     }
   },
   "services": {

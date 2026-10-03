@@ -1063,6 +1063,13 @@ class MeshInterface:
                 if "user" in node_info_dict:
                     _normalize_user_dict(node_info_dict["user"], node_info.num)
                 db_node = self._get_or_create_node(node_info.num)
+                if node_id == self.my_node_num():
+                    # diagnostyka: co radio samo podało o pozycji własnego węzła
+                    self._logger.info(
+                        "Własny węzeł z radia: pozycja=%s (poprawna: %s)",
+                        node_info_dict.get("position"),
+                        gwpos.normalize_position(node_info_dict.get("position")) is not None,
+                    )
                 if "position" in node_info_dict:
                     node_info_dict["position"] = gwpos.merge_position(db_node.get("position"), node_info_dict["position"])
                 db_node.update(node_info_dict)

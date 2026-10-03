@@ -961,7 +961,33 @@ async def ws_gateway_debug(hass, connection, msg) -> None:
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_request_position(hass, connection, msg) -> None:
-    """Poproś węzeł o aktualną pozycję."""
+    """Poproś węzeł o aktualną pozycję.
+
+    Własnej bramki nie pytamy przez radio: nikt jej nie odpowie (Routing error 8 = brak odpowiedzi).
+    Zamiast tego zwracamy pozycję ustaloną lokalnie albo czytelny powód, że jej nie ma.
+    """
+    entry = _entry_by_id(hass, msg["entry_id"])
+    own = ((entry.runtime_data.gateway_node or {}).get("num")) if entry is not None else None
+    if entry is not None and own is not None and msg["node_id"] == own:
+        store = get_store(entry.entry_id)
+        persisted = store.gateway_position if store is not None else None
+        try:
+            position, source = entry.runtime_data.client.get_gateway_position(persisted)
+        except Exception:  # noqa: BLE001
+            position, source = None, None
+        if position:
+            connection.send_result(
+                msg["id"],
+                {"confirmed": True, "result": {"position": position, "source": source, "local": True}},
+            )
+        else:
+            connection.send_error(
+                msg["id"],
+                "gateway_no_position",
+                "Bramka nie zna własnej pozycji: radio nie ma jeszcze fixu GPS i nie ma ustawionej pozycji stałej. "
+                "Poczekaj na fix GPS albo ustaw pozycję stałą w ustawieniach pozycji.",
+            )
+        return
     await _run_node_action(hass, connection, msg, lambda c, m: c.request_position(m["node_id"]))
 
 

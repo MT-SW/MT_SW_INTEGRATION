@@ -192,7 +192,18 @@
       },
       "merge": {
         "title": "Merge duplicate nodes",
-        "description": "Looks for devices of the same node that came back under a NEW node number (same public key or — without a key — same names and hardware model), moves the entities with their history onto one device and removes the duplicate. Never merges nodes that are live at the same time with different keys. Safe to run repeatedly."
+        "description": "Found groups of devices that look like the same node under different numbers (same public key or — without a key — same names and model): {count}. Tick the ones you want to merge. In the next step you choose which node stays for each group. Entities and history move to one device.",
+        "data": {
+          "groups": "Groups to merge"
+        }
+      },
+      "merge_pick": {
+        "title": "Which node stays?",
+        "description": "Group: **{name}** (matched by: {reason}). Groups left (including this one): {left}.\n\nThe chosen node stays on the tracked list. The other numbers are removed from the list and, optionally, from the radio's node database. History and entities stay on one device.",
+        "data": {
+          "keep": "Node to keep",
+          "remove_from_radio": "Also remove the others from the radio's node database"
+        }
       }
     },
     "error": {
@@ -205,7 +216,8 @@
     "abort": {
       "no_devices": "No devices have been added yet.",
       "not_loaded": "Statistics are disabled or the integration has not started yet.",
-      "merge_done": "Done. Entity registry entries changed: {count}. Details are in the Home Assistant log (INFO)."
+      "merge_done": "Done. Entity registry entries changed: {count}. Details are in the Home Assistant log (INFO).",
+      "merge_none": "No duplicates to merge were found."
     }
   },
   "services": {
