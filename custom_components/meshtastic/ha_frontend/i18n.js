@@ -193,7 +193,7 @@ const STRINGS = {
     "radio.stats_saved_at": "Statystyki z {time} — odświeżą się po następnym pakiecie od węzła.",
 
     "radio.chart.airtime": "Obciążenie eteru",
-    "radio.chart.packets": "Ruch pakietów (na próbkę)",
+    "radio.chart.packets": "Ruch pakietów (na minutę)",
     "radio.chart.empty": "Zbieranie danych — wykres pojawi się po kilku minutach.",
     "radio.chart.chutil": "Wykorzystanie kanału",
     "radio.chart.airutil": "Czas nadawania",
@@ -659,7 +659,7 @@ const STRINGS = {
     "radio.stats_saved_at": "Statistics from {time} — they refresh on the node's next packet.",
 
     "radio.chart.airtime": "Airtime load",
-    "radio.chart.packets": "Packet traffic (per sample)",
+    "radio.chart.packets": "Packet traffic (per minute)",
     "radio.chart.empty": "Collecting data — the chart appears after a few minutes.",
     "radio.chart.chutil": "Channel utilization",
     "radio.chart.airutil": "Air util TX",

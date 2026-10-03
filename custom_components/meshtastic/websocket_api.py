@@ -143,7 +143,13 @@ def _gateway_payload(entry: ConfigEntry) -> Mapping[str, Any]:
     basic_stats, basic_saved_at = _remembered(node_data, saved, "localStats")
     extended_stats, extended_saved_at = _remembered(node_data, saved, "localStatsExtended")
     local_stats = {**basic_stats, **extended_stats}
+    # Notkę „statystyki z …” pokazujemy tylko wtedy, gdy główne liczniki (LocalStats —
+    # pakiety i węzły) nie są jeszcze żywe. Metryki urządzenia i rozszerzone statystyki
+    # firmware przychodzą rzadziej niż LocalStats, więc brak jednej z nich nie może
+    # trzymać komunikatu w nieskończoność, skoro ramki już się odświeżają.
     saved_times = [ts for ts in (device_saved_at, basic_saved_at, extended_saved_at) if ts]
+    if not basic_saved_at and basic_stats:
+        saved_times = []
 
     try:
         metadata = client.metadata or {}

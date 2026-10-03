@@ -207,6 +207,8 @@ class MeshRadioTab extends LitElement {
       <div class="chart-wrap">
         <mesh-line-chart
           derivative
+          rate
+          unit=" /min"
           .points=${points}
           .language=${this.hass.language}
           .emptyLabel=${empty}

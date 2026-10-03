@@ -29,6 +29,21 @@ function esc(value) {
     .replace(/"/g, "&quot;");
 }
 
+/* „Ładna” wartość osi: 1, 2, 5 razy potęga dziesięciu. */
+function niceCeil(value) {
+  if (!(value > 0)) {
+    return 1;
+  }
+  const exp = Math.floor(Math.log10(value));
+  const base = 10 ** exp;
+  const frac = value / base;
+  const nice = frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10;
+  return nice * base;
+}
+
+const TICKS_Y = 5;
+const TICKS_X = 5;
+
 class MeshLineChart extends LitElement {
   static get properties() {
     return {
@@ -42,6 +57,9 @@ class MeshLineChart extends LitElement {
          bezwzględnych — liczniki pakietów rosną monotonicznie i bez tego
          wykres byłby nudną prostą do góry. */
       derivative: { type: Boolean },
+      /* Razem z `derivative`: przyrost przeliczany na minutę, żeby wysokość
+         słupka nie zależała od tego, jak rzadko przyszła próbka. */
+      rate: { type: Boolean },
       /* Jeśli true, oś Y jest dopasowana do danych (min..max z zapasem, także
          dla wartości ujemnych) zamiast zaczynać się od zera — potrzebne dla
          wielkości takich jak ciśnienie czy napięcie, które wahają się w wąskim
@@ -59,6 +77,8 @@ class MeshLineChart extends LitElement {
     this.unit = "";
     this.height = 160;
     this.derivative = false;
+    this.rate = false;
+    this._tip = null;
     this.fit = false;
     this.language = "pl";
     this.emptyLabel = "";
@@ -81,7 +101,12 @@ class MeshLineChart extends LitElement {
         const cur = raw[i][s.key];
         if (typeof prev === "number" && typeof cur === "number") {
           // reset licznika po restarcie radia -> pomijamy ujemny skok
-          point[s.key] = cur >= prev ? cur - prev : 0;
+          let delta = cur >= prev ? cur - prev : 0;
+          if (this.rate) {
+            const minutes = (raw[i].ts - raw[i - 1].ts) / 60000;
+            delta = minutes > 0 ? delta / minutes : 0;
+          }
+          point[s.key] = delta;
           any = true;
         }
       }
@@ -137,8 +162,9 @@ class MeshLineChart extends LitElement {
           }
         }
       }
-      // Zawsze zostaw trochę powietrza nad najwyższą wartością.
-      vMax = vMax > 0 ? vMax * 1.15 : 1;
+      // Zawsze zostaw trochę powietrza nad najwyższą wartością i zaokrąglij
+      // oś do równej liczby, żeby podziałki były czytelne (0, 25, 50, 75, 100).
+      vMax = niceCeil(vMax * 1.05);
     }
     const vSpan = vMax - vMin;
 
@@ -155,10 +181,18 @@ class MeshLineChart extends LitElement {
       }
       formatValue = (v) => v.toFixed(decimals);
     }
+    const longSpan = tsSpan > 24 * 3600 * 1000;
     const formatTime = (ts) =>
-      new Date(ts).toLocaleTimeString(this.language, { hour: "2-digit", minute: "2-digit" });
+      longSpan
+        ? new Date(ts).toLocaleString(this.language, {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : new Date(ts).toLocaleTimeString(this.language, { hour: "2-digit", minute: "2-digit" });
 
-    const ticks = [vMin, vMin + vSpan / 2, vMax];
+    const ticks = Array.from({ length: TICKS_Y }, (_, i) => vMin + (vSpan * i) / (TICKS_Y - 1));
     const tickLabels = ticks.map((v) => `${formatValue(v)}${this.unit}`);
     // W trybie fit etykiety mają jednostkę i miejsca po przecinku (np. "1013.2 hPa"),
     // więc lewy margines rośnie z ich długością.
@@ -184,32 +218,115 @@ class MeshLineChart extends LitElement {
       );
     });
 
-    parts.push(
-      `<text class="axis" x="${padLeft}" y="${this.height - 6}" text-anchor="start">` +
-        `${esc(formatTime(tsMin))}</text>`,
-      `<text class="axis" x="${WIDTH - PADDING.right}" y="${this.height - 6}" text-anchor="end">` +
-        `${esc(formatTime(tsMax))}</text>`
-    );
+    for (let i = 0; i < TICKS_X; i += 1) {
+      const ts = tsMin + (tsSpan * i) / (TICKS_X - 1);
+      const gx = x(ts).toFixed(1);
+      const anchor = i === 0 ? "start" : i === TICKS_X - 1 ? "end" : "middle";
+      parts.push(
+        `<line class="grid grid-v" x1="${gx}" x2="${gx}" y1="${PADDING.top}" y2="${PADDING.top + innerH}"/>`,
+        `<text class="axis" x="${gx}" y="${this.height - 6}" text-anchor="${anchor}">` +
+          `${esc(formatTime(ts))}</text>`
+      );
+    }
+
+    // Przerwa w danych (np. restart integracji) przerywa linię zamiast ciągnąć
+    // fałszywą prostą przez dziurę.
+    const gaps = [];
+    for (let i = 1; i < points.length; i += 1) {
+      gaps.push(points[i].ts - points[i - 1].ts);
+    }
+    gaps.sort((a, b) => a - b);
+    const median = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0;
+    const maxGap = Math.max(median * 4, 10 * 60 * 1000);
 
     for (const s of this.series) {
-      const d = points
-        .filter((p) => typeof p[s.key] === "number")
-        .map((p, i) => `${i === 0 ? "M" : "L"}${x(p.ts).toFixed(1)},${y(p[s.key]).toFixed(1)}`)
-        .join(" ");
+      let d = "";
+      let prevTs = null;
+      const dots = [];
+      for (const p of points) {
+        const v = p[s.key];
+        if (typeof v !== "number" || !Number.isFinite(v)) {
+          continue;
+        }
+        const cx = x(p.ts).toFixed(1);
+        const cy = y(v).toFixed(1);
+        d += `${prevTs === null || p.ts - prevTs > maxGap ? "M" : "L"}${cx},${cy} `;
+        prevTs = p.ts;
+        dots.push(`<circle class="dot" cx="${cx}" cy="${cy}" r="2.5" fill="${esc(s.color)}"/>`);
+      }
       if (d) {
-        parts.push(`<path class="line" d="${d}" stroke="${esc(s.color)}"/>`);
+        parts.push(`<path class="line" d="${d.trim()}" stroke="${esc(s.color)}"/>`);
+        // Kropki tylko przy małej liczbie próbek, żeby nie zasłaniały linii.
+        if (dots.length <= 80) {
+          parts.push(...dots);
+        }
       }
     }
 
     parts.push("</svg>");
+    this._geom = { points, padLeft, innerW, tsMin, tsSpan, formatValue, formatTime };
     return parts.join("");
   }
 
   updated() {
     const canvas = this.renderRoot && this.renderRoot.querySelector(".canvas");
     if (canvas) {
+      this._geom = null;
       canvas.innerHTML = this._buildSvg();
+      this._hideTip();
     }
+  }
+
+  _hideTip() {
+    const tip = this.renderRoot && this.renderRoot.querySelector(".tip");
+    const cursor = this.renderRoot && this.renderRoot.querySelector(".cursor");
+    if (tip) {
+      tip.style.display = "none";
+    }
+    if (cursor) {
+      cursor.style.display = "none";
+    }
+  }
+
+  /* Najechanie / dotknięcie pokazuje dokładne wartości najbliższej próbki. */
+  _onMove(event) {
+    const g = this._geom;
+    const box = this.renderRoot.querySelector(".box");
+    const tip = this.renderRoot.querySelector(".tip");
+    const cursor = this.renderRoot.querySelector(".cursor");
+    if (!g || !box || !tip || !cursor) {
+      return;
+    }
+    const rect = box.getBoundingClientRect();
+    if (!rect.width) {
+      return;
+    }
+    const vx = ((event.clientX - rect.left) / rect.width) * WIDTH;
+    const ts = g.tsMin + ((vx - g.padLeft) / g.innerW) * g.tsSpan;
+    let best = null;
+    for (const p of g.points) {
+      if (best === null || Math.abs(p.ts - ts) < Math.abs(best.ts - ts)) {
+        best = p;
+      }
+    }
+    if (!best) {
+      return;
+    }
+    const px = ((g.padLeft + ((best.ts - g.tsMin) / g.tsSpan) * g.innerW) / WIDTH) * rect.width;
+    const rows = this.series
+      .filter((s) => typeof best[s.key] === "number")
+      .map(
+        (s) =>
+          `<div><span class="swatch" style="background:${esc(s.color)}"></span>${esc(s.label)}: ` +
+          `<b>${esc(g.formatValue(best[s.key]))}${esc(this.unit)}</b></div>`
+      )
+      .join("");
+    tip.innerHTML = `<div class="tip-time">${esc(g.formatTime(best.ts))}</div>${rows}`;
+    tip.style.display = "block";
+    cursor.style.display = "block";
+    cursor.style.left = `${px}px`;
+    const tipW = tip.offsetWidth;
+    tip.style.left = `${Math.max(0, Math.min(rect.width - tipW, px + 10))}px`;
   }
 
   render() {
@@ -224,7 +341,15 @@ class MeshLineChart extends LitElement {
             )}
           </div>`
         : html`<div class="chart-empty">${this.emptyLabel}</div>`}
-      <div class="canvas"></div>
+      <div
+        class="box"
+        @pointermove=${(e) => this._onMove(e)}
+        @pointerleave=${() => this._hideTip()}
+      >
+        <div class="canvas"></div>
+        <div class="cursor"></div>
+        <div class="tip"></div>
+      </div>
     `;
   }
 
@@ -254,9 +379,57 @@ class MeshLineChart extends LitElement {
         vector-effect: non-scaling-stroke;
       }
 
+      .canvas .grid-v {
+        stroke-dasharray: 2 4;
+        opacity: 0.6;
+      }
+
+      .box {
+        position: relative;
+        touch-action: pan-y;
+      }
+
+      .cursor {
+        display: none;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: var(--secondary-text-color);
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .tip {
+        display: none;
+        position: absolute;
+        top: 4px;
+        z-index: 2;
+        padding: 6px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: nowrap;
+        pointer-events: none;
+        color: var(--primary-text-color);
+        background: var(--card-background-color, #fff);
+        border: 1px solid var(--divider-color);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      }
+
+      .tip .swatch {
+        display: inline-block;
+        margin-right: 6px;
+      }
+
+      .tip-time {
+        color: var(--secondary-text-color);
+        margin-bottom: 2px;
+      }
+
       .canvas .axis {
         fill: var(--secondary-text-color);
-        font-size: 10px;
+        font-size: 11px;
         font-family: inherit;
       }
 
