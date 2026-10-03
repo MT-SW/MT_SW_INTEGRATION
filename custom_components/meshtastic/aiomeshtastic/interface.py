@@ -376,17 +376,53 @@ class MeshInterface:
         return self._connected_node_device_ui
 
     def connected_node_fixed_position(self) -> dict[str, float] | None:
-        """Pozycja własnego węzła (dla formularza stałej pozycji) albo None."""
+        """Pozycja własnego węzła (dla formularza stałej pozycji) albo None.
+
+        Bierze pierwszą poprawną z: bazy węzłów, ostatniego własnego pakietu, pozycji ustawionej przez nas.
+        """
         with contextlib.suppress(Exception):
-            node = self._node_database.get(self._connected_node_info.my_node_num) or {}
-            position = node.get("position") or {}
-            if "latitudeI" in position or "longitudeI" in position:
-                return {
-                    "latitude": round(position.get("latitudeI", 0) * 1e-7, 7),
-                    "longitude": round(position.get("longitudeI", 0) * 1e-7, 7),
-                    "altitude": position.get("altitude", 0),
-                }
+            sources = self.gateway_position_sources()
+            node = sources.get("node") or {}
+            for candidate in (node.get("position"), sources.get("own_packet"), sources.get("fixed_position")):
+                normalized = gwpos.normalize_position(dict(candidate) if candidate else None)
+                if normalized is not None:
+                    return {
+                        "latitude": normalized["latitude"],
+                        "longitude": normalized["longitude"],
+                        "altitude": normalized.get("altitude", 0),
+                    }
         return None
+
+    def own_position_known(self) -> bool:
+        return self.connected_node_fixed_position() is not None
+
+    async def refresh_own_node(self, timeout: float = 60, *, force: bool = False) -> bool:  # noqa: ASYNC109
+        """Pobierz z radia ponownie pełną konfigurację (z wpisem własnego węzła) i zwróć, czy pozycja jest znana.
+
+        Radio zna swoją pozycję (np. stałą), ale wpis własnego węzła mógł do nas nie dotrzeć
+        (ponowne połączenie pobiera tylko minimalną konfigurację). Odświeżamy najwyżej raz na 5 minut.
+        """
+        if self.own_position_known():
+            return True
+        now = time.monotonic()
+        last = getattr(self, "_own_refresh_at", None)
+        if not force and last is not None and now - last < 300:  # noqa: PLR2004
+            return False
+        self._own_refresh_at = now
+        try:
+            async with self._connected_node_config_lock:
+                await asyncio.wait_for(self._connection.request_config(minimal=False), timeout=timeout)
+            await asyncio.sleep(1)  # pętla główna dokończy przetwarzanie ostatnich pakietów
+        except Exception:  # noqa: BLE001
+            self._logger.info("Ponowne pobranie wpisu własnego węzła nie powiodło się", exc_info=True)
+        known = self.own_position_known()
+        self._logger.info("Odświeżenie wpisu własnego węzła z radia: pozycja %s", "znana" if known else "nadal brak")
+        return known
+
+    async def _ensure_own_position(self) -> None:
+        await asyncio.sleep(20)
+        if self.is_running and not self.own_position_known():
+            await self.refresh_own_node()
 
     def my_node_num(self) -> int | None:
         info = getattr(self, "_connected_node_info", None)
@@ -1276,6 +1312,7 @@ class MeshInterface:
             self._connected_node_ready.set()
             self._last_reboot_count = self._current_reboot_count()
         self._set_link_state("connected")
+        self._add_background_task(self._ensure_own_position(), name="own-position")
 
     def _current_reboot_count(self) -> int | None:
         info = self._connected_node_info

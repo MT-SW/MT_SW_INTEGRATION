@@ -804,6 +804,11 @@ async def _augment_config_for_panel(client: Any, local_config: dict, module_conf
     with contextlib.suppress(Exception):
         position = dict(local_config.get("position") or {})
         fixed = interface.connected_node_fixed_position() if position.get("fixedPosition") else None
+        if fixed is None and position.get("fixedPosition"):
+            # radio ma stałą pozycję, ale nie mamy jej w bazie — pobierz wpis własnego węzła ponownie
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(client.refresh_own_node(timeout=40), timeout=45)
+                fixed = interface.connected_node_fixed_position()
         if fixed is not None:
             position["fixedLat"] = fixed["latitude"]
             position["fixedLng"] = fixed["longitude"]
@@ -971,8 +976,13 @@ async def ws_request_position(hass, connection, msg) -> None:
     if entry is not None and own is not None and msg["node_id"] == own:
         store = get_store(entry.entry_id)
         persisted = store.gateway_position if store is not None else None
+        client = entry.runtime_data.client
         try:
-            position, source = entry.runtime_data.client.get_gateway_position(persisted)
+            position, source = client.get_gateway_position(persisted)
+            if not position:
+                # radio zna swoją pozycję, ale wpis własnego węzła mógł do nas nie dotrzeć — pobierz go ponownie
+                await client.refresh_own_node(timeout=60)
+                position, source = client.get_gateway_position(persisted)
         except Exception:  # noqa: BLE001
             position, source = None, None
         if position:

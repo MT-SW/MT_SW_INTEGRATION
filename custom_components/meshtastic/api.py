@@ -252,6 +252,10 @@ class MeshtasticApiClient:
         """Surowe kandydaty na pozycję bramki (do meshtastic/gateway_debug)."""
         return self._interface.gateway_position_sources()
 
+    async def refresh_own_node(self, timeout: float = 60) -> bool:  # noqa: ASYNC109
+        """Pobierz z radia ponownie wpis własnego węzła; True, gdy jego pozycja jest znana."""
+        return await self._interface.refresh_own_node(timeout=timeout)
+
     @property
     def interface(self) -> AioMeshInterface:
         """Połączenie z radiem — dla ondemand.py, które rozmawia wprost z warstwą pakietów."""
