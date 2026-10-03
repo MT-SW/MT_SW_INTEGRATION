@@ -17,7 +17,7 @@
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 
 const PADDING = { top: 8, right: 8, bottom: 20, left: 40 };
-const WIDTH = 600;
+const DEFAULT_WIDTH = 600;
 
 /* Do SVG trafiają tylko liczby i sformatowane etykiety, ale escapujemy
    wszystko, co idzie do tekstu — taniej niż zakładać, że tak zostanie. */
@@ -39,6 +39,20 @@ function niceCeil(value) {
   const frac = value / base;
   const nice = frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10;
   return nice * base;
+}
+
+/* Równy krok osi: najmniejszy z 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8 razy potęga dziesięciu, który jest >= wanted. */
+function niceStep(wanted) {
+  if (!(wanted > 0)) {
+    return 1;
+  }
+  const base = 10 ** Math.floor(Math.log10(wanted));
+  for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) {
+    if (m * base >= wanted * 0.9999) {
+      return m * base;
+    }
+  }
+  return 10 * base;
 }
 
 const TICKS_Y = 5;
@@ -117,8 +131,57 @@ class MeshLineChart extends LitElement {
     return out;
   }
 
+  /* Gdy próbek jest więcej niż jedna na kilka pikseli, uśredniamy je w przedziałach czasu: sto kolców na
+     centymetr wykresu niczego nie pokazuje, a średnia z przedziału tak (puste przedziały zostają puste,
+     więc dziury w danych nadal widać). */
+  _bucketed(points, widthPx) {
+    const target = Math.max(20, Math.floor(widthPx / 4));
+    if (points.length <= target * 1.5) {
+      return points;
+    }
+    const tsMin = points[0].ts;
+    const span = Math.max(1, points[points.length - 1].ts - tsMin);
+    const out = [];
+    let acc = null;
+    let idx = -1;
+    const flush = () => {
+      if (!acc) {
+        return;
+      }
+      const point = { ts: acc.ts / acc.n };
+      for (const s of this.series) {
+        if (acc.cnt[s.key]) {
+          point[s.key] = acc.sum[s.key] / acc.cnt[s.key];
+        }
+      }
+      out.push(point);
+    };
+    for (const p of points) {
+      const i = Math.min(target - 1, Math.floor(((p.ts - tsMin) / span) * target));
+      if (i !== idx) {
+        flush();
+        acc = { ts: 0, n: 0, sum: {}, cnt: {} };
+        idx = i;
+      }
+      acc.ts += p.ts;
+      acc.n += 1;
+      for (const s of this.series) {
+        if (typeof p[s.key] === "number" && Number.isFinite(p[s.key])) {
+          acc.sum[s.key] = (acc.sum[s.key] || 0) + p[s.key];
+          acc.cnt[s.key] = (acc.cnt[s.key] || 0) + 1;
+        }
+      }
+    }
+    flush();
+    return out;
+  }
+
   _buildSvg() {
-    const points = this._prepared();
+    const rawPoints = this._prepared();
+    if (rawPoints.length < 2) {
+      return "";
+    }
+    const points = this._bucketed(rawPoints, (this._width || DEFAULT_WIDTH) - PADDING.left - PADDING.right);
     if (points.length < 2) {
       return "";
     }
@@ -164,11 +227,13 @@ class MeshLineChart extends LitElement {
       }
       // Zawsze zostaw trochę powietrza nad najwyższą wartością i zaokrąglij
       // oś do równej liczby, żeby podziałki były czytelne (0, 25, 50, 75, 100).
-      vMax = niceCeil(vMax * 1.05);
+      vMax = niceStep((vMax * 1.04) / (TICKS_Y - 1)) * (TICKS_Y - 1);
     }
     const vSpan = vMax - vMin;
 
-    let formatValue = (v) => (vMax >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
+    const axisStep = (vMax - vMin) / (TICKS_Y - 1);
+    const axisDecimals = Math.abs(axisStep - Math.round(axisStep)) < 1e-9 ? 0 : Math.abs(axisStep * 10 - Math.round(axisStep * 10)) < 1e-9 ? 1 : 2;
+    let formatValue = (v) => (this.fit ? String(v) : v.toFixed(axisDecimals));
     if (this.fit) {
       // Liczba miejsc po przecinku zależy od rozpiętości osi, nie od wartości.
       let decimals = 3;
@@ -196,9 +261,10 @@ class MeshLineChart extends LitElement {
     const tickLabels = ticks.map((v) => `${formatValue(v)}${this.unit}`);
     // W trybie fit etykiety mają jednostkę i miejsca po przecinku (np. "1013.2 hPa"),
     // więc lewy margines rośnie z ich długością.
-    const padLeft = this.fit
-      ? Math.max(PADDING.left, 10 + 6 * Math.max(...tickLabels.map((label) => label.length)))
-      : PADDING.left;
+    const padLeft = Math.max(PADDING.left, 12 + 6.5 * Math.max(...tickLabels.map((label) => label.length)));
+    // Rysujemy w prawdziwych pikselach (szerokość pudełka), a nie w stałym układzie rozciąganym na cały panel:
+    // dzięki temu napisy mają swój rozmiar i nie rosną razem z szerokością ekranu.
+    const WIDTH = this._width || DEFAULT_WIDTH;
     const innerW = WIDTH - padLeft - PADDING.right;
 
     const x = (ts) => padLeft + ((ts - tsMin) / tsSpan) * innerW;
@@ -206,7 +272,7 @@ class MeshLineChart extends LitElement {
 
     const parts = [];
     parts.push(
-      `<svg viewBox="0 0 ${WIDTH} ${this.height}" preserveAspectRatio="none" role="img">`
+      `<svg width="${WIDTH}" height="${this.height}" viewBox="0 0 ${WIDTH} ${this.height}" role="img">`
     );
 
     ticks.forEach((v, i) => {
@@ -218,10 +284,12 @@ class MeshLineChart extends LitElement {
       );
     });
 
-    for (let i = 0; i < TICKS_X; i += 1) {
-      const ts = tsMin + (tsSpan * i) / (TICKS_X - 1);
+    // Etykiety czasu mają ok. 80-110 px: na wąskim wykresie jest ich mniej, żeby na siebie nie nachodziły.
+    const ticksX = Math.max(2, Math.min(TICKS_X, Math.floor(innerW / (longSpan ? 120 : 90))));
+    for (let i = 0; i < ticksX; i += 1) {
+      const ts = tsMin + (tsSpan * i) / (ticksX - 1);
       const gx = x(ts).toFixed(1);
-      const anchor = i === 0 ? "start" : i === TICKS_X - 1 ? "end" : "middle";
+      const anchor = i === 0 ? "start" : i === ticksX - 1 ? "end" : "middle";
       parts.push(
         `<line class="grid grid-v" x1="${gx}" x2="${gx}" y1="${PADDING.top}" y2="${PADDING.top + innerH}"/>`,
         `<text class="axis" x="${gx}" y="${this.height - 6}" text-anchor="${anchor}">` +
@@ -264,17 +332,46 @@ class MeshLineChart extends LitElement {
     }
 
     parts.push("</svg>");
-    this._geom = { points, padLeft, innerW, tsMin, tsSpan, formatValue, formatTime };
+    this._geom = { width: WIDTH, points, padLeft, innerW, tsMin, tsSpan, formatValue, formatTime };
     return parts.join("");
   }
 
-  updated() {
-    const canvas = this.renderRoot && this.renderRoot.querySelector(".canvas");
-    if (canvas) {
-      this._geom = null;
-      canvas.innerHTML = this._buildSvg();
-      this._hideTip();
+  connectedCallback() {
+    super.connectedCallback();
+    if (typeof ResizeObserver !== "undefined") {
+      this._ro = new ResizeObserver(() => this._redraw());
+      this._ro.observe(this);
     }
+  }
+
+  disconnectedCallback() {
+    if (this._ro) {
+      this._ro.disconnect();
+      this._ro = null;
+    }
+    super.disconnectedCallback();
+  }
+
+  /* Przerysowuje SVG, gdy zmieni się szerokość pudełka (obrót ekranu, zmiana rozmiaru panelu). */
+  _redraw() {
+    const canvas = this.renderRoot && this.renderRoot.querySelector(".canvas");
+    const box = this.renderRoot && this.renderRoot.querySelector(".box");
+    if (!canvas || !box) {
+      return;
+    }
+    const width = Math.round(box.clientWidth) || DEFAULT_WIDTH;
+    if (width === this._width && canvas.firstChild) {
+      return;
+    }
+    this._width = width;
+    this._geom = null;
+    canvas.innerHTML = this._buildSvg();
+    this._hideTip();
+  }
+
+  updated() {
+    this._width = 0; // dane się zmieniły: wymuś przerysowanie
+    this._redraw();
   }
 
   _hideTip() {
@@ -301,7 +398,7 @@ class MeshLineChart extends LitElement {
     if (!rect.width) {
       return;
     }
-    const vx = ((event.clientX - rect.left) / rect.width) * WIDTH;
+    const vx = ((event.clientX - rect.left) / rect.width) * g.width;
     const ts = g.tsMin + ((vx - g.padLeft) / g.innerW) * g.tsSpan;
     let best = null;
     for (const p of g.points) {
@@ -312,7 +409,7 @@ class MeshLineChart extends LitElement {
     if (!best) {
       return;
     }
-    const px = ((g.padLeft + ((best.ts - g.tsMin) / g.tsSpan) * g.innerW) / WIDTH) * rect.width;
+    const px = ((g.padLeft + ((best.ts - g.tsMin) / g.tsSpan) * g.innerW) / g.width) * rect.width;
     const rows = this.series
       .filter((s) => typeof best[s.key] === "number")
       .map(
@@ -360,8 +457,8 @@ class MeshLineChart extends LitElement {
       }
 
       .canvas svg {
-        width: 100%;
-        height: auto;
+        display: block;
+        max-width: 100%;
         overflow: visible;
       }
 
@@ -431,6 +528,7 @@ class MeshLineChart extends LitElement {
         fill: var(--secondary-text-color);
         font-size: 11px;
         font-family: inherit;
+        font-variant-numeric: tabular-nums;
       }
 
       .legend {
