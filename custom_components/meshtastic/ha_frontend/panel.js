@@ -10,6 +10,7 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
+import { setSignalPresetFromConfig } from "./signal-quality.js";
 
 import "./views.js";
 import "./messages.js";
@@ -349,6 +350,7 @@ class MeshtasticPanel extends LitElement {
     }
     try {
       const result = await this.hass.callWS({ type: "meshtastic/config", entry_id: entryId });
+      setSignalPresetFromConfig(result.local_config); // kolory SNR wg presetu bramki, jak w aplikacji
       this._localConfig = result.local_config || {};
       this._moduleConfig = result.module_config || {};
       this._configSchema = result.schema || null;
@@ -458,6 +460,7 @@ class MeshtasticPanel extends LitElement {
       switch (name) {
         case "get_config": {
           const result = await this.hass.callWS({ type: "meshtastic/config", entry_id: entryId });
+          setSignalPresetFromConfig(result.local_config);
           this._localConfig = result.local_config || {};
           this._moduleConfig = result.module_config || {};
           // Ich edytor kanałów czyta config.channels, czego nasza komenda

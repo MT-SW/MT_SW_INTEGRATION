@@ -73,6 +73,13 @@ let knownPreset = null;
 export function setSignalPreset(preset) {
   knownPreset = normalizePreset(preset);
 }
+/** Preset z konfiguracji LoRa radia (local_config); wyłączony „use_preset” = ustawienia własne = domyślne progi. */
+export function setSignalPresetFromConfig(localConfig) {
+  const lora = (localConfig && localConfig.lora) || {};
+  const custom = lora.usePreset === false || lora.use_preset === false;
+  const preset = custom ? null : (lora.modemPreset ?? lora.modem_preset ?? DEFAULT_PRESET);
+  setSignalPreset(preset);
+}
 export function getSignalPreset() {
   return knownPreset;
 }
@@ -128,21 +135,20 @@ export function rssiQuality(rssi) {
 }
 
 /**
- * Jakość łącza: 'good' | 'fair' | 'bad' | 'none'.
- * SNR jest oceniany względem presetu, RSSI własnymi progami i może ocenę tylko
- * OBNIŻYĆ (wygrywa gorsza z dwóch). Brak obu wartości = 'none'.
+ * Jakość łącza: 'good' | 'fair' | 'bad' | 'none' — jak determineSignalQuality w aplikacji.
+ * SNR jest oceniany względem presetu bramki. RSSI wchodzi do oceny tylko wtedy, gdy znany
+ * jest też poziom szumu: wtedy liczy się gorsze z SNR i (RSSI − szum), oba względem tych
+ * samych progów. Bez poziomu szumu ocena opiera się wyłącznie na SNR. Gdy nie ma SNR,
+ * a jest RSSI, oceniamy RSSI jego własnymi progami (jak Rssi() w aplikacji).
  * RSSI == 0 traktujemy jak brak pomiaru (tak robi cały panel).
  */
-export function signalQuality(snr, rssi, preset) {
-  const order = SIGNAL_QUALITIES;
-  let worst = -1;
+export function signalQuality(snr, rssi, preset, noiseFloor) {
+  const hasRssi = isNum(rssi) && rssi !== 0;
   if (isNum(snr)) {
-    worst = Math.max(worst, order.indexOf(rateSnr(snr, preset)));
+    const effective = hasRssi && isNum(noiseFloor) && noiseFloor !== 0 ? Math.min(snr, rssi - noiseFloor) : snr;
+    return rateSnr(effective, preset);
   }
-  if (isNum(rssi) && rssi !== 0) {
-    worst = Math.max(worst, order.indexOf(rssiQuality(rssi)));
-  }
-  return worst < 0 ? "none" : order[worst];
+  return hasRssi ? rssiQuality(rssi) : "none";
 }
 
 /* ---- kolory ---------------------------------------------------------- */
@@ -179,11 +185,11 @@ export function signalColor(quality) {
 }
 
 /** 'color:...;' dla pary SNR/RSSI; pusty napis, gdy nie ma żadnego pomiaru. */
-export function signalStyle(snr, rssi, preset) {
+export function signalStyle(snr, rssi, preset, noiseFloor) {
   if (!isNum(snr) && !(isNum(rssi) && rssi !== 0)) {
     return "";
   }
-  return `color:${signalColor(signalQuality(snr, rssi, preset))};`;
+  return `color:${signalColor(signalQuality(snr, rssi, preset, noiseFloor))};`;
 }
 
 /** Polska etykieta (strings.xml values-pl: good / fair / bad / none_quality). */
