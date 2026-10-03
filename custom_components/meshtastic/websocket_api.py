@@ -285,10 +285,33 @@ def _coordinate(position: Mapping[str, Any], name: str) -> float | None:
         return None
 
 
+SOURCE_HOME = "home"
+
+
+def _gateway_position_with_home(hass: Any, client: Any, persisted: Any) -> tuple[dict[str, Any] | None, str | None]:
+    """Pozycja bramki z radia; gdy radio jej nie zna — pozycja domowa Home Assistanta (źródło „home”).
+
+    Pozycji domowej nie zapisujemy jako „ostatniej dobrej” i nie wstawiamy do formularza ustawień
+    (zapis ustawień wysłałby ją do radia), więc znika, gdy tylko radio poda prawdziwą.
+    """
+    position, source = client.get_gateway_position(persisted)
+    if position or hass is None:
+        return position, source
+    with contextlib.suppress(Exception):
+        lat, lon = float(hass.config.latitude), float(hass.config.longitude)
+        if valid_coordinates(lat, lon):
+            home: dict[str, Any] = {"latitude": lat, "longitude": lon}
+            elevation = getattr(hass.config, "elevation", None)
+            if elevation is not None:
+                home["altitude"] = int(elevation)
+            return home, SOURCE_HOME
+    return None, None
+
+
 class _NodePayloadContext:
     """Dane wspólne dla całej listy węzłów — liczone raz, nie per węzeł."""
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: ConfigEntry, hass: HomeAssistant | None = None) -> None:
         self.entry = entry
         gateway_node = entry.runtime_data.gateway_node or {}
         self.gateway_id = gateway_node.get("num")
@@ -306,8 +329,8 @@ class _NodePayloadContext:
         self.gateway_position_source: str | None = None
         try:
             persisted = self.store.gateway_position if self.store is not None else None
-            self.gateway_position, self.gateway_position_source = entry.runtime_data.client.get_gateway_position(
-                persisted
+            self.gateway_position, self.gateway_position_source = _gateway_position_with_home(
+                hass, entry.runtime_data.client, persisted
             )
         except Exception:  # noqa: BLE001 - pozycja bramki jest best-effort
             _LOGGER.debug("Nie udało się ustalić pozycji bramki", exc_info=True)
@@ -433,7 +456,7 @@ async def ws_nodes(
     # Koordynator jest przefiltrowany opcją "nodes" wpisu konfiguracyjnego,
     # która decyduje wyłącznie o tym, dla których węzłów powstają encje HA.
     # Panel ma pokazywać to samo, co widzi radio — jak klient WWW.
-    context = _NodePayloadContext(entry)
+    context = _NodePayloadContext(entry, hass)
     nodes = [
         _node_payload(context, node_id, node)
         for node_id, node in entry.runtime_data.client.get_all_nodes_sync().items()
@@ -478,7 +501,7 @@ def ws_subscribe_nodes(
         connection.send_message(websocket_api.event_message(msg["id"], payload))
 
     def _snapshot() -> None:
-        context = _NodePayloadContext(entry)
+        context = _NodePayloadContext(entry, hass)
         nodes = [_node_payload(context, node_id, node) for node_id, node in client.get_all_nodes_sync().items()]
         _send(
             {
@@ -501,7 +524,7 @@ def ws_subscribe_nodes(
             if not pending:
                 return
             database = client.get_all_nodes_sync()
-            context = _NodePayloadContext(entry)
+            context = _NodePayloadContext(entry, hass)
             upsert = []
             remove = []
             for node_id in pending:
@@ -973,7 +996,7 @@ async def ws_request_position(hass, connection, msg) -> None:
         persisted = store.gateway_position if store is not None else None
         client = entry.runtime_data.client
         try:
-            position, source = client.get_gateway_position(persisted)
+            position, source = _gateway_position_with_home(hass, client, persisted)
         except Exception:  # noqa: BLE001
             position, source = None, None
         if position:
