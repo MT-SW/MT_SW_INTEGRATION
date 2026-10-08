@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
+import base64
 import contextlib
 import datetime
 import enum
@@ -1829,9 +1830,11 @@ class MeshInterface:
         # panel wisiał, a węzeł zostawał na liście, mimo że radio zdążyło go
         # już usunąć.
         try:
+            admin_channel, admin_pki_key = self._admin_routing(node)
             ack = await asyncio.wait_for(
                 self._connection.send_mesh_packet(
-                    channel_index=self._get_admin_channel_index(node=node),
+                    channel_index=admin_channel,
+                    pki_public_key=admin_pki_key,
                     to_node=node,
                     message=admin_message,
                     port_num=portnums_pb2.PortNum.ADMIN_APP,
@@ -2214,6 +2217,7 @@ class MeshInterface:
         from_node: int | None = None,
         *,
         want_response: bool = False,
+        pki_public_key: bytes | None = None,
         timeout: float = UNDEFINED,  # noqa: ASYNC109
     ) -> Packet:
         actual_timeout = (
@@ -2238,6 +2242,7 @@ class MeshInterface:
                 want_response=want_response,
                 channel_index=channel_index,
                 from_node=from_node,
+                pki_public_key=pki_public_key,
                 ack_callback=on_ack,
             )
         )
@@ -2263,8 +2268,10 @@ class MeshInterface:
     async def send_admin_message(
         self, node: int, message: admin_pb2.AdminMessage, *, ack: bool = True
     ) -> None | tuple[mesh_pb2.Data, mesh_pb2.FromRadio]:
+        channel_index, pki_key = self._admin_routing(node)
         return await self._connection.send_mesh_packet(
-            channel_index=self._get_admin_channel_index(node=node),
+            channel_index=channel_index,
+            pki_public_key=pki_key,
             to_node=node,
             message=message,
             port_num=portnums_pb2.PortNum.ADMIN_APP,
@@ -2300,7 +2307,8 @@ class MeshInterface:
                     node=node,
                     message=message,
                     port_num=portnums_pb2.PortNum.ADMIN_APP,
-                    channel_index=self._get_admin_channel_index(node=node),
+                    channel_index=self._admin_routing(node)[0],
+                    pki_public_key=self._admin_routing(node)[1],
                     want_response=expect_response,
                     timeout=timeout,
                 )
@@ -2369,18 +2377,27 @@ class MeshInterface:
     def remote_metadata(self, node: int) -> dict[str, Any] | None:
         return self._remote_metadata.get(node)
 
-    def _node_has_pkc(self, node: int) -> bool:
-        """Czy zdalny węzeł ma klucz publiczny (admin przez PKC, tak jak w aplikacji).
-
-        Baza węzłów nie ma pola ``hasPKC`` (to pole z metadanych urządzenia), więc wcześniej PKC nigdy nie był
-        wybierany. Sprawdzamy ``user.publicKey`` węzła oraz — jeśli znamy — metadane ``hasPKC``.
-        """
-        meta = self._remote_metadata.get(node) or {}
-        if meta.get("hasPKC"):
-            return True
+    def _pkc_key(self, node: int) -> bytes:
+        """Klucz publiczny węzła z bazy węzłów (pusty, gdy go nie znamy)."""
         user = (self._node_database.get(node) or {}).get("user") or {}
-        key = user.get("publicKey") or user.get("public_key")
-        return bool(key)
+        raw = user.get("publicKey") or user.get("public_key") or ""
+        if isinstance(raw, (bytes, bytearray)):
+            return bytes(raw)
+        try:
+            return base64.b64decode(raw) if raw else b""
+        except (ValueError, TypeError):
+            return b""
+
+    def _node_has_pkc(self, node: int) -> bool:
+        """Jak w aplikacji: PKC dla administracji, gdy klucz publiczny mają oba węzły (nasza bramka i zdalny)."""
+        return bool(self._pkc_key(node)) and bool(self._pkc_key(self._connected_node_info.my_node_num))
+
+    def _admin_routing(self, node: int) -> tuple[int, bytes | None]:
+        """(indeks kanału, klucz PKC) dla pakietu administracyjnego do ``node``."""
+        index = self._get_admin_channel_index(node=node)
+        if index == self.PKC_CHANNEL_INDEX:
+            return 0, self._pkc_key(node)
+        return index, None
 
     def _get_admin_channel_index(self, node: int) -> int:
         if node == self._connected_node_info.my_node_num:

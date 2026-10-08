@@ -298,6 +298,7 @@ class ClientApiConnection:
         reply_id: int | None = None,
         emoji: int | None = None,
         want_response: bool = False,
+        pki_public_key: bytes | None = None,
         out_callback: Callable[[Packet], Awaitable[None]] | None = None,
         ack_callback: Callable[[Packet[mesh_pb2.Routing]], Awaitable[None]] | None = None,
         response_callback: Callable[[Packet], Awaitable[None]] | None = None,
@@ -305,6 +306,11 @@ class ClientApiConnection:
         mesh_packet = mesh_pb2.MeshPacket()
         if channel_index is not None:
             mesh_packet.channel = channel_index
+        if pki_public_key:
+            # Szyfrowanie kluczem publicznym odbiorcy (PKC) — tak jak w aplikacji: kanał 0 + flaga + klucz odbiorcy.
+            mesh_packet.pki_encrypted = True
+            mesh_packet.public_key = pki_public_key
+            mesh_packet.channel = 0
         mesh_packet.decoded.payload = (
             message.SerializeToString() if (isinstance(message, google.protobuf.message.Message)) else message
         )
