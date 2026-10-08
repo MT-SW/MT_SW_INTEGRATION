@@ -17,20 +17,26 @@ from google.protobuf.json_format import MessageToDict
 from homeassistant.exceptions import IntegrationError
 
 from .aiomeshtastic import (
-    BluetoothConnection as AioBluetoothConnection,
-)
-from .aiomeshtastic import (
     MeshInterface,
 )
 from .aiomeshtastic import (
     MeshInterface as AioMeshInterface,
 )
 from .aiomeshtastic import (
-    SerialConnection as AioSerialConnection,
-)
-from .aiomeshtastic import (
     TcpConnection as AioTcpConnection,
 )
+
+# Połączenia szeregowe i Bluetooth wymagają dodatkowych bibliotek. Gdy którejś brakuje,
+# nie wolno przez to blokować całej integracji (np. użytkownikom łączącym się przez TCP).
+try:
+    from .aiomeshtastic import BluetoothConnection as AioBluetoothConnection
+except ImportError:  # pragma: no cover
+    AioBluetoothConnection = None  # type: ignore[assignment,misc]
+
+try:
+    from .aiomeshtastic import SerialConnection as AioSerialConnection
+except ImportError:  # pragma: no cover
+    AioSerialConnection = None  # type: ignore[assignment,misc]
 from .aiomeshtastic.errors import MeshRoutingError, MeshtasticError
 from .aiomeshtastic.protobuf import admin_pb2, mesh_pb2, portnums_pb2
 from .const import (
@@ -112,8 +118,14 @@ class MeshtasticApiClient:
         if connection_type == ConnectionType.TCP.value:
             connection = AioTcpConnection(host=data[CONF_CONNECTION_TCP_HOST], port=data[CONF_CONNECTION_TCP_PORT])
         elif connection_type == ConnectionType.BLUETOOTH.value:
+            if AioBluetoothConnection is None:
+                msg = "Bluetooth connection is unavailable: required library (bleak) could not be imported"
+                raise IntegrationError(msg)
             connection = AioBluetoothConnection(ble_address=data[CONF_CONNECTION_BLUETOOTH_ADDRESS])
         elif connection_type == ConnectionType.SERIAL.value:
+            if AioSerialConnection is None:
+                msg = "Serial connection is unavailable: required library (pyserial-asyncio-fast) could not be imported"
+                raise IntegrationError(msg)
             connection = AioSerialConnection(device=data[CONF_CONNECTION_SERIAL_PORT])
         else:
             msg = f"Unsupported connection type {connection_type}"

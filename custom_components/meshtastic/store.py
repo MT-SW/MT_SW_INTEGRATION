@@ -49,7 +49,7 @@ from .sniffer_decode import ChannelKeys
 from .mqtt_sniffer import MqttSniffer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
 
     from homeassistant.core import Event, HomeAssistant
 
@@ -429,7 +429,7 @@ class PanelStore:
             LOGGER.debug("Automatyczne czyszczenie: nie udało się pobrać bazy węzłów", exc_info=True)
             return
         candidates = select_candidates(
-            nodes,
+            self.overlay_last_heard(nodes),
             own_node=(runtime.gateway_node or {}).get("num"),
             protected=set(runtime.coordinator.data or {}),
             inactive_days=settings["inactivity_days"],
@@ -588,6 +588,7 @@ class PanelStore:
             return
         gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
         local_node = gateway_node.get("num")
+        self._remember_seen(packet, local_node)
         self._remember_via(packet, local_node)
         self._remember_status(packet, local_node)
         self._remember_key(packet, local_node)
@@ -737,6 +738,50 @@ class PanelStore:
                 changed = True
         if changed:
             self._schedule_save()
+
+    def _remember_seen(self, packet: dict[str, Any], local_node: int | None) -> None:
+        """Z każdego pakietu od węzła: kiedy ostatnio dało znak życia — na dowolnym kanale.
+
+        Baza węzłów radia nie zawsze uzupełnia czas „ostatnio słyszany” (np. dla pakietów z innego
+        kanału niż główny), przez co taki węzeł wyglądał na niesłyszanego od zawsze i mieszał się
+        z naprawdę starymi. Ten czas liczymy sami, z każdego pakietu, który dotarł do integracji, i
+        zapisujemy na dysk — przeżywa restart.
+        """
+        sender = packet.get("from")
+        if not isinstance(sender, int) or not sender or sender == local_node:
+            return
+        now_s = int(time.time())
+        rx_time = packet.get("rxTime")
+        # rxTime == 0 to brak odczytu zegara w radiu; zegar z przyszłości też nie jest wiarygodny
+        seen = int(rx_time) if isinstance(rx_time, int | float) and 0 < rx_time <= now_s else now_s
+        state = self._node_state.setdefault(str(sender), {})
+        previous = state.get("seen") or 0
+        if seen <= previous:
+            return
+        state["seen"] = seen
+        # Czas zmienia się z każdym pakietem, więc na dysk idzie nie częściej niż raz na minutę.
+        if seen - previous >= 60:  # noqa: PLR2004
+            self._schedule_save()
+
+    def seen_at(self, node_id: int) -> int | None:
+        """Czas (sekundy epoki) ostatniego pakietu od węzła, jaki widziała integracja."""
+        value = (self._node_state.get(str(node_id)) or {}).get("seen")
+        return int(value) if isinstance(value, int | float) and value > 0 else None
+
+    def last_heard(self, node_id: int, db_value: Any) -> Any:
+        """Późniejszy z dwóch czasów: z bazy węzłów radia i z własnej obserwacji pakietów."""
+        seen = self.seen_at(node_id)
+        if seen is None:
+            return db_value
+        return max(seen, int(db_value)) if isinstance(db_value, int | float) and db_value > 0 else seen
+
+    def overlay_last_heard(self, nodes: Mapping[int, Mapping[str, Any]]) -> dict[int, Mapping[str, Any]]:
+        """Baza węzłów z lastHeard podniesionym do ostatniego widzianego pakietu (do czyszczenia bazy)."""
+        result: dict[int, Mapping[str, Any]] = {}
+        for node_id, node in nodes.items():
+            merged = self.last_heard(node_id, node.get("lastHeard"))
+            result[node_id] = node if merged == node.get("lastHeard") else {**node, "lastHeard": merged}
+        return result
 
     def _remember_via(self, packet: dict[str, Any], local_node: int | None) -> None:
         """Z każdego pakietu od węzła: droga (przekaźnik, skoki) i sygnał (SNR, RSSI).

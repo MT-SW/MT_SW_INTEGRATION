@@ -209,11 +209,13 @@ export class MeshSettingsTab extends LitElement {
     return {
       hass: { type: Object },
       wsCommand: { type: Object }, // function reference
+      remote: { type: Boolean }, // ustawienia zdalnego węzła, nie bramki
     };
   }
 
   constructor() {
     super();
+    this.remote = false;
     this._activePanel = "lora";
     this._config = null;
     this._loading = true;
@@ -252,6 +254,26 @@ export class MeshSettingsTab extends LitElement {
     this._loadConfig();
   }
 
+  /* Dla zdalnego węzła chowamy narzędzia, które działają tylko na bramce. */
+  _navItems() {
+    if (!this.remote) {
+      return NAV_ITEMS;
+    }
+    const localOnly = new Set(["sniffer", "storage", "chat", "debug_logs"]);
+    return NAV_ITEMS.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !localOnly.has(item.id)),
+    })).filter((group) => group.items.length);
+  }
+
+  /* Po zapisie na bramce odświeżamy dane; na zdalnym węźle to byłby kolejny
+     kilkuminutowy odczyt przez eter, więc formularz zostaje, jak jest. */
+  _onSaved() {
+    if (!this.remote) {
+      this._loadConfig();
+    }
+  }
+
   async _loadConfig() {
     this._loading = true;
     this._error = null;
@@ -287,7 +309,7 @@ export class MeshSettingsTab extends LitElement {
       ${this._error ? html`<div class="error-banner">${this._error}</div>` : ""}
       <div class="settings-layout">
         <div class="settings-nav">
-          ${NAV_ITEMS.map((group) => html`
+          ${this._navItems().map((group) => html`
             <div class="settings-nav-group">
               <div class="settings-nav-header">${PL(group.group)}</div>
               ${group.items.map((item) => html`
@@ -312,102 +334,102 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-lora
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-lora>`;
       case "channels":
         return html`<mesh-settings-channels
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-channels>`;
       case "user":
         return html`<mesh-settings-user
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-user>`;
       case "screen":
         return html`<mesh-settings-screen
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-screen>`;
       case "device":
         return html`<mesh-settings-device
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-device>`;
       case "position":
         return html`<mesh-settings-position
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-position>`;
       case "power":
         return html`<mesh-settings-power
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-power>`;
       case "network":
         return html`<mesh-settings-network
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-network>`;
       case "display":
         return html`<mesh-settings-display
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-display>`;
       case "bluetooth":
         return html`<mesh-settings-bluetooth
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-bluetooth>`;
       case "security":
         return html`<mesh-settings-security
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
-          @config-saved=${this._loadConfig}
+          @config-saved=${this._onSaved}
         ></mesh-settings-security>`;
       case "mqtt":
-        return html`<mesh-settings-mqtt .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-mqtt>`;
+        return html`<mesh-settings-mqtt .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-mqtt>`;
       case "serial":
-        return html`<mesh-settings-serial .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-serial>`;
+        return html`<mesh-settings-serial .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-serial>`;
       case "ext_notification":
-        return html`<mesh-settings-ext-notification .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-ext-notification>`;
+        return html`<mesh-settings-ext-notification .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-ext-notification>`;
       case "store_forward":
-        return html`<mesh-settings-store-forward .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-store-forward>`;
+        return html`<mesh-settings-store-forward .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-store-forward>`;
       case "range_test":
-        return html`<mesh-settings-range-test .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-range-test>`;
+        return html`<mesh-settings-range-test .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-range-test>`;
       case "telemetry":
-        return html`<mesh-settings-telemetry .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-telemetry>`;
+        return html`<mesh-settings-telemetry .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-telemetry>`;
       case "canned_message":
-        return html`<mesh-settings-canned-message .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-canned-message>`;
+        return html`<mesh-settings-canned-message .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-canned-message>`;
       case "audio":
-        return html`<mesh-settings-audio .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-audio>`;
+        return html`<mesh-settings-audio .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-audio>`;
       case "remote_hardware":
-        return html`<mesh-settings-remote-hardware .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-remote-hardware>`;
+        return html`<mesh-settings-remote-hardware .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-remote-hardware>`;
       case "neighbor_info":
-        return html`<mesh-settings-neighbor-info .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-neighbor-info>`;
+        return html`<mesh-settings-neighbor-info .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-neighbor-info>`;
       case "ambient_lighting":
-        return html`<mesh-settings-ambient-lighting .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-ambient-lighting>`;
+        return html`<mesh-settings-ambient-lighting .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-ambient-lighting>`;
       case "detection_sensor":
-        return html`<mesh-settings-detection-sensor .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-detection-sensor>`;
+        return html`<mesh-settings-detection-sensor .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-detection-sensor>`;
       case "paxcounter":
-        return html`<mesh-settings-paxcounter .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-paxcounter>`;
+        return html`<mesh-settings-paxcounter .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-paxcounter>`;
       case "traffic_management":
-        return html`<mesh-settings-traffic-management .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-traffic-management>`;
+        return html`<mesh-settings-traffic-management .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-traffic-management>`;
       case "mesh_beacon":
-        return html`<mesh-settings-mesh-beacon .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-mesh-beacon>`;
+        return html`<mesh-settings-mesh-beacon .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-mesh-beacon>`;
       case "sniffer":
-        return html`<mesh-settings-sniffer .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-sniffer>`;
+        return html`<mesh-settings-sniffer .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-sniffer>`;
       case "status_message":
-        return html`<mesh-settings-status-message .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._loadConfig}></mesh-settings-status-message>`;
+        return html`<mesh-settings-status-message .config=${this._config} .wsCommand=${(type, data) => this._ws(type, data)} @config-saved=${this._onSaved}></mesh-settings-status-message>`;
       case "actions":
         return html`<mesh-settings-actions
           .wsCommand=${(type, data) => this._ws(type, data)}

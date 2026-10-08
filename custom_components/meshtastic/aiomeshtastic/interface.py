@@ -17,6 +17,7 @@ from pathlib import Path
 from types import MappingProxyType, TracebackType
 from typing import (
     Any,
+    ClassVar,
     Optional,
     Self,
 )
@@ -53,6 +54,7 @@ from .protobuf import (
     module_config_pb2,
     mqtt_pb2,
     portnums_pb2,
+    remote_hardware_pb2,
     telemetry_pb2,
 )
 from .protobuf.mesh_pb2 import MeshPacket
@@ -187,6 +189,10 @@ class MeshInterface:
         self._connected_node_device_ui: device_ui_pb2.DeviceUIConfig | None = None
         # gotowe wiadomości (moduł Canned Message) — trzymane w radiu poza configiem
         self._canned_messages: str | None = None
+        # klucze sesji administratora zdalnych węzłów: węzeł → (klucz, czas pobrania z zegara monotonicznego)
+        self._admin_sessions: dict[int, tuple[bytes, float]] = {}
+        self._admin_session_locks: dict[int, asyncio.Lock] = {}
+        self._remote_metadata: dict[int, dict[str, Any]] = {}
 
         self._connected_node_ready = asyncio.Event()
 
@@ -1524,6 +1530,8 @@ class MeshInterface:
         cached = self._connected_node_channels if node is None else None
         if cached is not None and 0 <= index < len(cached):
             channel_message.CopyFrom(cached[index])
+        if node is not None and node != self._connected_node_info.my_node_num:
+            channel_message.CopyFrom(await self.request_remote_channel(node, index))
         ParseDict(dict(channel), channel_message, ignore_unknown_fields=True)
 
         admin_message = admin_pb2.AdminMessage()
@@ -1660,6 +1668,10 @@ class MeshInterface:
                 if current_all is not None and current_all.HasField(field.name):
                     previous = getattr(current_all, field.name)
                     target.CopyFrom(previous)
+        elif node != self._connected_node_info.my_node_num:
+            # Zdalny węzeł: bez bieżącej sekcji zapis wyzerowałby wszystko, czego formularz nie pokazuje.
+            previous = await self.request_remote_section(node, field.name, is_module=module)
+            target.CopyFrom(previous)
 
         ParseDict(self._clean_values_for(target, values), target, ignore_unknown_fields=True)
         # Sekcje siedzą w oneof — bez tego zapis samych wartości domyślnych
@@ -1725,6 +1737,8 @@ class MeshInterface:
         ui = device_ui_pb2.DeviceUIConfig()
         if node is None and self._connected_node_device_ui is not None:
             ui.CopyFrom(self._connected_node_device_ui)
+        elif node is not None and node != self._connected_node_info.my_node_num:
+            ui.CopyFrom(await self.request_remote_section(node, "device_ui", is_module=False))
         ParseDict(self._clean_values_for(ui, values), ui, ignore_unknown_fields=True)
         admin_message = admin_pb2.AdminMessage()
         admin_message.store_ui_config.CopyFrom(ui)
@@ -1878,6 +1892,205 @@ class MeshInterface:
 
         await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
 
+    # ── zdalne zarządzanie węzłem (jak „Administracja” w aplikacji) ──────────
+
+    _CONFIG_TYPES: ClassVar[dict[str, int]] = {
+        "device": admin_pb2.AdminMessage.ConfigType.DEVICE_CONFIG,
+        "position": admin_pb2.AdminMessage.ConfigType.POSITION_CONFIG,
+        "power": admin_pb2.AdminMessage.ConfigType.POWER_CONFIG,
+        "network": admin_pb2.AdminMessage.ConfigType.NETWORK_CONFIG,
+        "display": admin_pb2.AdminMessage.ConfigType.DISPLAY_CONFIG,
+        "lora": admin_pb2.AdminMessage.ConfigType.LORA_CONFIG,
+        "bluetooth": admin_pb2.AdminMessage.ConfigType.BLUETOOTH_CONFIG,
+        "security": admin_pb2.AdminMessage.ConfigType.SECURITY_CONFIG,
+    }
+    _MODULE_CONFIG_TYPES: ClassVar[dict[str, int]] = {
+        "mqtt": admin_pb2.AdminMessage.ModuleConfigType.MQTT_CONFIG,
+        "serial": admin_pb2.AdminMessage.ModuleConfigType.SERIAL_CONFIG,
+        "external_notification": admin_pb2.AdminMessage.ModuleConfigType.EXTNOTIF_CONFIG,
+        "store_forward": admin_pb2.AdminMessage.ModuleConfigType.STOREFORWARD_CONFIG,
+        "range_test": admin_pb2.AdminMessage.ModuleConfigType.RANGETEST_CONFIG,
+        "telemetry": admin_pb2.AdminMessage.ModuleConfigType.TELEMETRY_CONFIG,
+        "canned_message": admin_pb2.AdminMessage.ModuleConfigType.CANNEDMSG_CONFIG,
+        "audio": admin_pb2.AdminMessage.ModuleConfigType.AUDIO_CONFIG,
+        "remote_hardware": admin_pb2.AdminMessage.ModuleConfigType.REMOTEHARDWARE_CONFIG,
+        "neighbor_info": admin_pb2.AdminMessage.ModuleConfigType.NEIGHBORINFO_CONFIG,
+        "ambient_lighting": admin_pb2.AdminMessage.ModuleConfigType.AMBIENTLIGHTING_CONFIG,
+        "detection_sensor": admin_pb2.AdminMessage.ModuleConfigType.DETECTIONSENSOR_CONFIG,
+        "paxcounter": admin_pb2.AdminMessage.ModuleConfigType.PAXCOUNTER_CONFIG,
+        "statusmessage": admin_pb2.AdminMessage.ModuleConfigType.STATUSMESSAGE_CONFIG,
+        "traffic_management": admin_pb2.AdminMessage.ModuleConfigType.TRAFFICMANAGEMENT_CONFIG,
+        "mesh_beacon": admin_pb2.AdminMessage.ModuleConfigType.MESHBEACON_CONFIG,
+    }
+    REMOTE_CHANNEL_COUNT = 8
+
+    async def request_remote_section(self, node: int, section: str, *, is_module: bool | None = None) -> Message:
+        """Bieżąca sekcja konfiguracji zdalnego węzła — podstawa zapisu, bo firmware podmienia całą sekcję."""
+        module, field = self._resolve_config_section(section, is_module=is_module)
+        request = admin_pb2.AdminMessage()
+        if not module and field.name == "device_ui":
+            request.get_ui_config_request = True
+        elif module and field.name in self._MODULE_CONFIG_TYPES:
+            request.get_module_config_request = self._MODULE_CONFIG_TYPES[field.name]
+        elif not module and field.name in self._CONFIG_TYPES:
+            request.get_config_request = self._CONFIG_TYPES[field.name]
+        else:
+            msg = f"Section {section} cannot be read from a remote node"
+            raise ValueError(msg)
+        response = await self.send_admin_message_await_response(node=node, message=request, expect_response=True)
+        payload = response.app_payload
+        if not module and field.name == "device_ui":
+            return payload.get_ui_config_response
+        container = payload.get_module_config_response if module else payload.get_config_response
+        if not container.HasField(field.name):
+            # Zapis na pustej podstawie wyzerowałby wszystko, czego formularz nie pokazuje.
+            msg = f"Remote node did not return section {field.name}"
+            raise MeshInterfaceRequestError(msg, reason="no_response")
+        return getattr(container, field.name)
+
+    async def request_remote_channel(self, node: int, index: int) -> channel_pb2.Channel:
+        request = admin_pb2.AdminMessage()
+        request.get_channel_request = index + 1  # firmware numeruje od 1; 0 oznacza brak
+        response = await self.send_admin_message_await_response(node=node, message=request, expect_response=True)
+        return response.app_payload.get_channel_response
+
+    async def request_remote_owner(self, node: int) -> mesh_pb2.User:
+        request = admin_pb2.AdminMessage()
+        request.get_owner_request = True
+        response = await self.send_admin_message_await_response(node=node, message=request, expect_response=True)
+        return response.app_payload.get_owner_response
+
+    async def request_remote_canned_messages(self, node: int) -> str:
+        request = admin_pb2.AdminMessage()
+        request.get_canned_message_module_messages_request = True
+        response = await self.send_admin_message_await_response(node=node, message=request, expect_response=True)
+        return response.app_payload.get_canned_message_module_messages_response
+
+    async def fetch_remote_node_config(self, node: int) -> dict[str, Any]:
+        """Całe ustawienia zdalnego węzła (jak aplikacja po wejściu w „Administrację”).
+
+        Odczyt idzie zapytaniami po kolei (po kilka naraz, żeby nie zapchać łącza radiowego); sekcji,
+        której węzeł nie odda mimo ponowienia, brakuje w wyniku i trafia na listę ``missing``.
+        """
+        await self.ensure_admin_session(node, force=True)
+        local = localonly_pb2.LocalConfig()
+        module_cfg = localonly_pb2.LocalModuleConfig()
+        result: dict[str, Any] = {
+            "local": local,
+            "module": module_cfg,
+            "device_ui": None,
+            "channels": [],
+            "owner": None,
+            "canned": None,
+            "missing": [],
+            "metadata": self.remote_metadata(node),
+        }
+        limit = asyncio.Semaphore(3)
+
+        async def fetch(label: str, factory: Callable[[], Awaitable[Any]]) -> Any:
+            async with limit:
+                for attempt in range(2):
+                    try:
+                        return await factory()
+                    except MeshtasticError as err:
+                        self._logger.debug("Zdalny odczyt %s z %s nieudany (%d): %s", label, node, attempt + 1, err)
+                result["missing"].append(label)
+                return None
+
+        async def section(name: str, *, module: bool) -> None:
+            value = await fetch(name, lambda: self.request_remote_section(node, name, is_module=module))
+            if value is None:
+                return
+            target = module_cfg if module else local
+            if name == "device_ui":
+                result["device_ui"] = value
+            elif name in target.DESCRIPTOR.fields_by_name:
+                getattr(target, name).CopyFrom(value)
+
+        async def channel(index: int) -> None:
+            value = await fetch(f"channel_{index}", lambda: self.request_remote_channel(node, index))
+            if value is not None:
+                result["channels"].append(value)
+
+        async def owner() -> None:
+            result["owner"] = await fetch("owner", lambda: self.request_remote_owner(node))
+
+        async def canned() -> None:
+            result["canned"] = await fetch("canned", lambda: self.request_remote_canned_messages(node))
+
+        await asyncio.gather(
+            *[section(name, module=False) for name in (*self._CONFIG_TYPES, "device_ui")],
+            *[section(name, module=True) for name in self._MODULE_CONFIG_TYPES],
+            *[channel(index) for index in range(self.REMOTE_CHANNEL_COUNT)],
+            owner(),
+            canned(),
+        )
+        result["channels"].sort(key=lambda c: c.index)
+        return result
+
+    # Moduł Remote Hardware ma w firmware własny kanał (zwykle o nazwie „gpio”); dokumentacja
+    # Meshtastic przyjmuje, że stoi tuż po kanale głównym, czyli pod indeksem 1 — tak jak w aplikacji.
+    GPIO_CHANNEL_INDEX = 1
+
+    def _gpio_channel_index(self) -> int:
+        for channel in self._connected_node_channels or []:
+            if channel.settings and channel.settings.name.lower() == "gpio" and channel.role != channel_pb2.Channel.Role.DISABLED:
+                return channel.index
+        return self.GPIO_CHANNEL_INDEX
+
+    async def write_gpio(self, node: int, mask: int, value: int) -> None:
+        """Ustaw piny z maski na wartości z ``value`` (moduł Remote Hardware zdalnego węzła)."""
+        hardware = remote_hardware_pb2.HardwareMessage()
+        hardware.type = remote_hardware_pb2.HardwareMessage.Type.WRITE_GPIOS
+        hardware.gpio_mask = mask
+        hardware.gpio_value = value
+        await self._send_message_await_response(
+            node=node,
+            message=hardware,
+            port_num=portnums_pb2.PortNum.REMOTE_HARDWARE_APP,
+            channel_index=self._gpio_channel_index(),
+            want_response=False,
+        )
+
+    async def read_gpio(self, node: int, mask: int) -> int:
+        """Odczytaj stan pinów z maski; zwraca maskę wartości (bit = stan pinu)."""
+        hardware = remote_hardware_pb2.HardwareMessage()
+        hardware.type = remote_hardware_pb2.HardwareMessage.Type.READ_GPIOS
+        hardware.gpio_mask = mask
+        response = await self._send_message_await_response(
+            node=node,
+            message=hardware,
+            port_num=portnums_pb2.PortNum.REMOTE_HARDWARE_APP,
+            channel_index=self._gpio_channel_index(),
+            want_response=True,
+        )
+        reply = remote_hardware_pb2.HardwareMessage()
+        reply.ParseFromString(response.data.payload)
+        if reply.type != remote_hardware_pb2.HardwareMessage.Type.READ_GPIOS_REPLY:
+            msg = "Unexpected reply to GPIO read"
+            raise MeshInterfaceRequestError(msg, reason="no_response")
+        return reply.gpio_value
+
+    async def add_manual_contact(self, node_num: int, long_name: str, short_name: str, node: int | None = None) -> None:
+        """Dodaj kontakt (numer + nazwy) do bazy węzłów radia — własnego (``node=None``) albo zdalnego."""
+        user = mesh_pb2.User()
+        user.id = f"!{node_num:08x}"
+        user.long_name = long_name
+        user.short_name = short_name
+        contact = admin_pb2.SharedContact()
+        contact.node_num = node_num
+        contact.user.CopyFrom(user)
+        admin_message = admin_pb2.AdminMessage()
+        admin_message.add_contact.CopyFrom(contact)
+        await self.send_admin_message_await_response(node=node, message=admin_message, expect_response=False)
+        if node is None and node_num != self.BROADCAST_NUM:
+            # Radio nie odsyła nowego wpisu — bez tego węzeł pojawiłby się dopiero po pełnym pobraniu bazy.
+            db_node = self._get_or_create_node(node_num)
+            db_user = db_node.setdefault("user", {})
+            db_user.update({"id": user.id, "longName": long_name, "shortName": short_name})
+            self._emit_node_changed(node_num)
+            await self._notify_node_update(node_num)
+
     async def request_telemetry(
         self,
         node: int | MeshNode,
@@ -1990,6 +2203,9 @@ class MeshInterface:
             ack=ack,
         )
 
+    # Firmware uważa klucz sesji za ważny ok. 300 s — odnawiamy wcześniej.
+    ADMIN_SESSION_TTL = 240.0
+
     async def send_admin_message_await_response(
         self,
         node: int | None,
@@ -1998,17 +2214,78 @@ class MeshInterface:
         timeout: float = UNDEFINED,  # noqa: ASYNC109
         expect_response: bool = True,
     ) -> Packet[admin_pb2.AdminMessage]:
+        await self._connected_node_ready.wait()
+        my_node = self._connected_node_info.my_node_num
         if node is None:
-            await self._connected_node_ready.wait()
-            node = self._connected_node_info.my_node_num
-        return await self._send_message_await_response(
-            node=node,
-            message=message,
-            port_num=portnums_pb2.PortNum.ADMIN_APP,
-            channel_index=self._get_admin_channel_index(node=node),
-            want_response=expect_response,
-            timeout=timeout,
-        )
+            node = my_node
+        # Zdalny węzeł przyjmuje polecenia zmieniające tylko z aktualnym kluczem sesji, który dostaje się
+        # w odpowiedzi na dowolne zapytanie. Odczyty (get_*) go nie wymagają.
+        variant = message.WhichOneof("payload_variant")
+        needs_session = node != my_node and variant is not None and not variant.startswith("get_")
+        for attempt in range(2):
+            if needs_session:
+                message.session_passkey = await self.ensure_admin_session(node, force=attempt > 0)
+            try:
+                response = await self._send_message_await_response(
+                    node=node,
+                    message=message,
+                    port_num=portnums_pb2.PortNum.ADMIN_APP,
+                    channel_index=self._get_admin_channel_index(node=node),
+                    want_response=expect_response,
+                    timeout=timeout,
+                )
+            except MeshRoutingError as err:
+                if needs_session and attempt == 0 and err.error == mesh_pb2.Routing.Error.ADMIN_BAD_SESSION_KEY:
+                    self._admin_sessions.pop(node, None)
+                    continue
+                raise
+            if node != my_node:
+                self._note_admin_session(node, response)
+            return response
+        msg = "Remote admin session could not be established"  # pragma: no cover
+        raise MeshInterfaceRequestError(msg, reason="no_session")  # pragma: no cover
+
+    def _note_admin_session(self, node: int, response: Packet | None) -> None:
+        """Każda odpowiedź administracyjna niesie świeży klucz sesji — zapamiętaj go."""
+        try:
+            payload = response.app_payload if response is not None else None
+            if isinstance(payload, admin_pb2.AdminMessage) and payload.session_passkey:
+                self._admin_sessions[node] = (bytes(payload.session_passkey), time.monotonic())
+        except Exception:  # noqa: BLE001 - klucz jest best-effort, nie może zepsuć udanego polecenia
+            self._logger.debug("Nie udało się odczytać klucza sesji z odpowiedzi", exc_info=True)
+
+    def admin_session_age(self, node: int) -> float | None:
+        """Ile sekund temu pobrano ważny klucz sesji zdalnego węzła (None = brak sesji)."""
+        cached = self._admin_sessions.get(node)
+        if cached is None:
+            return None
+        age = time.monotonic() - cached[1]
+        return age if age < self.ADMIN_SESSION_TTL else None
+
+    async def ensure_admin_session(self, node: int, *, force: bool = False) -> bytes:
+        """Klucz sesji administratora zdalnego węzła; w razie potrzeby pobiera nowy (zapytanie o metadane)."""
+        await self._connected_node_ready.wait()
+        if node == self._connected_node_info.my_node_num:
+            return b""
+        lock = self._admin_session_locks.setdefault(node, asyncio.Lock())
+        async with lock:
+            if not force and self.admin_session_age(node) is not None:
+                return self._admin_sessions[node][0]
+            request = admin_pb2.AdminMessage()
+            request.get_device_metadata_request = True
+            response = await self.send_admin_message_await_response(node=node, message=request, expect_response=True)
+            payload = response.app_payload
+            passkey = bytes(payload.session_passkey) if isinstance(payload, admin_pb2.AdminMessage) else b""
+            if not passkey:
+                msg = "Remote node returned no admin session key"
+                raise MeshInterfaceRequestError(msg, reason="no_session")
+            self._admin_sessions[node] = (passkey, time.monotonic())
+            if payload.HasField("get_device_metadata_response"):
+                self._remote_metadata[node] = message_to_dict(payload.get_device_metadata_response)
+            return passkey
+
+    def remote_metadata(self, node: int) -> dict[str, Any] | None:
+        return self._remote_metadata.get(node)
 
     def _get_admin_channel_index(self, node: int) -> int:
         if node == self._connected_node_info.my_node_num:

@@ -222,6 +222,31 @@ async def ws_gateways(
     connection.send_result(msg["id"], {"gateways": gateways})
 
 
+def _panel_channel_rows(raw_channels: Any, preset_name: str) -> list[dict[str, Any]]:
+    """Kanały w postaci, której używa panel (jedna funkcja dla bramki i dla zdalnego węzła)."""
+    channels = []
+    for channel in raw_channels or []:
+        settings = channel.get("settings", {}) or {}
+        role = channel.get("role", "DISABLED")
+        own_name = settings.get("name") or ""
+        channels.append(
+            {
+                "index": channel.get("index", 0),
+                "role": role,
+                "name": own_name,
+                "display_name": own_name or (preset_name if role != "DISABLED" else ""),
+                "preset_name": preset_name,
+                "psk": settings.get("psk") or "",
+                "has_psk": bool(settings.get("psk")),
+                "uplink_enabled": bool(settings.get("uplinkEnabled")),
+                "downlink_enabled": bool(settings.get("downlinkEnabled")),
+                "position_precision": (settings.get("moduleSettings", {}) or {}).get("positionPrecision"),
+                "is_muted": bool((settings.get("moduleSettings", {}) or {}).get("isMuted")),
+            }
+        )
+    return channels
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{WS_PREFIX}/channels",
@@ -254,26 +279,7 @@ async def ws_channels(
         local = entry.runtime_data.client.interface.connected_node_local_config()
         preset_name = preset_channel_name(local.lora if local is not None else None)
 
-    channels = []
-    for channel in raw_channels or []:
-        settings = channel.get("settings", {}) or {}
-        role = channel.get("role", "DISABLED")
-        own_name = settings.get("name") or ""
-        channels.append(
-            {
-                "index": channel.get("index", 0),
-                "role": role,
-                "name": own_name,
-                "display_name": own_name or (preset_name if role != "DISABLED" else ""),
-                "preset_name": preset_name,
-                "psk": settings.get("psk") or "",
-                "has_psk": bool(settings.get("psk")),
-                "uplink_enabled": bool(settings.get("uplinkEnabled")),
-                "downlink_enabled": bool(settings.get("downlinkEnabled")),
-                "position_precision": (settings.get("moduleSettings", {}) or {}).get("positionPrecision"),
-                "is_muted": bool((settings.get("moduleSettings", {}) or {}).get("isMuted")),
-            }
-        )
+    channels = _panel_channel_rows(raw_channels, preset_name)
 
     connection.send_result(msg["id"], {"channels": channels})
 
@@ -405,7 +411,8 @@ def _node_payload(context: _NodePayloadContext, node_id: int, node: Mapping[str,
         "is_muted": bool(node.get("isMuted")),
         "heard_on_current_lora": node.get("heardOnCurrentLora"),
         "channel": _as_int(node.get("channel")),
-        "last_heard": node.get("lastHeard"),
+        # późniejszy z czasów: z bazy radia i z własnej obserwacji pakietów (także z innych kanałów)
+        "last_heard": store.last_heard(node_id, node.get("lastHeard")) if store is not None else node.get("lastHeard"),
         "snr": _as_float(node.get("snr")),
         "signed": bool(signed),
         "hops_away": _as_int(node.get("hopsAway")),
@@ -899,6 +906,12 @@ async def _augment_config_for_panel(
         module_config["cannedMessage"] = canned
 
 
+# Zmiany na zdalnym węźle, po których może zniknąć z sieci albo przestać słuchać administratora —
+# panel prosi o wyraźne potwierdzenie, a serwer nie wykona ich bez niego.
+REMOTE_RISKY_SECTIONS = frozenset({"lora", "security"})
+REMOTE_RISKY_ACTIONS = frozenset({"shutdown", "factory_reset", "factory_reset_device", "reboot_ota"})
+
+
 def _node_action_schema(name: str) -> dict:
     return {
         vol.Required("type"): f"{WS_PREFIX}/{name}",
@@ -945,6 +958,8 @@ async def _run_node_action(hass, connection, msg, action):
         vol.Required("entry_id"): str,
         vol.Required("node_id"): int,
         vol.Required("favorite"): bool,
+        # numer zdalnego radia, na którego liście ulubionych ma się zmienić wpis (bez niego — bramka)
+        vol.Optional("dest_node_id"): int,
     }
 )
 @websocket_api.require_admin
@@ -952,7 +967,14 @@ async def _run_node_action(hass, connection, msg, action):
 async def ws_set_favorite(hass, connection, msg) -> None:
     """Oznacz węzeł jako ulubiony na urządzeniu (albo zdejmij oznaczenie)."""
     await _run_node_action(
-        hass, connection, msg, lambda c, m: c.set_node_favorite(m["node_id"], m["favorite"])
+        hass,
+        connection,
+        msg,
+        lambda c, m: (
+            c.interface.set_node_favorite(m["node_id"], m["favorite"], node=m["dest_node_id"])
+            if m.get("dest_node_id") is not None
+            else c.set_node_favorite(m["node_id"], m["favorite"])
+        ),
     )
 
 
@@ -962,6 +984,7 @@ async def ws_set_favorite(hass, connection, msg) -> None:
         vol.Required("entry_id"): str,
         vol.Required("node_id"): int,
         vol.Required("ignored"): bool,
+        vol.Optional("dest_node_id"): int,
     }
 )
 @websocket_api.require_admin
@@ -969,7 +992,14 @@ async def ws_set_favorite(hass, connection, msg) -> None:
 async def ws_set_ignored(hass, connection, msg) -> None:
     """Dodaj węzeł do ignorowanych na urządzeniu (albo usuń z listy)."""
     await _run_node_action(
-        hass, connection, msg, lambda c, m: c.set_node_ignored(m["node_id"], m["ignored"])
+        hass,
+        connection,
+        msg,
+        lambda c, m: (
+            c.interface.set_node_ignored(m["node_id"], m["ignored"], node=m["dest_node_id"])
+            if m.get("dest_node_id") is not None
+            else c.set_node_ignored(m["node_id"], m["ignored"])
+        ),
     )
 
 
@@ -1140,6 +1170,10 @@ async def ws_traceroute_history(hass, connection, msg) -> None:
         vol.Required("group"): vol.In(["local", "module"]),
         vol.Required("section"): str,
         vol.Required("values"): dict,
+        # zdalny węzeł, do którego trafia zapis (bez niego — bramka)
+        vol.Optional("dest_node_id"): int,
+        # potwierdzenie ryzykownej zmiany na zdalnym węźle (LoRa, bezpieczeństwo)
+        vol.Optional("confirm_risky", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -1159,13 +1193,31 @@ async def ws_set_config(
         connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
         return
 
-    try:
-        await entry.runtime_data.client.async_set_config(
-            msg["section"], msg["values"], is_module=msg["group"] == "module"
+    dest = msg.get("dest_node_id")
+    if dest is not None and msg["section"] in REMOTE_RISKY_SECTIONS and not msg["confirm_risky"]:
+        connection.send_error(
+            msg["id"],
+            "confirmation_required",
+            "Ta zmiana na zdalnym węźle może go odciąć od sieci i wymaga potwierdzenia.",
         )
+        return
+
+    try:
+        if dest is not None:
+            await entry.runtime_data.client.interface.write_config_section(
+                msg["section"], msg["values"], is_module=msg["group"] == "module", node=dest
+            )
+        else:
+            await entry.runtime_data.client.async_set_config(
+                msg["section"], msg["values"], is_module=msg["group"] == "module"
+            )
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
-        _LOGGER.warning("Zapis sekcji %s nie powiódł się: %s", msg["section"], err)
-        connection.send_error(msg["id"], "set_config_failed", str(err))
+        code, text, expected = classify_node_action_error(err)
+        if expected:
+            _LOGGER.debug("Zapis sekcji %s: %s (%s: %s)", msg["section"], code, type(err).__name__, err)
+        else:
+            _LOGGER.warning("Zapis sekcji %s nie powiódł się: %s", msg["section"], text)
+        connection.send_error(msg["id"], code if dest is not None else "set_config_failed", text if dest is not None else str(err))
         return
 
     connection.send_result(msg["id"], {"saved": True})
@@ -1224,6 +1276,7 @@ async def ws_delete_conversation(
         vol.Required("short_name"): str,
         vol.Optional("is_licensed", default=False): bool,
         vol.Optional("is_unmessagable"): bool,
+        vol.Optional("dest_node_id"): int,
     }
 )
 @websocket_api.require_admin
@@ -1238,16 +1291,27 @@ async def ws_set_owner(
     if entry is None:
         connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
         return
+    dest = msg.get("dest_node_id")
     try:
-        await entry.runtime_data.client.async_set_owner(
-            msg["long_name"],
-            msg["short_name"],
-            is_licensed=msg["is_licensed"],
-            is_unmessagable=msg.get("is_unmessagable"),
-        )
+        if dest is not None:
+            await entry.runtime_data.client.interface.set_owner(
+                msg["long_name"],
+                msg["short_name"],
+                is_licensed=msg["is_licensed"],
+                is_unmessagable=msg.get("is_unmessagable"),
+                node=dest,
+            )
+        else:
+            await entry.runtime_data.client.async_set_owner(
+                msg["long_name"],
+                msg["short_name"],
+                is_licensed=msg["is_licensed"],
+                is_unmessagable=msg.get("is_unmessagable"),
+            )
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
-        _LOGGER.warning("Zapis właściciela nie powiódł się: %s", err)
-        connection.send_error(msg["id"], "set_owner_failed", str(err))
+        code, text, _expected = classify_node_action_error(err)
+        _LOGGER.warning("Zapis właściciela nie powiódł się: %s", text)
+        connection.send_error(msg["id"], code if dest is not None else "set_owner_failed", text if dest is not None else str(err))
         return
     connection.send_result(msg["id"], {"saved": True})
 
@@ -1257,6 +1321,7 @@ async def ws_set_owner(
         vol.Required("type"): f"{WS_PREFIX}/set_channel",
         vol.Required("entry_id"): str,
         vol.Required("channel"): dict,
+        vol.Optional("dest_node_id"): int,
     }
 )
 @websocket_api.require_admin
@@ -1271,11 +1336,16 @@ async def ws_set_channel(
     if entry is None:
         connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
         return
+    dest = msg.get("dest_node_id")
     try:
-        await entry.runtime_data.client.async_set_channel(msg["channel"])
+        if dest is not None:
+            await entry.runtime_data.client.interface.set_channel(msg["channel"], node=dest)
+        else:
+            await entry.runtime_data.client.async_set_channel(msg["channel"])
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
-        _LOGGER.warning("Zapis kanału nie powiódł się: %s", err)
-        connection.send_error(msg["id"], "set_channel_failed", str(err))
+        code, text, _expected = classify_node_action_error(err)
+        _LOGGER.warning("Zapis kanału nie powiódł się: %s", text)
+        connection.send_error(msg["id"], code if dest is not None else "set_channel_failed", text if dest is not None else str(err))
         return
     connection.send_result(msg["id"], {"saved": True})
 
@@ -1315,6 +1385,8 @@ async def ws_node_history(hass, connection, msg) -> None:
         vol.Required("action"): vol.In(
             ["reboot", "shutdown", "factory_reset", "nodedb_reset", "factory_reset_device", "reboot_ota"]
         ),
+        vol.Optional("dest_node_id"): int,
+        vol.Optional("confirm_risky", default=False): bool,
     }
 )
 @websocket_api.require_admin
@@ -1329,11 +1401,23 @@ async def ws_device_action(
     if entry is None:
         connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
         return
+    dest = msg.get("dest_node_id")
+    if dest is not None and msg["action"] in REMOTE_RISKY_ACTIONS and not msg["confirm_risky"]:
+        connection.send_error(
+            msg["id"],
+            "confirmation_required",
+            "Ta akcja na zdalnym węźle może go wyłączyć albo wyczyścić i wymaga potwierdzenia.",
+        )
+        return
     try:
-        await entry.runtime_data.client.async_device_action(msg["action"])
+        if dest is not None:
+            await entry.runtime_data.client.interface.device_action(msg["action"], node=dest)
+        else:
+            await entry.runtime_data.client.async_device_action(msg["action"])
     except Exception as err:  # noqa: BLE001 - błąd radia nie może zerwać połączenia WS
-        _LOGGER.warning("Akcja urządzenia %s nie powiodła się: %s", msg["action"], err)
-        connection.send_error(msg["id"], "device_action_failed", str(err))
+        code, text, _expected = classify_node_action_error(err)
+        _LOGGER.warning("Akcja urządzenia %s nie powiodła się: %s", msg["action"], text)
+        connection.send_error(msg["id"], code if dest is not None else "device_action_failed", text if dest is not None else str(err))
         return
     connection.send_result(msg["id"], {"done": True})
 
@@ -1690,7 +1774,7 @@ async def _nodedb_candidates(
         return None
     try:
         candidates = nodedb_cleanup.select_candidates(
-            nodes,
+            store.overlay_last_heard(nodes),
             own_node=(entry.runtime_data.gateway_node or {}).get("num"),
             protected=(),
             inactive_days=msg.get("inactive_days", 0),
@@ -1701,7 +1785,7 @@ async def _nodedb_candidates(
         connection.send_error(msg["id"], "no_criteria", "Wybierz czas nieaktywności albo rodzaj węzłów")
         return None
     skipped = nodedb_cleanup.count_skipped(
-        nodes,
+        store.overlay_last_heard(nodes),
         own_node=(entry.runtime_data.gateway_node or {}).get("num"),
         protected=(),
         inactive_days=msg.get("inactive_days", 0),
@@ -1911,6 +1995,200 @@ async def ws_ui_settings_set(
     connection.send_result(msg["id"], {"settings": merged})
 
 
+# ── zdalne zarządzanie węzłem (karta „Administracja” w szczegółach węzła) ──────
+
+def _full_dict(message: Any) -> dict[str, Any]:
+    """MessageToDict z polami domyślnymi — tak jak odczyt konfiguracji bramki."""
+    try:
+        return MessageToDict(message, always_print_fields_with_no_presence=True)
+    except TypeError:  # starsze protobuf
+        return MessageToDict(message, including_default_value_fields=True)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/admin_session",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Optional("force", default=False): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_admin_session(hass, connection, msg) -> None:
+    """Nawiąż (albo odnów) sesję administratora ze zdalnym węzłem — klucz, którego węzeł wymaga przy zmianach."""
+
+    async def action(client, m):
+        interface = client.interface
+        await interface.ensure_admin_session(m["node_id"], force=m["force"])
+        return {"active": True, "age": interface.admin_session_age(m["node_id"]), "metadata": interface.remote_metadata(m["node_id"])}
+
+    await _run_node_action(hass, connection, msg, action)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/admin_session_status",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_admin_session_status(hass, connection, msg) -> None:
+    """Czy mamy ważny klucz sesji zdalnego węzła — bez wysyłania czegokolwiek do radia."""
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    interface = entry.runtime_data.client.interface
+    age = interface.admin_session_age(msg["node_id"])
+    connection.send_result(
+        msg["id"],
+        {
+            "active": age is not None,
+            "age": age,
+            "ttl": interface.ADMIN_SESSION_TTL,
+            "metadata": interface.remote_metadata(msg["node_id"]),
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/remote_config",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_remote_config(hass, connection, msg) -> None:
+    """Pełne ustawienia zdalnego węzła w tym samym kształcie co ``config`` bramki (+ kanały i właściciel)."""
+
+    async def action(client, m):
+        interface = client.interface
+        raw = await interface.fetch_remote_node_config(m["node_id"])
+        local_config = _full_dict(raw["local"])
+        module_config = _full_dict(raw["module"])
+        if raw["device_ui"] is not None:
+            local_config["deviceUi"] = _full_dict(raw["device_ui"])
+        with contextlib.suppress(Exception):
+            mqtt = dict(module_config.get("mqtt") or {})
+            address = str(mqtt.get("address") or "")
+            host, sep, port = address.rpartition(":")
+            if sep and host and port.isdigit():
+                mqtt["address"] = host
+                mqtt["port"] = int(port)
+                module_config["mqtt"] = mqtt
+        if raw["canned"] is not None:
+            canned = dict(module_config.get("cannedMessage") or {})
+            canned["messages"] = raw["canned"]
+            module_config["cannedMessage"] = canned
+        with contextlib.suppress(Exception):
+            position = dict(local_config.get("position") or {})
+            node_position = (client.get_all_nodes_sync().get(m["node_id"]) or {}).get("position")
+            lat, lon = _coordinate(node_position or {}, "latitude"), _coordinate(node_position or {}, "longitude")
+            if position.get("fixedPosition") and valid_coordinates(lat, lon):
+                position["fixedLat"], position["fixedLng"] = lat, lon
+                position["fixedAltitude"] = (node_position or {}).get("altitude") or 0
+                local_config["position"] = position
+        preset_name = "LongFast"
+        with contextlib.suppress(Exception):
+            preset_name = preset_channel_name(raw["local"].lora)
+        owner = raw["owner"]
+        return {
+            "local_config": local_config,
+            "module_config": module_config,
+            "channels": _panel_channel_rows([_full_dict(c) for c in raw["channels"]], preset_name),
+            "owner": (
+                {
+                    "longName": owner.long_name,
+                    "shortName": owner.short_name,
+                    "isLicensed": bool(owner.is_licensed),
+                    "isUnmessagable": bool(owner.is_unmessagable),
+                }
+                if owner is not None
+                else None
+            ),
+            "missing": raw["missing"],
+            "metadata": raw["metadata"],
+            "schema": _config_schema(),
+        }
+
+    await _run_node_action(hass, connection, msg, action)
+
+
+_GPIO_PIN_MAX = 62  # tak jak w aplikacji: maska 64-bitowa, pin = numer bitu
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/gpio_write",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Required("pin"): vol.All(int, vol.Range(min=0, max=_GPIO_PIN_MAX)),
+        vol.Required("high"): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_gpio_write(hass, connection, msg) -> None:
+    """Ustaw pin GPIO zdalnego węzła w stan wysoki albo niski (moduł Remote Hardware)."""
+
+    async def action(client, m):
+        mask = 1 << m["pin"]
+        await client.interface.write_gpio(m["node_id"], mask, mask if m["high"] else 0)
+        return {"pin": m["pin"], "high": m["high"]}
+
+    await _run_node_action(hass, connection, msg, action)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/gpio_read",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Required("pin"): vol.All(int, vol.Range(min=0, max=_GPIO_PIN_MAX)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_gpio_read(hass, connection, msg) -> None:
+    """Odczytaj stan pinu GPIO zdalnego węzła."""
+
+    async def action(client, m):
+        value = await client.interface.read_gpio(m["node_id"], 1 << m["pin"])
+        return {"pin": m["pin"], "high": bool((value >> m["pin"]) & 1)}
+
+    await _run_node_action(hass, connection, msg, action)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/add_contact",
+        vol.Required("entry_id"): str,
+        vol.Required("node_id"): int,
+        vol.Required("long_name"): vol.All(str, vol.Length(min=1, max=39)),
+        vol.Optional("short_name", default=""): vol.All(str, vol.Length(max=4)),
+        # zdalne radio, do którego bazy trafia kontakt (bez niego — baza bramki)
+        vol.Optional("dest_node_id"): int,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_add_contact(hass, connection, msg) -> None:
+    """Dodaj ręcznie węzeł (numer + nazwy) do bazy węzłów radia."""
+
+    async def action(client, m):
+        await client.interface.add_manual_contact(
+            m["node_id"], m["long_name"], m["short_name"], node=m.get("dest_node_id")
+        )
+        return True
+
+    await _run_node_action(hass, connection, msg, action)
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Zarejestruj komendy panelu. Wołane raz, z async_setup."""
     for handler in (
@@ -1957,6 +2235,12 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_set_owner,
         ws_set_channel,
         ws_device_action,
+        ws_admin_session,
+        ws_admin_session_status,
+        ws_remote_config,
+        ws_gpio_write,
+        ws_gpio_read,
+        ws_add_contact,
     ):
         websocket_api.async_register_command(hass, handler)
     debug_logs.async_register_commands(hass)

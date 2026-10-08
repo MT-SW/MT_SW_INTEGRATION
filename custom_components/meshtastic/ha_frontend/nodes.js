@@ -20,6 +20,7 @@ import "./chart.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
 import "./node-stats.js";;
 import "./node-ondemand.js";
+import "./remote-admin.js";
 import { buildTraceView, renderTracerouteMapAction, UNKNOWN_SNR } from "./traceroute-layer.js";
 import { signalValue } from "./signal-quality.js";
 
@@ -987,6 +988,15 @@ class MeshNodesTab extends LitElement {
                   .nodes=${this.nodes}
                 ></mesh-node-ondemand>`
               : ""}
+
+            ${node.is_gateway
+              ? ""
+              : html`<mesh-remote-admin
+                  .hass=${this.hass}
+                  .entryId=${this.entryId}
+                  .nodeId=${node.node_id}
+                  .nodeHex=${node.node_hex}
+                ></mesh-remote-admin>`}
 
             ${this._neighborsShown && node.neighbors && node.neighbors.length
               ? html`

@@ -9,7 +9,13 @@ from asyncio import StreamReader, StreamReaderProtocol, StreamWriter
 from typing import cast
 
 import serial
-import serial_asyncio
+
+try:
+    # Nowsze wersje pyserial-asyncio-fast (dołączone do świeżych obrazów Home Assistanta)
+    # udostępniają moduł pod nazwą serial_asyncio_fast.
+    import serial_asyncio_fast as serial_asyncio
+except ImportError:
+    import serial_asyncio
 
 from custom_components.meshtastic.aiomeshtastic.connection import (
     ClientApiConnectionError,
