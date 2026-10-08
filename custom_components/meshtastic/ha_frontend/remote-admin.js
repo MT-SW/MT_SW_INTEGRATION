@@ -357,6 +357,8 @@ class MeshRemoteAdmin extends LitElement {
           }
           const missing = result.missing || [];
           return {
+            fetched: result.fetched || [],
+            errors: result.errors || {},
             local_config: toSnake(result.local_config || {}),
             module_config: toSnake(result.module_config || {}),
             channels: result.channels || [],

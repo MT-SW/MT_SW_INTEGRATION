@@ -611,6 +611,13 @@ class MeshtasticPanel extends LitElement {
         case "debug_logs_firmware_api":
         case "debug_logs_capture_debug":
           return this._softWs({ ...data, type: `meshtastic/${name}`, entry_id: entryId });
+        case "ota_status":
+        case "ota_start":
+        case "ota_fetch":
+        case "ota_delete":
+        case "link_pause":
+        case "link_resume":
+          return this._softWs({ ...data, type: `meshtastic/${name}`, entry_id: entryId });
         case "ui_settings":
           return this._softWs({ type: "meshtastic/ui_settings" });
         case "ui_settings_set":

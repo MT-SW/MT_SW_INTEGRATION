@@ -9,6 +9,7 @@ import "./modules.js";
 import "./sniffer-panel.js";
 import "./debug-logs.js";
 import "./nodedb-panel.js";
+import "./ota-panel.js";
 import "./chat-settings.js";
 import {
   REGIONS,
@@ -228,6 +229,7 @@ const NAV_ITEMS = [
     items: [
       { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
       { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
+      { id: "ota", label: PL("Firmware (OTA)"), icon: "mdi:update" },
       { id: "storage", label: PL("Storage"), icon: "mdi:database" },
       { id: "chat", label: PL("Chat"), icon: "mdi:chat-outline" },
       { id: "debug_logs", label: PL("Debug"), icon: "mdi:bug-outline" },
@@ -296,7 +298,7 @@ export class MeshSettingsTab extends LitElement {
     if (!this.remote) {
       return NAV_ITEMS;
     }
-    const localOnly = new Set(["sniffer", "storage", "chat", "debug_logs"]);
+    const localOnly = new Set(["sniffer", "storage", "chat", "debug_logs", "ota"]);
     return NAV_ITEMS.map((group) => ({
       ...group,
       items: group.items.filter((item) => !localOnly.has(item.id)),
@@ -394,6 +396,25 @@ export class MeshSettingsTab extends LitElement {
       this.requestUpdate();
       return;
     }
+    // Pokazujemy wyłącznie to, co węzeł naprawdę oddał. Brakującej sekcji nie wolno zastąpić
+    // wartościami domyślnymi formularza, bo wyglądałyby jak prawdziwe ustawienia węzła.
+    const fetched = new Set(result.fetched || []);
+    const wanted = [...(spec.sections || [])];
+    if (spec.owner) wanted.push("owner");
+    if (spec.canned) wanted.push("canned");
+    const absent = wanted.filter((name) => !fetched.has(name));
+    if (spec.channels && !(result.channels || []).length) {
+      absent.push("channels");
+    }
+    if (absent.length) {
+      const reasons = Object.entries(result.errors || {})
+        .filter(([label]) => absent.includes(label) || label.startsWith("channel_"))
+        .map(([label, text]) => `${label}: ${text}`);
+      this._partErrors = { ...(this._partErrors || {}), [id]: { absent, reasons } };
+      this._parts = { ...this._parts, [id]: "failed" };
+      this.requestUpdate();
+      return;
+    }
     const base = this._config || {};
     const local = { ...(base.local_config || {}) };
     const module = { ...(base.module_config || {}) };
@@ -412,7 +433,6 @@ export class MeshSettingsTab extends LitElement {
       channels: spec.channels ? result.channels || [] : base.channels,
       owner: spec.owner && result.owner ? result.owner : base.owner,
     };
-    this._missing = result.missing || [];
     this._parts = { ...this._parts, [id]: "done" };
     this.requestUpdate();
   }
@@ -427,13 +447,12 @@ export class MeshSettingsTab extends LitElement {
         if (state === "failed") {
           return html`<div class="error-banner">
             ${PL("Could not read this tab from the remote node.")}
+            ${((this._partErrors || {})[this._activePanel]?.reasons || []).map((line) => html`<div>${line}</div>`)}
+            <div>${PL("Nothing is shown instead of real settings, so you do not see made-up defaults.")}</div>
             <button @click=${() => { this._parts = { ...this._parts, [this._activePanel]: undefined }; this._ensurePart(this._activePanel); }}>${PL("Try again")}</button>
           </div>`;
         }
         return html`<div class="loading">${PL("Reading this tab from the remote node... it can take a few minutes.")}</div>`;
-      }
-      if (this._missing && this._missing.length) {
-        return html`<div class="error-banner">${PL("The node did not answer for:")} ${this._missing.join(", ")}</div>${this._renderPanel()}`;
       }
     }
     return this._renderPanel();
@@ -545,6 +564,11 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-actions
           .wsCommand=${(type, data) => this._ws(type, data)}
         ></mesh-settings-actions>`;
+      case "ota":
+        return html`<mesh-settings-ota
+          .hass=${this.hass}
+          .wsCommand=${(type, data) => this._ws(type, data)}
+        ></mesh-settings-ota>`;
       case "storage":
         return html`<mesh-settings-storage
           .wsCommand=${(type, data) => this._ws(type, data)}

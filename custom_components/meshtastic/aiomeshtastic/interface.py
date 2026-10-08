@@ -252,6 +252,8 @@ class MeshInterface:
         self._heartbeat_replies_confirmed = False
 
         # MQTT client for persistent connection
+        self._pause_until = 0.0
+        self._last_client_notification: tuple[float, str] | None = None
         self._mqtt_proxy_enabled = enable_mqtt_proxy
         if self._mqtt_proxy_enabled and not _has_aiomqtt:
             self._logger.warning("Could not enable MQTT proxy because aiomqtt is not installed")
@@ -344,6 +346,44 @@ class MeshInterface:
     @property
     def link_up(self) -> bool:
         return self._link_up and self.is_running
+
+    # ── celowe odłączenie od radia (np. na czas aktualizacji OTA robionej poza integracją) ──
+
+    @property
+    def link_paused(self) -> bool:
+        return time.monotonic() < getattr(self, "_pause_until", 0.0)
+
+    def link_pause_remaining(self) -> float:
+        return max(0.0, getattr(self, "_pause_until", 0.0) - time.monotonic())
+
+    async def pause_link(self, seconds: float) -> None:
+        """Rozłącz się z radiem i nie łącz ponownie przez ``seconds`` — radio jest wtedy wolne dla innej aplikacji."""
+        self._pause_until = time.monotonic() + max(1.0, float(seconds))
+        self._set_link_state("paused")
+        self._logger.warning("Odłączam się od radia na %.0f s (na prośbę użytkownika)", seconds)
+        with contextlib.suppress(Exception):
+            await self._connection.send_disconnect()
+        await self._connection.force_close()
+
+    async def resume_link(self) -> None:
+        """Zakończ odłączenie — pętla ponownego łączenia sama wróci do radia."""
+        if self.link_paused:
+            self._logger.warning("Kończę odłączenie od radia — łączę ponownie")
+        self._pause_until = 0.0
+
+    async def request_reboot_ota(self, mode: int, ota_hash: bytes) -> None:
+        """Poproś lokalne radio o restart do bootloadera OTA (Wi-Fi albo BLE), jak aplikacja."""
+        await self._connected_node_ready.wait()
+        message = admin_pb2.AdminMessage()
+        message.ota_request.reboot_ota_mode = mode
+        message.ota_request.ota_hash = ota_hash
+        self._last_client_notification = None
+        await self.send_admin_message(self._connected_node_info.my_node_num, message, ack=False)
+
+    def last_client_notification(self) -> str | None:
+        """Ostatnie powiadomienie od radia dla klienta (np. „Rebooting to WiFi OTA”)."""
+        value = getattr(self, "_last_client_notification", None)
+        return value[1] if value else None
 
     def nodes(self) -> Mapping[int, Mapping[str, Any]]:
         return MappingProxyType(self._node_database)
@@ -966,6 +1006,8 @@ class MeshInterface:
             self._connected_node_device_ui = packet.deviceuiConfig
         elif packet.HasField("queueStatus"):
             self._connected_node_queue_status = packet.queueStatus
+        elif packet.HasField("clientNotification"):
+            self._last_client_notification = (time.monotonic(), packet.clientNotification.message)
         elif packet.HasField("log_record"):
             self._emit_log_record(packet.log_record)
         elif packet.HasField("config"):
@@ -1271,6 +1313,10 @@ class MeshInterface:
 
         while self.is_running:
             self._last_reconnect_attempt = time.monotonic()
+            if self.link_paused:
+                # Użytkownik odłączył integrację (np. na czas OTA) — nie dotykamy radia, tylko czekamy.
+                await asyncio.sleep(min(2.0, max(0.2, self.link_pause_remaining())))
+                continue
             if reconnect_counter < reconnect_counter_max:
                 reconnect_counter += 1
             # 2, 4, 8, 16, 20, 20... s (+ do 25% losowo) — radio po restarcie
@@ -1993,6 +2039,8 @@ class MeshInterface:
             "owner": None,
             "canned": None,
             "missing": [],
+            "errors": {},  # przyczyna porażki każdej brakującej sekcji — panel pokazuje ją zamiast domyślnych wartości
+            "fetched": [],  # tylko to, co węzeł naprawdę oddał — reszty nie wolno pokazywać jako "ustawienia"
             "metadata": self.remote_metadata(node),
         }
         limit = asyncio.Semaphore(3)
@@ -2003,7 +2051,10 @@ class MeshInterface:
                     try:
                         return await factory()
                     except MeshtasticError as err:
-                        self._logger.debug("Zdalny odczyt %s z %s nieudany (%d): %s", label, node, attempt + 1, err)
+                        self._logger.warning(
+                            "Zdalny odczyt %s z !%08x nieudany (próba %d): %s", label, node, attempt + 1, err
+                        )
+                        result["errors"][label] = str(err) or type(err).__name__
                 result["missing"].append(label)
                 return None
 
@@ -2011,6 +2062,7 @@ class MeshInterface:
             value = await fetch(name, lambda: self.request_remote_section(node, name, is_module=module))
             if value is None:
                 return
+            result["fetched"].append(name)
             target = module_cfg if module else local
             if name == "device_ui":
                 result["device_ui"] = value
@@ -2021,12 +2073,17 @@ class MeshInterface:
             value = await fetch(f"channel_{index}", lambda: self.request_remote_channel(node, index))
             if value is not None:
                 result["channels"].append(value)
+                result["fetched"].append(f"channel_{index}")
 
         async def get_owner() -> None:
             result["owner"] = await fetch("owner", lambda: self.request_remote_owner(node))
+            if result["owner"] is not None:
+                result["fetched"].append("owner")
 
         async def get_canned() -> None:
             result["canned"] = await fetch("canned", lambda: self.request_remote_canned_messages(node))
+            if result["canned"] is not None:
+                result["fetched"].append("canned")
 
         def want(name: str) -> bool:
             return wanted is None or name in wanted
@@ -2253,6 +2310,18 @@ class MeshInterface:
                     continue
                 raise
             if node != my_node:
+                # Odpowiedź musi pochodzić od pytanego węzła. Gdyby przyszła od kogoś innego (np. od
+                # własnej bramki), pokazalibyśmy cudze ustawienia jako ustawienia zdalnego węzła.
+                sender = getattr(response, "from_id", None)
+                if sender is not None and sender != node:
+                    self._logger.warning(
+                        "Zdalny admin: odpowiedź na %s przyszła od !%08x zamiast od !%08x — odrzucona",
+                        variant,
+                        sender,
+                        node,
+                    )
+                    msg = f"Response came from a different node (!{sender:08x})"
+                    raise MeshInterfaceRequestError(msg, reason="wrong_sender")
                 self._note_admin_session(node, response)
             return response
         msg = "Remote admin session could not be established"  # pragma: no cover

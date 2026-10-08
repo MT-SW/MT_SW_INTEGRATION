@@ -25,6 +25,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 
+from .ota import async_register_ota
 from . import debug_logs, nodedb_cleanup, ondemand
 from .aiomeshtastic.interface import TelemetryType
 from .const import DOMAIN
@@ -2129,6 +2130,8 @@ async def ws_remote_config(hass, connection, msg) -> None:
                 else None
             ),
             "missing": raw["missing"],
+            "fetched": raw["fetched"],
+            "errors": raw["errors"],
             "metadata": raw["metadata"],
             "schema": _config_schema(),
         }
@@ -2261,4 +2264,5 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     ):
         websocket_api.async_register_command(hass, handler)
     debug_logs.async_register_commands(hass)
+    async_register_ota(hass)
     async_register_planner_proxy(hass)
