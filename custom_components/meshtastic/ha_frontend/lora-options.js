@@ -74,3 +74,38 @@ export function precisionLabel(bits) {
   }
   return PRECISION_LABELS[bits] ? PL(PRECISION_LABELS[bits]) : `${bits}`;
 }
+
+/* Szybkość kodowania (mianownik 4/N), jaką preset ma z założenia — tak jak w tabeli firmware
+   i aplikacji na Androida. */
+const PRESET_CODING_RATE = {
+  VERY_LONG_SLOW: 8, LONG_TURBO: 8, LONG_FAST: 5, LONG_MODERATE: 8, LONG_SLOW: 8,
+  MEDIUM_FAST: 5, MEDIUM_SLOW: 5, MEDIUM_TURBO: 5, SHORT_FAST: 5, SHORT_SLOW: 5, SHORT_TURBO: 5,
+  LITE_FAST: 5, LITE_SLOW: 5, NARROW_FAST: 6, NARROW_SLOW: 6, TINY_FAST: 5, TINY_SLOW: 6,
+};
+/* Te presety (domyślnie 4/6) w firmware MT_SW mogą zejść też do 4/5. */
+const LOWER_RATE_ALLOWED = new Set(["NARROW_FAST", "NARROW_SLOW", "TINY_SLOW"]);
+
+export function presetCodingRate(preset) {
+  return PRESET_CODING_RATE[preset] || 0;
+}
+
+/* Wartości, które można ustawić ponad presetem (bez „domyślnej”). Pusta lista = preset ma już 4/8. */
+export function codingRateOverrides(preset) {
+  const own = presetCodingRate(preset);
+  if (!own) {
+    return [];
+  }
+  const lowest = LOWER_RATE_ALLOWED.has(preset) ? 5 : own + 1;
+  const rates = [];
+  for (let rate = lowest; rate <= 8; rate += 1) {
+    if (rate !== own) {
+      rates.push(rate);
+    }
+  }
+  return rates;
+}
+
+/* Wartość zapisana w konfiguracji tak, jak zastosuje ją firmware: nadpisanie albo 0. */
+export function codingRateOverride(preset, stored) {
+  return codingRateOverrides(preset).includes(Number(stored)) ? Number(stored) : 0;
+}

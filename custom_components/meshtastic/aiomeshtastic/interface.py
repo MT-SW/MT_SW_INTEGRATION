@@ -11,7 +11,7 @@ import itertools
 import random
 import time
 from collections import defaultdict, deque
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, MutableMapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType, TracebackType
@@ -1966,13 +1966,23 @@ class MeshInterface:
         response = await self.send_admin_message_await_response(node=node, message=request, expect_response=True)
         return response.app_payload.get_canned_message_module_messages_response
 
-    async def fetch_remote_node_config(self, node: int) -> dict[str, Any]:
+    async def fetch_remote_node_config(
+        self,
+        node: int,
+        *,
+        sections: Iterable[str] | None = None,
+        channels: bool = True,
+        owner: bool = True,
+        canned: bool = True,
+        force_session: bool = True,
+    ) -> dict[str, Any]:
         """Całe ustawienia zdalnego węzła (jak aplikacja po wejściu w „Administrację”).
 
         Odczyt idzie zapytaniami po kolei (po kilka naraz, żeby nie zapchać łącza radiowego); sekcji,
         której węzeł nie odda mimo ponowienia, brakuje w wyniku i trafia na listę ``missing``.
         """
-        await self.ensure_admin_session(node, force=True)
+        await self.ensure_admin_session(node, force=force_session)
+        wanted = None if sections is None else set(sections)
         local = localonly_pb2.LocalConfig()
         module_cfg = localonly_pb2.LocalModuleConfig()
         result: dict[str, Any] = {
@@ -2012,18 +2022,21 @@ class MeshInterface:
             if value is not None:
                 result["channels"].append(value)
 
-        async def owner() -> None:
+        async def get_owner() -> None:
             result["owner"] = await fetch("owner", lambda: self.request_remote_owner(node))
 
-        async def canned() -> None:
+        async def get_canned() -> None:
             result["canned"] = await fetch("canned", lambda: self.request_remote_canned_messages(node))
 
+        def want(name: str) -> bool:
+            return wanted is None or name in wanted
+
         await asyncio.gather(
-            *[section(name, module=False) for name in (*self._CONFIG_TYPES, "device_ui")],
-            *[section(name, module=True) for name in self._MODULE_CONFIG_TYPES],
-            *[channel(index) for index in range(self.REMOTE_CHANNEL_COUNT)],
-            owner(),
-            canned(),
+            *[section(name, module=False) for name in (*self._CONFIG_TYPES, "device_ui") if want(name)],
+            *[section(name, module=True) for name in self._MODULE_CONFIG_TYPES if want(name)],
+            *([channel(index) for index in range(self.REMOTE_CHANNEL_COUNT)] if channels else []),
+            *([get_owner()] if owner else []),
+            *([get_canned()] if canned else []),
         )
         result["channels"].sort(key=lambda c: c.index)
         return result

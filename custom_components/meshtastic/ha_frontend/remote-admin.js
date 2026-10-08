@@ -329,18 +329,39 @@ class MeshRemoteAdmin extends LitElement {
     try {
       switch (name) {
         case "get_config": {
+          // Szkielet bez ruchu w eterze — dane każdej zakładki wczytuje "load_part".
+          this._remoteLocal = {};
+          this._missing = [];
+          return {
+            local_config: {},
+            module_config: {},
+            channels: [],
+            owner: { longName: "", shortName: "", isLicensed: false, isUnmessagable: false },
+          };
+        }
+        case "load_part": {
           const result = await this.hass.callWS({
             type: "meshtastic/remote_config",
             entry_id: this.entryId,
             node_id: this.nodeId,
+            sections: data.sections || [],
+            channels: Boolean(data.channels),
+            owner: Boolean(data.owner),
+            canned: Boolean(data.canned),
           });
-          this._remoteLocal = result.local_config || {};
-          this._missing = result.missing || [];
+          // zapamiętujemy, które sekcje należą do części "local", żeby zapis trafił do właściwej grupy
+          for (const name of data.sections || []) {
+            if (result.local_config && Object.prototype.hasOwnProperty.call(result.local_config, name)) {
+              this._remoteLocal = { ...(this._remoteLocal || {}), [name]: true };
+            }
+          }
+          const missing = result.missing || [];
           return {
             local_config: toSnake(result.local_config || {}),
             module_config: toSnake(result.module_config || {}),
             channels: result.channels || [],
-            owner: result.owner || { longName: "", shortName: "", isLicensed: false, isUnmessagable: false },
+            owner: result.owner,
+            missing,
           };
         }
         case "set_config": {
@@ -507,7 +528,6 @@ class MeshRemoteAdmin extends LitElement {
       <div class="buttons">
         <button @click=${() => (this._settings = false)}>${this._tr("back")}</button>
       </div>
-      ${this._missing.length ? html`<div class="help warn">${this._tr("missing", { s: this._missing.join(", ") })}</div>` : ""}
       <div class="help">${this._tr("loading")}</div>
       <mesh-settings-tab
         .hass=${this.hass}

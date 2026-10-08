@@ -17,6 +17,9 @@ import {
   PRECISE_BITS,
   DEFAULT_APPROX_BITS,
   precisionLabel,
+  presetCodingRate,
+  codingRateOverrides,
+  codingRateOverride,
 } from "./lora-options.js";
 import {
   settingsStyles,
@@ -145,6 +148,38 @@ const GPS_FORMATS = [
 ];
 
 /* ── Navigation items ── */
+/* Zdalny węzeł: co trzeba odczytać z radia, żeby zakładka miała dane. Każda zakładka
+   wczytuje się osobno (jak w aplikacji), bo odczyt całości przez eter trwa minutami. */
+const REMOTE_PARTS = {
+  lora: { sections: ["lora"] },
+  channels: { sections: ["lora"], channels: true },
+  user: { owner: true },
+  status_message: { sections: ["statusmessage"] },
+  device: { sections: ["device"] },
+  position: { sections: ["position"] },
+  power: { sections: ["power"] },
+  network: { sections: ["network"] },
+  display: { sections: ["display"] },
+  bluetooth: { sections: ["bluetooth"] },
+  security: { sections: ["security"] },
+  screen: { sections: ["device_ui"] },
+  mqtt: { sections: ["mqtt"] },
+  serial: { sections: ["serial"] },
+  ext_notification: { sections: ["external_notification"] },
+  store_forward: { sections: ["store_forward"] },
+  range_test: { sections: ["range_test"] },
+  telemetry: { sections: ["telemetry"] },
+  canned_message: { sections: ["canned_message"], canned: true },
+  audio: { sections: ["audio"] },
+  remote_hardware: { sections: ["remote_hardware"] },
+  neighbor_info: { sections: ["neighbor_info"] },
+  ambient_lighting: { sections: ["ambient_lighting"] },
+  detection_sensor: { sections: ["detection_sensor"] },
+  paxcounter: { sections: ["paxcounter"] },
+  traffic_management: { sections: ["traffic_management"] },
+  mesh_beacon: { sections: ["mesh_beacon"] },
+};
+
 const NAV_ITEMS = [
   {
     group: "Radio Config",
@@ -216,6 +251,8 @@ export class MeshSettingsTab extends LitElement {
   constructor() {
     super();
     this.remote = false;
+    this._missing = [];
+    this._parts = {}; // zdalny węzeł: zakładka -> "loading" | "done" | "failed"
     this._activePanel = "lora";
     this._config = null;
     this._loading = true;
@@ -315,17 +352,91 @@ export class MeshSettingsTab extends LitElement {
               ${group.items.map((item) => html`
                 <div
                   class="settings-nav-item ${this._activePanel === item.id ? "active" : ""}"
-                  @click=${() => { this._activePanel = item.id; this.requestUpdate(); }}
+                  @click=${() => this._selectPanel(item.id)}
                 >${item.label}</div>
               `)}
             </div>
           `)}
         </div>
         <div class="settings-content">
-          ${this._renderPanel()}
+          ${this._renderContent()}
         </div>
       </div>
     `;
+  }
+
+  _selectPanel(id) {
+    this._activePanel = id;
+    this._ensurePart(id);
+    this.requestUpdate();
+  }
+
+  _needsPart(id) {
+    return this.remote && Boolean(REMOTE_PARTS[id]);
+  }
+
+  /* Zdalny węzeł: wczytaj z radia tylko to, czego potrzebuje wybrana zakładka. */
+  async _ensurePart(id) {
+    if (!this._needsPart(id) || this._parts[id] === "loading" || this._parts[id] === "done") {
+      return;
+    }
+    this._parts = { ...this._parts, [id]: "loading" };
+    this.requestUpdate();
+    const spec = REMOTE_PARTS[id];
+    const result = await this._ws("meshtastic_ui/load_part", {
+      sections: spec.sections || [],
+      channels: Boolean(spec.channels),
+      owner: Boolean(spec.owner),
+      canned: Boolean(spec.canned),
+    });
+    if (!result) {
+      this._parts = { ...this._parts, [id]: "failed" };
+      this.requestUpdate();
+      return;
+    }
+    const base = this._config || {};
+    const local = { ...(base.local_config || {}) };
+    const module = { ...(base.module_config || {}) };
+    for (const name of spec.sections || []) {
+      if (result.local_config && name in result.local_config) {
+        local[name] = result.local_config[name];
+      }
+      if (result.module_config && name in result.module_config) {
+        module[name] = result.module_config[name];
+      }
+    }
+    this._config = {
+      ...base,
+      local_config: local,
+      module_config: module,
+      channels: spec.channels ? result.channels || [] : base.channels,
+      owner: spec.owner && result.owner ? result.owner : base.owner,
+    };
+    this._missing = result.missing || [];
+    this._parts = { ...this._parts, [id]: "done" };
+    this.requestUpdate();
+  }
+
+  _renderContent() {
+    if (this._needsPart(this._activePanel)) {
+      const state = this._parts[this._activePanel];
+      if (state === undefined) {
+        this._ensurePart(this._activePanel);
+      }
+      if (state !== "done") {
+        if (state === "failed") {
+          return html`<div class="error-banner">
+            ${PL("Could not read this tab from the remote node.")}
+            <button @click=${() => { this._parts = { ...this._parts, [this._activePanel]: undefined }; this._ensurePart(this._activePanel); }}>${PL("Try again")}</button>
+          </div>`;
+        }
+        return html`<div class="loading">${PL("Reading this tab from the remote node... it can take a few minutes.")}</div>`;
+      }
+      if (this._missing && this._missing.length) {
+        return html`<div class="error-banner">${PL("The node did not answer for:")} ${this._missing.join(", ")}</div>${this._renderPanel()}`;
+      }
+    }
+    return this._renderPanel();
   }
 
   _renderPanel() {
@@ -504,13 +615,43 @@ class MeshSettingsLora extends LitElement {
     this.requestUpdate();
   }
 
+  /* Jak w aplikacji: przy presecie można podnieść szybkość kodowania ponad domyślną presetu.
+     Firmware stosuje tylko wyższą wartość, więc niższej nie oferujemy, a „domyślny” to 0. */
+  _renderCodingRate(d) {
+    const preset = presetCodingRate(d.modem_preset || "LONG_FAST");
+    if (!preset) {
+      return "";
+    }
+    const overrides = codingRateOverrides(d.modem_preset || "LONG_FAST");
+    const stored = String(codingRateOverride(d.modem_preset || "LONG_FAST", d.coding_rate ?? 0));
+    const options = [
+      { value: "0", label: `${PL("Preset default")} (4/${preset})` },
+      ...overrides.map((rate) => ({ value: String(rate), label: `4/${rate}` })),
+    ];
+    return html`<mesh-select
+      .label=${PL("Coding Rate Override")}
+      .description=${overrides.length
+        ? PL("Adds error correction on top of the preset. A higher coding rate makes every packet longer on air and uses more of the duty cycle and channel utilization budget.")
+        : PL("This preset already uses the highest coding rate.")}
+      .value=${stored}
+      .options=${options}
+      ?disabled=${!overrides.length}
+      @change=${(e) => this._updateField("coding_rate", Number(e.detail.value))}
+    ></mesh-select>`;
+  }
+
   async _save() {
     this._saving = true;
     this.requestUpdate();
 
+    // Zapisujemy tylko wartość, którą firmware naprawdę zastosuje (jak w aplikacji).
+    const values = { ...this._draft };
+    if (values.use_preset !== false) {
+      values.coding_rate = codingRateOverride(values.modem_preset || "LONG_FAST", values.coding_rate ?? 0);
+    }
     const result = await this.wsCommand("meshtastic_ui/set_config", {
       section: "lora",
-      values: this._draft,
+      values,
     });
 
     this._saving = false;
@@ -580,6 +721,7 @@ class MeshSettingsLora extends LitElement {
               .step=${0.001}
               @change=${(e) => this._updateField("override_frequency", e.detail.value)}
             ></mesh-number-input>
+            ${usePreset ? this._renderCodingRate(d) : ""}
             ${usePreset
               ? ""
               : html`

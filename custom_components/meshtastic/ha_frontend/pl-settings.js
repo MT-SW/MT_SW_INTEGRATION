@@ -15,6 +15,17 @@
  */
 
 const PL_STRINGS = {
+  /* ── zdalny węzeł / szybkość kodowania ── */
+  "Coding Rate Override": "Nadpisanie szybkości kodowania (Coding Rate)",
+  "Preset default": "Domyślna dla presetu",
+  "Adds error correction on top of the preset. A higher coding rate makes every packet longer on air and uses more of the duty cycle and channel utilization budget.":
+    "Dodaje korekcję błędów ponad presetem. Wyższa szybkość kodowania wydłuża każdy pakiet w eterze i zużywa więcej budżetu duty cycle oraz wykorzystania kanału.",
+  "This preset already uses the highest coding rate.": "Ten preset już używa najwyższej szybkości kodowania.",
+  "Reading this tab from the remote node... it can take a few minutes.":
+    "Czytam tę zakładkę ze zdalnego węzła… to może potrwać kilka minut.",
+  "Could not read this tab from the remote node.": "Nie udało się odczytać tej zakładki ze zdalnego węzła.",
+  "Try again": "Spróbuj ponownie",
+  "The node did not answer for:": "Węzeł nie odpowiedział dla:",
   /* ── wspólne ── */
   Name: "Nazwa",
   Enabled: "Włączony",

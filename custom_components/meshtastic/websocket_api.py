@@ -777,7 +777,10 @@ def _field_meta(descriptor: Any) -> dict[str, Any]:
     elif descriptor.type == descriptor.TYPE_MESSAGE:
         kind = "message"
 
-    repeated = descriptor.label == descriptor.LABEL_REPEATED
+    # nowe protobuf (7+) usunęło pole label i ma is_repeated
+    repeated = getattr(descriptor, "is_repeated", None)
+    if repeated is None:
+        repeated = descriptor.label == descriptor.LABEL_REPEATED
     return {
         "type": kind,
         "enum": enum_name,
@@ -2059,6 +2062,12 @@ async def ws_admin_session_status(hass, connection, msg) -> None:
         vol.Required("type"): f"{WS_PREFIX}/remote_config",
         vol.Required("entry_id"): str,
         vol.Required("node_id"): int,
+        # Bez "sections" odczyt obejmuje wszystko; z nimi tylko wskazaną część — jedna zakładka ustawień
+        # naraz, jak w aplikacji, żeby nie czekać minutami na całość.
+        vol.Optional("sections"): [str],
+        vol.Optional("channels", default=True): bool,
+        vol.Optional("owner", default=True): bool,
+        vol.Optional("canned", default=True): bool,
     }
 )
 @websocket_api.require_admin
@@ -2068,7 +2077,15 @@ async def ws_remote_config(hass, connection, msg) -> None:
 
     async def action(client, m):
         interface = client.interface
-        raw = await interface.fetch_remote_node_config(m["node_id"])
+        partial = "sections" in m
+        raw = await interface.fetch_remote_node_config(
+            m["node_id"],
+            sections=m.get("sections"),
+            channels=m["channels"] if partial else True,
+            owner=m["owner"] if partial else True,
+            canned=m["canned"] if partial else True,
+            force_session=not partial,
+        )
         local_config = _full_dict(raw["local"])
         module_config = _full_dict(raw["module"])
         if raw["device_ui"] is not None:
