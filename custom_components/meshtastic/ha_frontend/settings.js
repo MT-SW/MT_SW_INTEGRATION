@@ -408,7 +408,7 @@ export class MeshSettingsTab extends LitElement {
     }
     if (absent.length) {
       const reasons = Object.entries(result.errors || {})
-        .filter(([label]) => absent.includes(label) || label.startsWith("channel_"))
+        .filter(([label]) => label === "session" || absent.includes(label) || label.startsWith("channel_"))
         .map(([label, text]) => `${label}: ${text}`);
       this._partErrors = { ...(this._partErrors || {}), [id]: { absent, reasons } };
       this._parts = { ...this._parts, [id]: "failed" };

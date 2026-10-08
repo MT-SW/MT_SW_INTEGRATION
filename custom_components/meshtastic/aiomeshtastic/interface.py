@@ -2369,13 +2369,24 @@ class MeshInterface:
     def remote_metadata(self, node: int) -> dict[str, Any] | None:
         return self._remote_metadata.get(node)
 
+    def _node_has_pkc(self, node: int) -> bool:
+        """Czy zdalny węzeł ma klucz publiczny (admin przez PKC, tak jak w aplikacji).
+
+        Baza węzłów nie ma pola ``hasPKC`` (to pole z metadanych urządzenia), więc wcześniej PKC nigdy nie był
+        wybierany. Sprawdzamy ``user.publicKey`` węzła oraz — jeśli znamy — metadane ``hasPKC``.
+        """
+        meta = self._remote_metadata.get(node) or {}
+        if meta.get("hasPKC"):
+            return True
+        user = (self._node_database.get(node) or {}).get("user") or {}
+        key = user.get("publicKey") or user.get("public_key")
+        return bool(key)
+
     def _get_admin_channel_index(self, node: int) -> int:
         if node == self._connected_node_info.my_node_num:
             return 0
 
-        if self._node_database.get(self._connected_node_info.my_node_num, {}).get(
-            "hasPKC", False
-        ) and self._node_database.get(node, {}).get("hasPKC", False):
+        if self._node_has_pkc(node):
             return self.PKC_CHANNEL_INDEX
 
         for c in self._connected_node_channels or []:

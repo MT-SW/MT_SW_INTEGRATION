@@ -340,15 +340,22 @@ class MeshRemoteAdmin extends LitElement {
           };
         }
         case "load_part": {
-          const result = await this.hass.callWS({
-            type: "meshtastic/remote_config",
-            entry_id: this.entryId,
-            node_id: this.nodeId,
-            sections: data.sections || [],
-            channels: Boolean(data.channels),
-            owner: Boolean(data.owner),
-            canned: Boolean(data.canned),
-          });
+          let result;
+          try {
+            result = await this.hass.callWS({
+              type: "meshtastic/remote_config",
+              entry_id: this.entryId,
+              node_id: this.nodeId,
+              sections: data.sections || [],
+              channels: Boolean(data.channels),
+              owner: Boolean(data.owner),
+              canned: Boolean(data.canned),
+            });
+          } catch (err) {
+            // Cała prośba padła (np. brak sesji administratora) — oddajemy przyczynę, żeby panel ją pokazał.
+            const reason = (err && err.message) || String(err);
+            return { fetched: [], errors: { session: reason }, local_config: {}, module_config: {}, channels: [], owner: null, missing: [] };
+          }
           // zapamiętujemy, które sekcje należą do części "local", żeby zapis trafił do właściwej grupy
           for (const name of data.sections || []) {
             if (result.local_config && Object.prototype.hasOwnProperty.call(result.local_config, name)) {
