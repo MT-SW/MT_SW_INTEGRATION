@@ -146,7 +146,15 @@ function toSnake(value) {
 const toCamel = (key) => key.replace(/_([a-z0-9])/g, (_m, c) => c.toUpperCase());
 
 /* "!1a2b3c4d", "1a2b3c4d" albo liczba dziesiętna → numer węzła albo null */
-export function parseNodeId(text) {
+export /* Backend odsyła wynik akcji na węźle jako {confirmed, result: {...}} — rozpakowujemy go, żeby panel widział dane. */
+function unwrapNodeResult(reply) {
+  if (reply && typeof reply === "object" && "confirmed" in reply && reply.result && typeof reply.result === "object") {
+    return { ...reply.result, confirmed: reply.confirmed };
+  }
+  return reply;
+}
+
+function parseNodeId(text) {
   const raw = String(text || "").trim();
   if (!raw) {
     return null;
@@ -225,11 +233,13 @@ class MeshRemoteAdmin extends LitElement {
       return;
     }
     try {
-      this._session = await this.hass.callWS({
-        type: "meshtastic/admin_session_status",
-        entry_id: this.entryId,
-        node_id: this.nodeId,
-      });
+      this._session = unwrapNodeResult(
+        await this.hass.callWS({
+          type: "meshtastic/admin_session_status",
+          entry_id: this.entryId,
+          node_id: this.nodeId,
+        })
+      );
     } catch (err) {
       // stan sesji jest tylko informacją — brak odpowiedzi nie blokuje reszty
       console.warn("MT_SW: stan sesji administratora", err);
@@ -244,12 +254,14 @@ class MeshRemoteAdmin extends LitElement {
     this._error = "";
     this._notice = "";
     try {
-      return await this.hass.callWS({
-        type: `meshtastic/${type}`,
-        entry_id: this.entryId,
-        node_id: this.nodeId,
-        ...extra,
-      });
+      return unwrapNodeResult(
+        await this.hass.callWS({
+          type: `meshtastic/${type}`,
+          entry_id: this.entryId,
+          node_id: this.nodeId,
+          ...extra,
+        })
+      );
     } catch (err) {
       console.error("MT_SW: polecenie zdalne nie powiodło się", type, err);
       this._error = (err && err.message) || this._tr("failed");
@@ -356,6 +368,7 @@ class MeshRemoteAdmin extends LitElement {
             const reason = (err && err.message) || String(err);
             return { fetched: [], errors: { session: reason }, local_config: {}, module_config: {}, channels: [], owner: null, missing: [] };
           }
+          result = unwrapNodeResult(result) || {};
           // zapamiętujemy, które sekcje należą do części "local", żeby zapis trafił do właściwej grupy
           for (const name of data.sections || []) {
             if (result.local_config && Object.prototype.hasOwnProperty.call(result.local_config, name)) {
