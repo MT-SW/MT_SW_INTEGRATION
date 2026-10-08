@@ -2302,20 +2302,42 @@ class MeshInterface:
         for attempt in range(2):
             if needs_session:
                 message.session_passkey = await self.ensure_admin_session(node, force=attempt > 0)
+            route_channel, route_key = self._admin_routing(node)
+            if node != my_node:
+                self._logger.warning(
+                    "Zdalny admin → !%08x: %s (próba %d, kanał=%d, PKC=%s, klucz odbiorcy=%dB, nasz klucz=%dB)",
+                    node,
+                    variant,
+                    attempt + 1,
+                    route_channel,
+                    bool(route_key),
+                    len(self._pkc_key(node)),
+                    len(self._pkc_key(my_node)),
+                )
             try:
                 response = await self._send_message_await_response(
                     node=node,
                     message=message,
                     port_num=portnums_pb2.PortNum.ADMIN_APP,
-                    channel_index=self._admin_routing(node)[0],
-                    pki_public_key=self._admin_routing(node)[1],
+                    channel_index=route_channel,
+                    pki_public_key=route_key,
                     want_response=expect_response,
                     timeout=timeout,
                 )
             except MeshRoutingError as err:
+                if node != my_node:
+                    self._logger.warning(
+                        "Zdalny admin ← !%08x: %s odrzucone przez sieć: %s", node, variant, err
+                    )
                 if needs_session and attempt == 0 and err.error == mesh_pb2.Routing.Error.ADMIN_BAD_SESSION_KEY:
                     self._admin_sessions.pop(node, None)
                     continue
+                raise
+            except Exception as err:
+                if node != my_node:
+                    self._logger.warning(
+                        "Zdalny admin ← !%08x: %s bez odpowiedzi: %s: %s", node, variant, type(err).__name__, err
+                    )
                 raise
             if node != my_node:
                 # Odpowiedź musi pochodzić od pytanego węzła. Gdyby przyszła od kogoś innego (np. od
