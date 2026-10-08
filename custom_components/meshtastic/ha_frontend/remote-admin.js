@@ -381,7 +381,22 @@ class MeshRemoteAdmin extends LitElement {
             errors: result.errors || {},
             local_config: toSnake(result.local_config || {}),
             module_config: toSnake(result.module_config || {}),
-            channels: result.channels || [],
+            // edytor kanałów czyta config.channels[i].settings.* (tak jak dla bramki), a serwer oddaje płaskie wiersze
+            channels: (result.channels || []).map((channel) => ({
+              index: channel.index,
+              role: channel.role,
+              preset_name: channel.preset_name || "",
+              settings: {
+                name: channel.name || "",
+                psk: channel.psk || "",
+                uplink_enabled: Boolean(channel.uplink_enabled),
+                downlink_enabled: Boolean(channel.downlink_enabled),
+                module_settings: {
+                  position_precision: channel.position_precision ?? 0,
+                  is_muted: Boolean(channel.is_muted),
+                },
+              },
+            })),
             owner: result.owner,
             missing,
           };
