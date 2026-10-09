@@ -447,13 +447,13 @@ class MeshInterface:
         """Pobierz z radia ponownie pełną konfigurację (z wpisem własnego węzła) i zwróć, czy pozycja jest znana.
 
         Radio zna swoją pozycję (np. stałą), ale wpis własnego węzła mógł do nas nie dotrzeć
-        (ponowne połączenie pobiera tylko minimalną konfigurację). Odświeżamy najwyżej raz na 5 minut.
+        (ponowne połączenie pobiera tylko minimalną konfigurację). Odświeżamy najwyżej raz na 30 sekund.
         """
         if self.own_position_known():
             return True
         now = time.monotonic()
         last = getattr(self, "_own_refresh_at", None)
-        if not force and last is not None and now - last < 300:  # noqa: PLR2004
+        if not force and last is not None and now - last < 30:  # noqa: PLR2004
             return False
         self._own_refresh_at = now
         try:
@@ -462,6 +462,18 @@ class MeshInterface:
             await asyncio.sleep(1)  # pętla główna dokończy przetwarzanie ostatnich pakietów
         except Exception:  # noqa: BLE001
             self._logger.info("Ponowne pobranie wpisu własnego węzła nie powiodło się", exc_info=True)
+        if not self.own_position_known():
+            # wpis węzła nie niesie współrzędnych stałej pozycji — zapytaj radio wprost o jego pozycję
+            # (to samo robi przycisk „zapytaj o pozycję” w aplikacji; moduł pozycji odpowiada zapisaną pozycją)
+            try:
+                own = self.my_node_num()
+                if own is not None:
+                    reply = await self.request_position(own, timeout=15)
+                    reply_dict = google.protobuf.json_format.MessageToDict(reply)
+                    self._logger.warning("Odpowiedź radia na pytanie o własną pozycję: %s", reply_dict)
+                    self.note_own_position(reply_dict)
+            except Exception as err:  # noqa: BLE001
+                self._logger.warning("Pytanie radia o własną pozycję nie powiodło się: %s: %s", type(err).__name__, err)
         known = self.own_position_known()
         self._logger.warning("Odświeżenie wpisu własnego węzła z radia: pozycja %s", "znana" if known else "nadal brak")
         return known

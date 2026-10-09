@@ -684,4 +684,4 @@ class MeshRemoteAdmin extends LitElement {
   }
 }
 
-customElements.define("mesh-remote-admin", MeshRemoteAdmin);
+if (!customElements.get("mesh-remote-admin")) customElements.define("mesh-remote-admin", MeshRemoteAdmin);
