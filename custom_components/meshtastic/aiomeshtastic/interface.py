@@ -462,18 +462,6 @@ class MeshInterface:
             await asyncio.sleep(1)  # pętla główna dokończy przetwarzanie ostatnich pakietów
         except Exception:  # noqa: BLE001
             self._logger.info("Ponowne pobranie wpisu własnego węzła nie powiodło się", exc_info=True)
-        if not self.own_position_known():
-            # wpis węzła nie niesie współrzędnych stałej pozycji — zapytaj radio wprost o jego pozycję
-            # (to samo robi przycisk „zapytaj o pozycję” w aplikacji; moduł pozycji odpowiada zapisaną pozycją)
-            try:
-                own = self.my_node_num()
-                if own is not None:
-                    reply = await self.request_position(own, timeout=15)
-                    reply_dict = google.protobuf.json_format.MessageToDict(reply)
-                    self._logger.warning("Odpowiedź radia na pytanie o własną pozycję: %s", reply_dict)
-                    self.note_own_position(reply_dict)
-            except Exception as err:  # noqa: BLE001
-                self._logger.warning("Pytanie radia o własną pozycję nie powiodło się: %s: %s", type(err).__name__, err)
         known = self.own_position_known()
         self._logger.warning("Odświeżenie wpisu własnego węzła z radia: pozycja %s", "znana" if known else "nadal brak")
         return known
@@ -1209,6 +1197,13 @@ class MeshInterface:
                     self._own_node_info_raw = node_info_dict
                 if node_id == self.my_node_num():
                     # diagnostyka: co radio samo podało o pozycji własnego węzła
+                    with contextlib.suppress(Exception):
+                        self._logger.warning(
+                            "Własny węzeł z radia — surowe bajty wpisu (hex)=%s, pola pozycji=%s, nieznane pola=%s",
+                            node_info.SerializeToString().hex(),
+                            [(f.name, v) for f, v in node_info.position.ListFields()],
+                            node_info.position.UnknownFields() if hasattr(node_info.position, "UnknownFields") else None,
+                        )
                     self._logger.warning(
                         "Własny węzeł z radia: pozycja=%s (poprawna: %s)",
                         node_info_dict.get("position"),
