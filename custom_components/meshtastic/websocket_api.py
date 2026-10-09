@@ -880,6 +880,10 @@ async def _augment_config_for_panel(
     with contextlib.suppress(Exception):
         position = dict(local_config.get("position") or {})
         fixed = interface.connected_node_fixed_position() if position.get("fixedPosition") else None
+        if fixed is None and position.get("fixedPosition"):
+            # radio ma stałą pozycję, a my jej nie znamy — dopytaj jak aplikacja (etap 2 uzgadniania)
+            await interface.refresh_own_node(timeout=20)
+            fixed = interface.connected_node_fixed_position()
         if fixed is None and position.get("fixedPosition") and isinstance(persisted_position, dict):
             lat, lon = persisted_position.get("latitude"), persisted_position.get("longitude")
             if valid_coordinates(lat, lon):

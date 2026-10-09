@@ -458,7 +458,7 @@ class MeshInterface:
         self._own_refresh_at = now
         try:
             async with self._connected_node_config_lock:
-                await asyncio.wait_for(self._connection.request_config(minimal=False), timeout=timeout)
+                await asyncio.wait_for(self._connection.request_config(node_info_only=True), timeout=timeout)
             await asyncio.sleep(1)  # pętla główna dokończy przetwarzanie ostatnich pakietów
         except Exception:  # noqa: BLE001
             self._logger.info("Ponowne pobranie wpisu własnego węzła nie powiodło się", exc_info=True)
@@ -493,6 +493,9 @@ class MeshInterface:
 
     async def _ensure_own_position(self) -> None:
         await asyncio.sleep(20)
+        if self.is_running and not self.own_position_known():
+            # tak jak aplikacja: osobne żądanie samych wpisów węzłów (etap 2 uzgadniania)
+            await self.refresh_own_node(timeout=30, force=True)
         if self.is_running and not self.own_position_known():
             self.log_own_node_diagnostics()
         # dopóki pozycji brak — powtarzaj diagnostykę co 10 min (najwyżej 6 razy)

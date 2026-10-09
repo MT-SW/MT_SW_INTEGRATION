@@ -24,6 +24,9 @@ const PL_STRINGS = {
   "This preset already uses the highest coding rate.": "Ten preset już używa najwyższej szybkości kodowania.",
   "Reading this tab from the remote node... it can take a few minutes.":
     "Czytam tę zakładkę ze zdalnego węzła… to może potrwać kilka minut.",
+  "The radio did not report the coordinates of its fixed position. Enter them or use the Home Assistant location.":
+    "Radio nie podało współrzędnych swojej stałej pozycji. Wpisz je albo użyj lokalizacji Home Assistanta.",
+  "Use Home Assistant location": "Użyj lokalizacji Home Assistanta",
   "Could not read this tab from the remote node.": "Nie udało się odczytać tej zakładki ze zdalnego węzła.",
   "Try again": "Spróbuj ponownie",
   "Nothing is shown instead of real settings, so you do not see made-up defaults.": "Zamiast prawdziwych ustawień nie pokazuję niczego, żebyś nie widział wartości domyślnych udających ustawienia węzła.",

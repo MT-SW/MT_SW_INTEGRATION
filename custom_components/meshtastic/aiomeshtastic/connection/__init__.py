@@ -32,6 +32,7 @@ LOGGER = logging.getLogger(__package__)
 
 class ClientApiConnection:
     _CONFIG_ID_MINIMAL = 69420
+    _CONFIG_ID_NODE_INFO_ONLY = 69421  # jak w aplikacji: etap 2 — tylko wpisy węzłów
 
     def __init__(self) -> None:
         self._packet_stream_listeners: list[ClientApiConnectionPacketStreamListener] = []
@@ -252,16 +253,18 @@ class ClientApiConnection:
             msg = "Heartbeat failed"
             raise ClientApiConnectionInterruptedError(msg)
 
-    async def request_config(self, minimal: bool = False) -> bool:  # noqa: FBT001, FBT002
+    async def request_config(self, minimal: bool = False, node_info_only: bool = False) -> bool:  # noqa: FBT001, FBT002
         start_config_packet = mesh_pb2.ToRadio()
 
-        if minimal:
+        if node_info_only:
+            start_config_packet.want_config_id = self._CONFIG_ID_NODE_INFO_ONLY
+        elif minimal:
             start_config_packet.want_config_id = self._CONFIG_ID_MINIMAL
         else:
             # not using 0 as config id as it is default for config_complete_id
             start_config_packet.want_config_id = random.randint(1, 0xFFFFFFFF)  # noqa: S311
-            if start_config_packet.want_config_id == self._CONFIG_ID_MINIMAL:
-                start_config_packet.want_config_id += 1
+            if start_config_packet.want_config_id in (self._CONFIG_ID_MINIMAL, self._CONFIG_ID_NODE_INFO_ONLY):
+                start_config_packet.want_config_id += 2
 
         async for packet in self.listen(on_start=self.send_packet(start_config_packet)):
             try:

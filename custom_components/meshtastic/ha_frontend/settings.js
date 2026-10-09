@@ -492,6 +492,7 @@ export class MeshSettingsTab extends LitElement {
         ></mesh-settings-device>`;
       case "position":
         return html`<mesh-settings-position
+          .hass=${this.hass}
           .config=${this._config}
           .wsCommand=${(type, data) => this._ws(type, data)}
           @config-saved=${this._onSaved}
@@ -1865,6 +1866,19 @@ if (!customElements.get("mesh-settings-device")) {
 class MeshSettingsPosition extends ConfigSectionPanel {
   get _section() { return "position"; }
 
+  static get properties() {
+    return { ...super.properties, hass: { type: Object } };
+  }
+
+  /** Lokalizacja domowa Home Assistanta (ustawienia HA) — tylko do wstawienia w formularz na życzenie. */
+  _useHomeAssistantLocation() {
+    const cfg = this.hass?.config;
+    if (!cfg || typeof cfg.latitude !== "number" || typeof cfg.longitude !== "number") return;
+    this._updateField("fixed_lat", Number(cfg.latitude.toFixed(7)));
+    this._updateField("fixed_lng", Number(cfg.longitude.toFixed(7)));
+    this._updateField("fixed_altitude", Math.round(Number(cfg.elevation) || 0));
+  }
+
   render() {
     const d = this._draft;
     return html`
@@ -1964,6 +1978,15 @@ class MeshSettingsPosition extends ConfigSectionPanel {
                   @change=${(e) => this._updateField("fixed_altitude", e.detail.value)}
                 ></mesh-number-input>
               </div>
+              ${!d.fixed_lat && !d.fixed_lng ? html`
+                <p style="margin: 12px 0 0; font-size: 12px; color: var(--secondary-text-color);">
+                  ${PL("The radio did not report the coordinates of its fixed position. Enter them or use the Home Assistant location.")}
+                </p>` : ""}
+              ${this.hass?.config ? html`
+                <button
+                  style="margin-top: 12px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); cursor: pointer;"
+                  @click=${() => this._useHomeAssistantLocation()}
+                >${PL("Use Home Assistant location")}</button>` : ""}
             ` : ""}
           </div>
 
