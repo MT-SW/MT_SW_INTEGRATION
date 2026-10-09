@@ -1197,13 +1197,12 @@ class MeshInterface:
                     self._own_node_info_raw = node_info_dict
                 if node_id == self.my_node_num():
                     # diagnostyka: co radio samo podało o pozycji własnego węzła
-                    with contextlib.suppress(Exception):
+                    try:
                         self._logger.warning(
-                            "Własny węzeł z radia — surowe bajty wpisu (hex)=%s, pola pozycji=%s, nieznane pola=%s",
-                            node_info.SerializeToString().hex(),
-                            [(f.name, v) for f, v in node_info.position.ListFields()],
-                            node_info.position.UnknownFields() if hasattr(node_info.position, "UnknownFields") else None,
+                            "Własny węzeł z radia — surowe bajty wpisu (hex)=%s", node_info.SerializeToString().hex()
                         )
+                    except Exception as err:  # noqa: BLE001
+                        self._logger.warning("Nie udało się zapisać surowych bajtów wpisu: %s", err)
                     self._logger.warning(
                         "Własny węzeł z radia: pozycja=%s (poprawna: %s)",
                         node_info_dict.get("position"),
