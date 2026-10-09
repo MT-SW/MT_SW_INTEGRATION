@@ -39,14 +39,17 @@ const TEXT = {
     long_name: "Nazwa długa",
     short_name: "Nazwa krótka (max 4)",
     add: "Dodaj",
-    gpio: "GPIO (Remote Hardware)",
-    pin: "Numer pinu",
-    high: "Włącz (1)",
-    low: "Wyłącz (0)",
-    read: "Odczytaj",
+    gpio: "GPIO",
+    pin: "Pin GPIO",
+    pin_mask: "Maska: {m}",
+    high: "1",
+    low: "0",
+    read: "Odczyt",
+    gpio_help_title: "Jak działa sterowanie GPIO",
     gpio_help:
-      "Wymaga na węźle modułu Remote Hardware i kanału o nazwie „gpio” (albo drugiego kanału). Działa jak w aplikacji: pin = numer bitu w masce.",
-    gpio_state: "Pin {p}: {v}",
+      "1. Na węźle docelowym włącz moduł „Zdalny sprzęt” (Remote Hardware) i w polu „Dostępne piny” wpisz piny, którymi wolno sterować (albo zezwól na dowolne).\n2. Na obu urządzeniach, Twoim i docelowym, utwórz kanał o nazwie „gpio” na pozycji 1 (zaraz po kanale głównym, który ma pozycję 0) i ustaw na obu ten sam klucz (PSK).\n3. Tutaj wpisz numer pinu i użyj przycisków: 1 włącza pin, 0 wyłącza go, a Odczyt sprawdza jego stan.\nAplikacja zawsze wysyła polecenia kanałem na pozycji 1. Bez tego kanału albo bez włączonego modułu polecenie nie zadziała, a przy odczycie zobaczysz brak odpowiedzi.",
+    gpio_state: "Odczyt GPIO: {v}",
+    gpio_no_response: "Brak odpowiedzi ze zdalnego radia — może jeszcze dotrzeć.",
     settings: "Ustawienia zdalnego węzła",
     settings_open: "Pobierz i edytuj ustawienia",
     settings_help:
@@ -89,14 +92,17 @@ const TEXT = {
     long_name: "Long name",
     short_name: "Short name (max 4)",
     add: "Add",
-    gpio: "GPIO (Remote Hardware)",
-    pin: "Pin number",
-    high: "Set high (1)",
-    low: "Set low (0)",
+    gpio: "GPIO",
+    pin: "GPIO pin",
+    pin_mask: "Mask: {m}",
+    high: "On",
+    low: "Off",
     read: "Read",
+    gpio_help_title: "How GPIO control works",
     gpio_help:
-      "Needs the Remote Hardware module on the node and a channel named “gpio” (or a secondary channel). Works like in the app: pin = bit number in the mask.",
-    gpio_state: "Pin {p}: {v}",
+      "1. On the target node, enable the Remote Hardware module and list the pins it may control under Available pins (or allow any pin).\n2. On both devices, yours and the target, create a channel named gpio at position 1 (right after the primary channel at position 0) and set the same key (PSK) on both.\n3. Enter the pin number here and use the buttons: On sets the pin high, Off sets it low, and Read checks its state.\nThe gateway always sends the commands on the channel at position 1. Without that channel, or without the module enabled, the command will not work and a read shows no response.",
+    gpio_state: "GPIO read: {v}",
+    gpio_no_response: "No response from node",
     settings: "Remote node settings",
     settings_open: "Fetch and edit settings",
     settings_help:
@@ -321,7 +327,7 @@ class MeshRemoteAdmin extends LitElement {
   async _gpioWrite(high) {
     const result = await this._ws("gpio_write", { pin: Number(this._pin), high }, "gpio");
     if (result) {
-      this._pinState = this._tr("gpio_state", { p: result.pin, v: result.high ? "1" : "0" });
+      this._pinState = "";
       this._notice = this._tr("done");
     }
   }
@@ -329,7 +335,9 @@ class MeshRemoteAdmin extends LitElement {
   async _gpioRead() {
     const result = await this._ws("gpio_read", { pin: Number(this._pin) }, "gpio");
     if (result) {
-      this._pinState = this._tr("gpio_state", { p: result.pin, v: result.high ? "1" : "0" });
+      this._pinState = this._tr("gpio_state", { v: result.high ? "1" : "0" });
+    } else {
+      this._pinState = this._tr("gpio_no_response");
     }
   }
 
@@ -539,12 +547,15 @@ class MeshRemoteAdmin extends LitElement {
           .value=${String(this._pin)}
           @input=${(e) => (this._pin = Number(e.target.value))}
         />
+        ${Number.isInteger(this._pin) && this._pin >= 0 && this._pin <= 62
+          ? html`<span class="value">${this._tr("pin_mask", { m: "0x" + (1n << BigInt(this._pin)).toString(16) })}</span>`
+          : ""}
         <button ?disabled=${busy} @click=${() => this._gpioWrite(true)}>${this._tr("high")}</button>
         <button ?disabled=${busy} @click=${() => this._gpioWrite(false)}>${this._tr("low")}</button>
         <button ?disabled=${busy} @click=${() => this._gpioRead()}>${this._tr("read")}</button>
         ${this._pinState ? html`<span class="value">${this._pinState}</span>` : ""}
       </div>
-      <div class="help">${this._tr("gpio_help")}</div>
+      <div class="help"><b>${this._tr("gpio_help_title")}</b><br />${this._tr("gpio_help")}</div>
     `;
   }
 
@@ -620,6 +631,7 @@ class MeshRemoteAdmin extends LitElement {
         color: var(--secondary-text-color);
       }
       .help {
+        white-space: pre-line;
         padding: 0 16px 6px;
         font-size: 12px;
         color: var(--secondary-text-color);
