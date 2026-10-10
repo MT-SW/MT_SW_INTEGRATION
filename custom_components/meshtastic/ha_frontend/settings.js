@@ -1846,7 +1846,7 @@ class MeshSettingsDevice extends ConfigSectionPanel {
               @change=${(e) => this._updateField("rebroadcast_mode", e.detail.value)}
             ></mesh-select>
 
-            <mesh-interval-select .kind="node_info" .minSecs=${0}
+            <mesh-interval-select kind="node_info" .minSecs=${0}
               .label=${PL("Node Info Broadcast Secs")}
               .description=${PL("How often to broadcast node info (seconds, 0 = default)")}
               .value=${d.node_info_broadcast_secs ?? 0}
@@ -1942,7 +1942,7 @@ class MeshSettingsPosition extends ConfigSectionPanel {
               @change=${(e) => this._updateField("gps_mode", e.detail.value)}
             ></mesh-select>
 
-            <mesh-interval-select .kind="position_broadcast" .minSecs=${21600}
+            <mesh-interval-select kind="position_broadcast" .minSecs=${21600}
               .label=${PL("Position Broadcast Secs")}
               .description=${PL("How often to broadcast position (seconds, 0 = default)")}
               .value=${d.position_broadcast_secs ?? 0}
@@ -1957,14 +1957,14 @@ class MeshSettingsPosition extends ConfigSectionPanel {
               @change=${(e) => this._updateField("broadcast_smart_minimum_distance", e.detail.value)}
             ></mesh-number-input>
 
-            <mesh-interval-select .kind="smart_minimum" .minSecs=${0}
+            <mesh-interval-select kind="smart_minimum" .minSecs=${0}
               .label=${PL("Broadcast Smart Min Interval (secs)")}
               .description=${PL("Min interval between smart broadcasts")}
               .value=${d.broadcast_smart_minimum_interval_secs ?? 0}
               @change=${(e) => this._updateField("broadcast_smart_minimum_interval_secs", e.detail.value)}
             ></mesh-interval-select>
 
-            <mesh-interval-select .kind="gps_update" .minSecs=${0}
+            <mesh-interval-select kind="gps_update" .minSecs=${0}
               .label=${PL("GPS Update Interval (secs)")}
               .description=${PL("How often the GPS hardware checks position")}
               .value=${d.gps_update_interval ?? 0}
@@ -2081,28 +2081,28 @@ class MeshSettingsPower extends ConfigSectionPanel {
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
-            <mesh-interval-select .kind="all" .minSecs=${0}
+            <mesh-interval-select kind="all" .minSecs=${0}
               .label=${PL("On Battery Shutdown After (secs)")}
               .description=${PL("Auto-shutdown after this many seconds on battery (0 = disabled)")}
               .value=${d.on_battery_shutdown_after_secs ?? 0}
               @change=${(e) => this._updateField("on_battery_shutdown_after_secs", e.detail.value)}
             ></mesh-interval-select>
 
-            <mesh-interval-select .kind="nag_timeout" .minSecs=${0}
+            <mesh-interval-select kind="nag_timeout" .minSecs=${0}
               .label=${PL("Min Wake Secs")}
               .description=${PL("Minimum time to stay awake (seconds)")}
               .value=${d.min_wake_secs ?? 0}
               @change=${(e) => this._updateField("min_wake_secs", e.detail.value)}
             ></mesh-interval-select>
 
-            <mesh-interval-select .kind="all" .minSecs=${0}
+            <mesh-interval-select kind="all" .minSecs=${0}
               .label=${PL("Light Sleep Interval (secs)")}
               .description=${PL("Light sleep interval for power saving")}
               .value=${d.ls_secs ?? 0}
               @change=${(e) => this._updateField("ls_secs", e.detail.value)}
             ></mesh-interval-select>
 
-            <mesh-interval-select .kind="nag_timeout" .minSecs=${0}
+            <mesh-interval-select kind="nag_timeout" .minSecs=${0}
               .label=${PL("Wait Bluetooth Secs")}
               .description=${PL("Seconds to wait for Bluetooth before sleeping")}
               .value=${d.wait_bluetooth_secs ?? 0}
@@ -2303,14 +2303,14 @@ class MeshSettingsDisplay extends ConfigSectionPanel {
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
-            <mesh-interval-select .kind="screen_on" .minSecs=${0}
+            <mesh-interval-select kind="screen_on" .minSecs=${0}
               .label=${PL("Screen On Secs")}
               .description=${PL("How long the screen stays on (0 = always on)")}
               .value=${d.screen_on_secs ?? 0}
               @change=${(e) => this._updateField("screen_on_secs", e.detail.value)}
             ></mesh-interval-select>
 
-            <mesh-interval-select .kind="screen_carousel" .minSecs=${0}
+            <mesh-interval-select kind="screen_carousel" .minSecs=${0}
               .label=${PL("Auto Carousel Secs")}
               .description=${PL("Seconds between auto-cycling pages (0 = disabled)")}
               .value=${d.auto_screen_carousel_secs ?? 0}

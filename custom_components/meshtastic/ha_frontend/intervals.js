@@ -28,25 +28,21 @@ export const INTERVAL_LISTS = {
   gps_update: [0, 8, 20, 40, 60, 80, 120, 300, 600, 900, 1800, 3600, 21600, 43200, 86400],
   range_test_sender: [0, 15, 30, 45, 60, 300, 600, 900, 1800, 3600],
   smart_minimum: [15, 30, 45, 60, 300, 600, 900, 1800, 3600],
-  screen_on: [15, 30, 60, 300, 600, 900, 1800, 3600, 2147483647],
+  screen_on: [15, 30, 60, 300, 600, 900, 1800, 3600],
   screen_carousel: [0, 15, 30, 60, 300, 600, 900],
   all: [
     0, 1, 2, 3, 4, 5, 8, 10, 15, 20, 30, 40, 45, 80, 90,
     60, 120, 300, 600, 900, 1800,
     3600, 7200, 10800, 14400, 18000, 21600, 28800, 36000, 43200, 64800, 86400, 129600, 172800, 259200,
-    2147483647,
   ],
 };
 
 export const MIN_DEVICE_METRICS_SECS = 2 * H;
 export const MIN_BROADCAST_SECS = 6 * H;
 
-const ALWAYS_ON = 2147483647;
-
 const TEXT = {
   pl: {
     unset: "Nieustawiony",
-    always: "Zawsze włączone",
     custom: "Własna",
     unit: {
       s: ["sekunda", "sekundy", "sekund"],
@@ -56,7 +52,6 @@ const TEXT = {
   },
   en: {
     unset: "Unset",
-    always: "Always on",
     custom: "Custom",
     unit: { s: ["second", "seconds", "seconds"], m: ["minute", "minutes", "minutes"], h: ["hour", "hours", "hours"] },
   },
@@ -67,9 +62,6 @@ export function formatInterval(seconds, language = "pl") {
   const value = Number(seconds) || 0;
   if (value === 0) {
     return text.unset;
-  }
-  if (value === ALWAYS_ON) {
-    return text.always;
   }
   let amount = value;
   let unit = "s";

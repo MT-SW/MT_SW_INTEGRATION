@@ -283,7 +283,7 @@ class MeshSettingsMqtt extends ModuleConfigPanel {
                   ${PL("Your node will periodically send an unencrypted map report packet to the configured MQTT server. It includes the node id, long and short name, approximate location, hardware model, role, firmware version, LoRa region, modem preset and primary channel name.")}
                 </div>
                 <div class="form-grid">
-                  <mesh-interval-select .kind="broadcast_medium" .minSecs=${0}
+                  <mesh-interval-select kind="broadcast_medium" .minSecs=${0}
                     .label=${PL("Map Reporting Interval (secs)")}
                     .description=${PL("How often the node reports to the map (0 = firmware default, 3600 s)")}
                     .value=${d.map_report_settings?.publish_interval_secs ?? 0}
@@ -408,7 +408,7 @@ class MeshSettingsExtNotification extends ModuleConfigPanel {
                 <mesh-number-input .label=${PL("Output Buzzer GPIO")} .description=${PL("GPIO for piezo buzzer")}
                   .value=${d.output_buzzer ?? 0} .min=${0} .max=${48}
                   @change=${(e) => this._updateField("output_buzzer", e.detail.value)}></mesh-number-input>
-                <mesh-interval-select .kind="nag_timeout" .minSecs=${0} .label=${PL("Nag Timeout (secs)")} .description=${PL("Repeat notification interval (0 = once)")}
+                <mesh-interval-select kind="nag_timeout" .minSecs=${0} .label=${PL("Nag Timeout (secs)")} .description=${PL("Repeat notification interval (0 = once)")}
                   .value=${d.nag_timeout ?? 0}
                   @change=${(e) => this._updateField("nag_timeout", e.detail.value)}></mesh-interval-select>
                 <mesh-number-input .label=${PL("Output Duration (ms)")} .description=${PL("Notification pulse duration")}
@@ -533,7 +533,7 @@ class MeshSettingsRangeTest extends ModuleConfigPanel {
           ${d.enabled ? html`
             <div class="settings-section">
               <div class="form-grid">
-                <mesh-interval-select .kind="range_test_sender" .minSecs=${0} .label=${PL("Sender Interval (secs)")}
+                <mesh-interval-select kind="range_test_sender" .minSecs=${0} .label=${PL("Sender Interval (secs)")}
                   .description=${PL("Seconds between test messages (0 = receive only)")}
                   .value=${d.sender ?? 0}
                   @change=${(e) => this._updateField("sender", e.detail.value)}></mesh-interval-select>
@@ -585,7 +585,7 @@ class MeshSettingsTelemetry extends ModuleConfigPanel {
               </div>
             </div>
             <div class="form-grid">
-              <mesh-interval-select .kind="broadcast_short" .minSecs=${7200} .label=${PL("Update Interval (secs)")}
+              <mesh-interval-select kind="broadcast_short" .minSecs=${7200} .label=${PL("Update Interval (secs)")}
                 .description=${PL("How often the radio broadcasts device metrics. 0 uses the firmware default (3600s on fw 2.7.x).")}
                 .value=${d.device_update_interval ?? 0}
                 @change=${(e) => this._updateField("device_update_interval", e.detail.value)}></mesh-interval-select>
@@ -600,7 +600,7 @@ class MeshSettingsTelemetry extends ModuleConfigPanel {
               @change=${(e) => this._updateField("environment_measurement_enabled", e.detail.checked)}></mesh-toggle>
             ${d.environment_measurement_enabled ? html`
               <div class="form-grid" style="margin-top: 8px;">
-                <mesh-interval-select .kind="broadcast_short" .minSecs=${21600} .label=${PL("Environment Update Interval (secs)")}
+                <mesh-interval-select kind="broadcast_short" .minSecs=${21600} .label=${PL("Environment Update Interval (secs)")}
                   .value=${d.environment_update_interval ?? 0}
                   @change=${(e) => this._updateField("environment_update_interval", e.detail.value)}></mesh-interval-select>
                 <mesh-number-input .label=${PL("Environment Screen Enabled")}
@@ -619,7 +619,7 @@ class MeshSettingsTelemetry extends ModuleConfigPanel {
               @change=${(e) => this._updateField("air_quality_enabled", e.detail.checked)}></mesh-toggle>
             ${d.air_quality_enabled ? html`
               <div class="form-grid" style="margin-top: 8px;">
-                <mesh-interval-select .kind="broadcast_short" .minSecs=${21600} .label=${PL("Air Quality Interval (secs)")}
+                <mesh-interval-select kind="broadcast_short" .minSecs=${21600} .label=${PL("Air Quality Interval (secs)")}
                   .value=${d.air_quality_interval ?? 0}
                   @change=${(e) => this._updateField("air_quality_interval", e.detail.value)}></mesh-interval-select>
               </div>
@@ -634,7 +634,7 @@ class MeshSettingsTelemetry extends ModuleConfigPanel {
               @change=${(e) => this._updateField("power_measurement_enabled", e.detail.checked)}></mesh-toggle>
             ${d.power_measurement_enabled ? html`
               <div class="form-grid" style="margin-top: 8px;">
-                <mesh-interval-select .kind="broadcast_short" .minSecs=${21600} .label=${PL("Power Update Interval (secs)")}
+                <mesh-interval-select kind="broadcast_short" .minSecs=${21600} .label=${PL("Power Update Interval (secs)")}
                   .value=${d.power_update_interval ?? 0}
                   @change=${(e) => this._updateField("power_update_interval", e.detail.value)}></mesh-interval-select>
                 <mesh-number-input .label=${PL("Power Screen Enabled")}
@@ -840,7 +840,7 @@ class MeshSettingsNeighborInfo extends ModuleConfigPanel {
           ${d.enabled ? html`
             <div class="settings-section">
               <div class="form-grid">
-                <mesh-interval-select .kind="neighbor_info" .minSecs=${21600} .label=${PL("Update Interval (secs)")}
+                <mesh-interval-select kind="neighbor_info" .minSecs=${21600} .label=${PL("Update Interval (secs)")}
                   .description=${PL("How often to broadcast neighbor info (0 = default)")}
                   .value=${d.update_interval ?? 0}
                   @change=${(e) => this._updateField("update_interval", e.detail.value)}></mesh-interval-select>
@@ -933,11 +933,11 @@ class MeshSettingsDetectionSensor extends ModuleConfigPanel {
                 <mesh-number-input .label=${PL("Monitor Pin")} .description=${PL("GPIO pin to monitor for detection")}
                   .value=${d.monitor_pin ?? 0} .min=${0} .max=${48}
                   @change=${(e) => this._updateField("monitor_pin", e.detail.value)}></mesh-number-input>
-                <mesh-interval-select .kind="detection_minimum" .minSecs=${0} .label=${PL("Minimum Broadcast Secs")}
+                <mesh-interval-select kind="detection_minimum" .minSecs=${0} .label=${PL("Minimum Broadcast Secs")}
                   .description=${PL("Min interval between alert broadcasts")}
                   .value=${d.minimum_broadcast_secs ?? 0}
                   @change=${(e) => this._updateField("minimum_broadcast_secs", e.detail.value)}></mesh-interval-select>
-                <mesh-interval-select .kind="detection_state" .minSecs=${0} .label=${PL("State Broadcast Secs")}
+                <mesh-interval-select kind="detection_state" .minSecs=${0} .label=${PL("State Broadcast Secs")}
                   .description=${PL("Periodic state broadcast interval")}
                   .value=${d.state_broadcast_secs ?? 0}
                   @change=${(e) => this._updateField("state_broadcast_secs", e.detail.value)}></mesh-interval-select>
@@ -993,7 +993,7 @@ class MeshSettingsPaxcounter extends ModuleConfigPanel {
           ${d.enabled ? html`
             <div class="settings-section">
               <div class="form-grid">
-                <mesh-interval-select .kind="pax_counter" .minSecs=${0} .label=${PL("Update Interval (secs)")}
+                <mesh-interval-select kind="pax_counter" .minSecs=${0} .label=${PL("Update Interval (secs)")}
                   .description=${PL("How often to broadcast pax count (0 = default)")}
                   .value=${d.paxcounter_update_interval ?? 0}
                   @change=${(e) => this._updateField("paxcounter_update_interval", e.detail.value)}></mesh-interval-select>
@@ -1202,7 +1202,7 @@ class MeshSettingsMeshBeacon extends ModuleConfigPanel {
                 .maxlength=${64}
                 @change=${(e) => this._updateField("broadcast_message", e.detail.value)}
               ></mesh-text-input>
-              <mesh-interval-select .kind="mesh_beacon" .minSecs=${3600}
+              <mesh-interval-select kind="mesh_beacon" .minSecs=${3600}
                 .label=${PL("Broadcast Interval (secs)")}
                 .value=${d.broadcast_interval_secs ?? 0}
                 @change=${(e) => this._updateField("broadcast_interval_secs", e.detail.value)}
