@@ -17,6 +17,8 @@ import { layoutStyles, emptyStateStyles } from "./styles.js";
 import { t, formatUptime, formatRelative, formatHops } from "./i18n.js";
 import { viaInfo, relayLabel, signalInfo } from "./hops.js";
 import "./chart.js";
+import "./minimap.js";
+import { validPoint } from "./minimap.js";
 import { buildTelemetryCharts } from "./telemetry-charts.js";
 import "./node-stats.js";;
 import "./node-ondemand.js";
@@ -87,6 +89,8 @@ class MeshNodesTab extends LitElement {
       _statsRequest: { type: Object },
       _ondemandOpen: { type: Boolean },
       _activeCategory: { type: String },
+      _historyRange: { type: String },
+      _selectedTs: { type: Number },
       _mtsw: { type: Boolean },
       _neighborsShown: { type: Boolean },
     };
@@ -111,6 +115,8 @@ class MeshNodesTab extends LitElement {
     this._statsRequest = null;
     this._ondemandOpen = false;
     this._activeCategory = null;
+    this._historyRange = "24h";
+    this._selectedTs = undefined;
     this._mtsw = null;
     this._mtswRequested = false;
     this._neighborsShown = false;
@@ -559,6 +565,7 @@ class MeshNodesTab extends LitElement {
   /* Widok jednej kategorii naraz — po wybraniu następnej poprzednia znika,
      żeby okno nie rosło z każdym kliknięciem. */
   _resetViews() {
+    this._selectedTs = undefined;
     this._traceroute = null;
     this._traceHistory = [];
     this._neighborHistory = [];
@@ -844,15 +851,98 @@ class MeshNodesTab extends LitElement {
     `;
   }
 
+  /* Zakres historii jak w aplikacji (1 godz., 1 dzień, 7 dni…); "all" = wszystko, co zapisano. */
+  static get RANGES() {
+    return [
+      ["1h", 3600e3],
+      ["24h", 86400e3],
+      ["7d", 7 * 86400e3],
+      ["14d", 14 * 86400e3],
+      ["30d", 30 * 86400e3],
+      ["all", 0],
+    ];
+  }
+
+  _ranged(points) {
+    const entry = MeshNodesTab.RANGES.find(([id]) => id === this._historyRange);
+    const span = entry ? entry[1] : 0;
+    if (!span || !points) {
+      return points || [];
+    }
+    const from = Date.now() - span;
+    return points.filter((p) => p.ts >= from);
+  }
+
+  _renderRangeBar() {
+    const id = this._activeCategory;
+    if (!["neighbors", "position", "signal", "device", "environment", "power"].includes(id)) {
+      return html``;
+    }
+    return html`
+      <div class="range-bar">
+        ${MeshNodesTab.RANGES.map(
+          ([key]) => html`
+            <button
+              class="range-chip ${this._historyRange === key ? "active" : ""}"
+              @click=${() => {
+                this._historyRange = key;
+                this._selectedTs = undefined;
+              }}
+            >
+              ${t(this.hass, `nodes.range.${key}`)}
+            </button>
+          `
+        )}
+      </div>
+    `;
+  }
+
+  _distanceText(node) {
+    const gateway = (this.nodes || []).find((n) => n.is_gateway);
+    if (!gateway || gateway.node_id === node.node_id || !validPoint(gateway) || !validPoint(node)) {
+      return "";
+    }
+    const rad = (d) => (d * Math.PI) / 180;
+    const dLat = rad(node.latitude - gateway.latitude);
+    const dLon = rad(node.longitude - gateway.longitude);
+    const h =
+      Math.sin(dLat / 2) ** 2 + Math.cos(rad(gateway.latitude)) * Math.cos(rad(node.latitude)) * Math.sin(dLon / 2) ** 2;
+    const metres = 6371000 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+    return metres < 1000
+      ? `${Math.round(metres)} m`
+      : `${(metres / 1000).toLocaleString(this.hass.language, { maximumFractionDigits: 1 })} km`;
+  }
+
+  /* Minimapa pozycji węzła (jak w aplikacji); przy historii pozycji zastępuje ją mapa ze śladem. */
+  _renderMiniMap(node) {
+    if (this._activeCategory === "position" || !validPoint(node)) {
+      return html``;
+    }
+    const url = `https://www.openstreetmap.org/?mlat=${node.latitude}&mlon=${node.longitude}#map=16/${node.latitude}/${node.longitude}`;
+    return html`
+      <mesh-mini-map
+        .points=${[{ latitude: node.latitude, longitude: node.longitude }]}
+        .badge=${this._distanceText(node)}
+        .dark=${Boolean(this.hass && this.hass.themes && this.hass.themes.darkMode)}
+      ></mesh-mini-map>
+      <div class="route-note">
+        <a href=${url} target="_blank" rel="noopener noreferrer">
+          ${node.latitude.toFixed(5)}, ${node.longitude.toFixed(5)}
+        </a>
+      </div>
+    `;
+  }
+
   _renderNeighborHistory() {
     if (!this._neighborHistory || this._neighborHistory.length < 2) {
       return html``;
     }
     return html`
       <div class="detail-section">${t(this.hass, "nodes.cat.neighbors")}</div>
+      ${this._renderRangeBar()}
       <div class="chart-wrap">
         <mesh-line-chart
-          .points=${this._neighborHistory}
+          .points=${this._ranged(this._neighborHistory)}
           .language=${this.hass.language}
           .emptyLabel=${t(this.hass, "nodes.history.empty")}
           .series=${[{ key: "count", label: t(this.hass, "nodes.history.neighbor_count"), color: "#4FC3F7" }]}
@@ -865,19 +955,40 @@ class MeshNodesTab extends LitElement {
     if (!this._positionHistory || !this._positionHistory.length) {
       return html``;
     }
+    const ranged = this._ranged(this._positionHistory);
+    const track = ranged.filter((p) => !p.empty && validPoint(p));
     return html`
       <div class="detail-section">${t(this.hass, "nodes.cat.position")}</div>
+      ${this._renderRangeBar()}
+      ${track.length
+        ? html`<mesh-mini-map
+            .points=${track}
+            .track=${true}
+            .height=${240}
+            .selected=${this._selectedTs}
+            .dark=${Boolean(this.hass && this.hass.themes && this.hass.themes.darkMode)}
+            @point-select=${(e) => (this._selectedTs = e.detail.ts)}
+          ></mesh-mini-map>`
+        : ""}
+      ${ranged.length
+        ? ""
+        : html`<div class="route-note">${t(this.hass, "nodes.history.empty")}</div>`}
       <div class="position-history">
-        ${this._positionHistory
+        ${ranged
           .slice()
           .reverse()
-          .slice(0, 20)
+          .slice(0, 100)
           .map(
             (p) => html`
-              <div class="position-history-row">
+              <div
+                class="position-history-row ${p.ts === this._selectedTs ? "selected" : ""}"
+                @click=${() => (this._selectedTs = p.ts)}
+              >
                 <span>${this._absoluteTime(p.ts / 1000)}</span>
-                <span>${Number(p.latitude).toFixed(5)}, ${Number(p.longitude).toFixed(5)}</span>
-                <span>${p.altitude !== null && p.altitude !== undefined ? `${p.altitude} m` : "—"}</span>
+                ${p.empty || p.latitude === null || p.latitude === undefined
+                  ? html`<span>${t(this.hass, "nodes.history.position_empty")}</span><span>—</span>`
+                  : html`<span>${Number(p.latitude).toFixed(5)}, ${Number(p.longitude).toFixed(5)}</span>
+                <span>${p.altitude !== null && p.altitude !== undefined ? `${p.altitude} m` : "—"}</span>`}
               </div>
             `
           )}
@@ -895,7 +1006,11 @@ class MeshNodesTab extends LitElement {
     // Osobny wykres z własną skalą dla każdego parametru; napięcie i prąd
     // z pakietu środowiskowego, urządzenia i mocy trafiają na wspólny wykres
     // tej samej wielkości (jako osobne linie).
-    const charts = buildTelemetryCharts(view.hist, (key) => t(this.hass, key));
+    const ranged = {};
+    for (const [key, points] of Object.entries(view.hist)) {
+      ranged[key] = this._ranged(points);
+    }
+    const charts = buildTelemetryCharts(ranged, (key) => t(this.hass, key));
 
     if (!charts.length) {
       return html`${title}${note}<div class="route-note">${t(this.hass, "nodes.history.empty")}</div>`;
@@ -903,6 +1018,7 @@ class MeshNodesTab extends LitElement {
 
     return html`
       ${title}${note}
+      ${this._renderRangeBar()}
       ${charts.map(
         (chart) => html`
           <div class="chart-wrap">
@@ -965,6 +1081,7 @@ class MeshNodesTab extends LitElement {
                 )
               : ""}
             ${this._detailRow("nodes.tracked", node.is_tracked ? t(this.hass, "common.yes") : t(this.hass, "common.no"))}
+            ${this._renderMiniMap(node)}
 
             ${this._renderTraceroute(node)}
             ${this._renderTraceHistory()}
@@ -1443,6 +1560,37 @@ class MeshNodesTab extends LitElement {
           padding: 6px 0;
           border-top: 1px solid var(--divider-color);
           font-size: 12px;
+        }
+
+        .position-history-row {
+          cursor: pointer;
+        }
+
+        .position-history-row.selected {
+          background: var(--secondary-background-color);
+        }
+
+        .range-bar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 8px;
+        }
+
+        .range-chip {
+          padding: 4px 10px;
+          border-radius: 14px;
+          border: 1px solid var(--divider-color);
+          background: transparent;
+          color: var(--primary-text-color);
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .range-chip.active {
+          background: var(--primary-color);
+          border-color: var(--primary-color);
+          color: var(--text-primary-color, #fff);
         }
 
         .position-history-row:first-child {

@@ -4,6 +4,8 @@ import {
   css,
 } from "./vendor/lit/lit-element.js";
 import "./components.js";
+import "./intervals.js";
+import { registerVersionClick, intervalsUnlocked } from "./intervals.js";
 import { PL } from "./pl-settings.js";
 import "./modules.js";
 import "./sniffer-panel.js";
@@ -241,6 +243,10 @@ const NAV_ITEMS = [
    <mesh-settings-tab>  —  Container with sidebar navigation
    ══════════════════════════════════════════════════════════ */
 
+/* Wersja integracji: adres panelu ma postać .../frontend/<wersja>/panel.js,
+   a <wersja> serwer bierze z manifest.json. */
+const INTEGRATION_VERSION = (import.meta.url.match(/\/frontend\/([^/]+)\//) || [])[1] || "?";
+
 export class MeshSettingsTab extends LitElement {
   static get properties() {
     return {
@@ -275,6 +281,17 @@ export class MeshSettingsTab extends LitElement {
           color: var(--secondary-text-color);
           font-size: 14px;
         }
+        .version-box {
+          margin-top: 16px;
+          padding: 8px 12px;
+          border-top: 1px solid var(--divider-color);
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-select: none;
+          font-size: 13px;
+        }
+        .version-box .version-label { color: var(--secondary-text-color); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .version-box .version-note { color: var(--primary-color); font-size: 12px; margin-top: 2px; }
         .error-banner {
           background: rgba(244,67,54,0.1);
           border: 1px solid rgba(244,67,54,0.3);
@@ -359,12 +376,32 @@ export class MeshSettingsTab extends LitElement {
               `)}
             </div>
           `)}
+          <div class="version-box" @click=${this._onVersionClick}>
+            <div class="version-label">${PL("Version")}</div>
+            <div>${INTEGRATION_VERSION}${intervalsUnlocked() ? " 🔓" : ""}</div>
+            ${this._versionNote ? html`<div class="version-note">${this._versionNote}</div>` : ""}
+          </div>
         </div>
         <div class="settings-content">
           ${this._renderContent()}
         </div>
       </div>
     `;
+  }
+
+  /* Jak w aplikacji: 5 szybkich kliknięć odblokowuje listy czasu bez dolnych limitów. */
+  _onVersionClick() {
+    const result = registerVersionClick();
+    if (!result) {
+      return;
+    }
+    this._versionNote = result === "unlocked" ? PL("Modules unlocked") : PL("Modules already unlocked");
+    this.requestUpdate();
+    clearTimeout(this._versionNoteTimer);
+    this._versionNoteTimer = setTimeout(() => {
+      this._versionNote = null;
+      this.requestUpdate();
+    }, 3000);
   }
 
   _selectPanel(id) {
@@ -745,6 +782,15 @@ class MeshSettingsLora extends LitElement {
               .min=${0}
               .step=${0.001}
               @change=${(e) => this._updateField("override_frequency", e.detail.value)}
+            ></mesh-number-input>
+            <mesh-number-input
+              .label=${PL("Frequency Offset (kHz)")}
+              .description=${PL("Shifts the operating frequency by this many kHz, e.g. to correct a radio crystal error. 0 means no offset.")}
+              .value=${Math.round((d.frequency_offset ?? 0) * 1000 * 1000) / 1000}
+              .min=${-1000}
+              .max=${1000}
+              .step=${0.001}
+              @change=${(e) => this._updateField("frequency_offset", Math.max(-1000, Math.min(1000, e.detail.value)) / 1000)}
             ></mesh-number-input>
             ${usePreset ? this._renderCodingRate(d) : ""}
             ${usePreset
@@ -1800,13 +1846,12 @@ class MeshSettingsDevice extends ConfigSectionPanel {
               @change=${(e) => this._updateField("rebroadcast_mode", e.detail.value)}
             ></mesh-select>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="node_info" .minSecs=${0}
               .label=${PL("Node Info Broadcast Secs")}
               .description=${PL("How often to broadcast node info (seconds, 0 = default)")}
               .value=${d.node_info_broadcast_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("node_info_broadcast_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
             <mesh-number-input
               .label=${PL("Button GPIO")}
@@ -1897,13 +1942,12 @@ class MeshSettingsPosition extends ConfigSectionPanel {
               @change=${(e) => this._updateField("gps_mode", e.detail.value)}
             ></mesh-select>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="position_broadcast" .minSecs=${21600}
               .label=${PL("Position Broadcast Secs")}
               .description=${PL("How often to broadcast position (seconds, 0 = default)")}
               .value=${d.position_broadcast_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("position_broadcast_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
             <mesh-number-input
               .label=${PL("Broadcast Smart Min Distance (m)")}
@@ -1913,21 +1957,19 @@ class MeshSettingsPosition extends ConfigSectionPanel {
               @change=${(e) => this._updateField("broadcast_smart_minimum_distance", e.detail.value)}
             ></mesh-number-input>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="smart_minimum" .minSecs=${0}
               .label=${PL("Broadcast Smart Min Interval (secs)")}
               .description=${PL("Min interval between smart broadcasts")}
               .value=${d.broadcast_smart_minimum_interval_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("broadcast_smart_minimum_interval_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="gps_update" .minSecs=${0}
               .label=${PL("GPS Update Interval (secs)")}
               .description=${PL("How often the GPS hardware checks position")}
               .value=${d.gps_update_interval ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("gps_update_interval", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
             <mesh-number-input
               .label=${PL("RX GPIO")}
@@ -2039,37 +2081,33 @@ class MeshSettingsPower extends ConfigSectionPanel {
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
-            <mesh-number-input
+            <mesh-interval-select .kind="all" .minSecs=${0}
               .label=${PL("On Battery Shutdown After (secs)")}
               .description=${PL("Auto-shutdown after this many seconds on battery (0 = disabled)")}
               .value=${d.on_battery_shutdown_after_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("on_battery_shutdown_after_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="nag_timeout" .minSecs=${0}
               .label=${PL("Min Wake Secs")}
               .description=${PL("Minimum time to stay awake (seconds)")}
               .value=${d.min_wake_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("min_wake_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="all" .minSecs=${0}
               .label=${PL("Light Sleep Interval (secs)")}
               .description=${PL("Light sleep interval for power saving")}
               .value=${d.ls_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("ls_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="nag_timeout" .minSecs=${0}
               .label=${PL("Wait Bluetooth Secs")}
               .description=${PL("Seconds to wait for Bluetooth before sleeping")}
               .value=${d.wait_bluetooth_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("wait_bluetooth_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
             <mesh-number-input
               .label=${PL("ADC Multiplier Override")}
@@ -2265,21 +2303,19 @@ class MeshSettingsDisplay extends ConfigSectionPanel {
         </div>
         <div class="settings-panel-body">
           <div class="form-grid">
-            <mesh-number-input
+            <mesh-interval-select .kind="screen_on" .minSecs=${0}
               .label=${PL("Screen On Secs")}
               .description=${PL("How long the screen stays on (0 = always on)")}
               .value=${d.screen_on_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("screen_on_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
-            <mesh-number-input
+            <mesh-interval-select .kind="screen_carousel" .minSecs=${0}
               .label=${PL("Auto Carousel Secs")}
               .description=${PL("Seconds between auto-cycling pages (0 = disabled)")}
               .value=${d.auto_screen_carousel_secs ?? 0}
-              .min=${0}
               @change=${(e) => this._updateField("auto_screen_carousel_secs", e.detail.value)}
-            ></mesh-number-input>
+            ></mesh-interval-select>
 
             <mesh-select
               .label=${PL("Display Units")}

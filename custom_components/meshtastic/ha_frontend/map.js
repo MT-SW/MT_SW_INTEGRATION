@@ -1083,6 +1083,28 @@ class MeshMapTab extends LitElement {
   }
 }
 
+/* Dla małych map w szczegółach węzła (minimap.js): ten sam Leaflet, te same
+   ustawienia kafli co na zakładce Mapa — dostawcy kafli nie zmieniamy. */
+export function resolveTileSpec(settings, dark = false) {
+  const preset = TILE_PRESETS[settings.preset] || TILE_PRESETS[DEFAULT_PRESET];
+  let url = preset.isCustom ? (settings.customUrl || "").trim() : preset.url;
+  if (preset.darkUrl && dark) {
+    url = preset.darkUrl;
+  }
+  const key = settings.keys && settings.keys[settings.preset];
+  if (preset.needsKey && key && url) {
+    url += `${url.includes("?") ? "&" : "?"}${preset.keyParam || "key"}=${encodeURIComponent(key)}`;
+  }
+  return {
+    url,
+    attribution: preset.isCustom ? OSM_ATTR : preset.attribution,
+    maxZoom: preset.maxZoom || 19,
+    referrerPolicy: preset.referrerPolicy || false,
+  };
+}
+
+export { loadLeafletScript, ensureLeafletCss, loadTileSettings };
+
 if (!customElements.get("mesh-map-tab")) {
   customElements.define("mesh-map-tab", MeshMapTab);
 }

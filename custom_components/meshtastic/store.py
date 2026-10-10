@@ -62,13 +62,20 @@ MAX_MESSAGES = 2000
 MAX_TIMESERIES_POINTS = 1500
 # Wykres skoków w czasie potrzebuje dłuższej historii niż lista ostatnich tras.
 MAX_TRACEROUTES_PER_NODE = 50
-MAX_NODE_HISTORY_POINTS = 300
+# Historia węzła jest ograniczana wiekiem (min. 30 dni), a nie samą liczbą punktów.
+# Punkty od innych węzłów zapisujemy tak, jak przychodzą. Tylko własna bramka
+# (która raportuje bardzo często) ma ograniczenie: nie częściej niż co 30 minut.
+# Jakość sygnału liczy się z każdego pakietu, więc tam odstęp to 5 minut.
+# Twardy limit chroni plik przed węzłem, który nadaje bez przerwy.
+HISTORY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+MAX_NODE_HISTORY_POINTS = 5000
+GATEWAY_HISTORY_MIN_GAP_MS = 30 * 60 * 1000
+SIGNAL_HISTORY_MIN_GAP_MS = 5 * 60 * 1000
 KEY_LENGTH = 32  # długość klucza publicznego X25519
 NODE_STATUS_PORT = 36  # PortNum.NODE_STATUS_APP: nazwa może być nieznana starszemu protobufowi
 # Jakość sygnału zbieramy z każdego pakietu od węzła, więc serii jest więcej niż
 # w telemetrii; na dysk trafia jednak nie częściej niż co 5 minut, żeby ciągły
 # ruch w eterze nie przepisywał pliku co kilka sekund.
-MAX_SIGNAL_HISTORY_POINTS = 1000
 SIGNAL_SAVE_INTERVAL_MS = 5 * 60 * 1000
 # Próbkujemy z koordynatora, nie ze zdarzeń telemetrii — dzięki temu wykresy
 # rosną także wtedy, gdy nikt nie ma otwartego panelu.
@@ -864,6 +871,23 @@ class PanelStore:
             return
         if position is not None and source != "persisted":
             self.remember_gateway_position(position)
+        self._note_gateway_position_empty(client)
+
+    def _note_gateway_position_empty(self, client: Any) -> None:
+        """Gdy radio zgłasza stałą pozycję, a nie podaje współrzędnych — zapisz to w historii (raz na zmianę)."""
+        try:
+            interface = client.interface
+            gateway_num = interface.my_node_num()
+            if gateway_num is None or not interface.connected_node_ready_for_position():
+                return
+            if interface.connected_node_fixed_position() is not None:
+                return
+            series = self._node_history.get(str(gateway_num), {}).get("position", [])
+            if series and series[-1].get("empty"):
+                return
+            self._record_node_point(gateway_num, "position", {"latitude": None, "longitude": None, "altitude": None, "empty": True})
+        except Exception:  # noqa: BLE001 - best-effort
+            LOGGER.debug("Nie udało się zapisać pustej pozycji w historii", exc_info=True)
 
     def _handle_position(self, event: Event) -> None:
         node_id = event.data.get(ATTR_EVENT_MESHTASTIC_API_NODE)
@@ -883,12 +907,30 @@ class PanelStore:
             },
         )
 
+    def _gateway_num(self) -> Any:
+        gateway_node = getattr(getattr(self._entry, "runtime_data", None), "gateway_node", None) or {}
+        return gateway_node.get("num")
+
     def _record_node_point(self, node_id: Any, kind: str, point: dict[str, Any], *, persist: bool = True) -> None:
         series = self._node_history.setdefault(str(node_id), {}).setdefault(kind, [])
-        series.append({"ts": _now_ms(), **point})
-        limit = MAX_SIGNAL_HISTORY_POINTS if kind == "signal" else MAX_NODE_HISTORY_POINTS
-        if len(series) > limit:
-            del series[: len(series) - limit]
+        now = _now_ms()
+        if series and not point.get("empty"):
+            gap = 0
+            if kind == "signal":
+                gap = SIGNAL_HISTORY_MIN_GAP_MS
+            elif node_id is not None and node_id == self._gateway_num():
+                gap = GATEWAY_HISTORY_MIN_GAP_MS
+            if gap and now - int(series[-1].get("ts", 0)) < gap:
+                return
+        series.append({"ts": now, **point})
+        cutoff = now - HISTORY_RETENTION_MS
+        drop = 0
+        while drop < len(series) - 1 and int(series[drop].get("ts", 0)) < cutoff:
+            drop += 1
+        if len(series) - drop > MAX_NODE_HISTORY_POINTS:
+            drop = len(series) - MAX_NODE_HISTORY_POINTS
+        if drop:
+            del series[:drop]
         if persist:
             self._schedule_save()
 

@@ -440,6 +440,12 @@ class MeshInterface:
                     }
         return None
 
+    def connected_node_ready_for_position(self) -> bool:
+        """True, gdy znamy konfigurację radia i wiemy, że ma ono ustawioną stałą pozycję."""
+        with contextlib.suppress(Exception):
+            return bool(self._connected_node_local_config.position.fixed_position)
+        return False
+
     def own_position_known(self) -> bool:
         return self.connected_node_fixed_position() is not None
 
@@ -467,13 +473,13 @@ class MeshInterface:
         return known
 
     def log_own_node_diagnostics(self) -> None:
-        """Do logu (INFO): co wiemy o własnym węźle i co radio przysłało — gdy pozycji brak."""
+        """Do logu (DEBUG): co wiemy o własnym węźle i co radio przysłało — gdy pozycji brak."""
         with contextlib.suppress(Exception):
             node = self._node_database.get(self.my_node_num()) or {}
             local_position = None
             with contextlib.suppress(Exception):
                 local_position = google.protobuf.json_format.MessageToDict(self._connected_node_local_config.position)
-            self._logger.warning(
+            self._logger.debug(
                 "DIAGNOSTYKA własnego węzła: num=%s, wpisów NodeInfo odebranych=%s, baza węzłów=%s, "
                 "własny wpis z radia=%s, klucze wpisu w bazie=%s, position w bazie=%s, config.position=%s, "
                 "pakietów POSITION_APP odebranych=%s (od własnego węzła=%s), ostatni własny pakiet=%s, "
@@ -1198,12 +1204,12 @@ class MeshInterface:
                 if node_id == self.my_node_num():
                     # diagnostyka: co radio samo podało o pozycji własnego węzła
                     try:
-                        self._logger.warning(
+                        self._logger.debug(
                             "Własny węzeł z radia — surowe bajty wpisu (hex)=%s", node_info.SerializeToString().hex()
                         )
                     except Exception as err:  # noqa: BLE001
-                        self._logger.warning("Nie udało się zapisać surowych bajtów wpisu: %s", err)
-                    self._logger.warning(
+                        self._logger.debug("Nie udało się zapisać surowych bajtów wpisu: %s", err)
+                    self._logger.debug(
                         "Własny węzeł z radia: pozycja=%s (poprawna: %s)",
                         node_info_dict.get("position"),
                         gwpos.normalize_position(node_info_dict.get("position")) is not None,

@@ -906,6 +906,12 @@ const PL_STRINGS = {
   "Images from links are downloaded in full resolution and shown under the message text. The server behind a link sees this browser's IP address. When off, an image loads after you click \"Load image\".": "Obrazki z linków są pobierane w pełnej rozdzielczości i pokazywane pod tekstem wiadomości. Serwer, na który wskazuje link, widzi adres IP tej przeglądarki. Gdy wyłączone, obrazek ładuje się po kliknięciu „Załaduj obrazek”.",
   "Could not save the setting.": "Nie udało się zapisać ustawienia.",
 
+  "Version": "Wersja",
+  "Modules unlocked": "Moduły odblokowane",
+  "Modules already unlocked": "Moduły już odblokowane",
+  "Frequency Offset (kHz)": "Przesunięcie częstotliwości (kHz)",
+  "Shifts the operating frequency by this many kHz, e.g. to correct a radio crystal error. 0 means no offset.":
+    "Przesuwa częstotliwość pracy o podaną liczbę kHz, np. aby skorygować błąd kwarcu radia. 0 oznacza brak przesunięcia.",
   /* ── Debugowanie (treść panelu: debug-logs.js, pisana po polsku) ── */
   "Debug": "Debugowanie",
 };
