@@ -40,14 +40,13 @@ const TEXT = {
     short_name: "Nazwa krótka (max 4)",
     add: "Dodaj",
     gpio: "GPIO",
-    pin: "Pin GPIO",
-    pin_mask: "Maska: {m}",
+    pin: "Numer pinu GPIO",
     high: "1",
     low: "0",
     read: "Odczyt",
     gpio_help_title: "Jak działa sterowanie GPIO",
     gpio_help:
-      "1. Na węźle docelowym włącz moduł „Zdalny sprzęt” (Remote Hardware) i w polu „Dostępne piny” wpisz piny, którymi wolno sterować (albo zezwól na dowolne).\n2. Na obu urządzeniach, Twoim i docelowym, utwórz kanał o nazwie „gpio” na pozycji 1 (zaraz po kanale głównym, który ma pozycję 0) i ustaw na obu ten sam klucz (PSK).\n3. Tutaj wpisz numer pinu i użyj przycisków: 1 włącza pin, 0 wyłącza go, a Odczyt sprawdza jego stan.\nAplikacja zawsze wysyła polecenia kanałem na pozycji 1. Bez tego kanału albo bez włączonego modułu polecenie nie zadziała, a przy odczycie zobaczysz brak odpowiedzi.",
+      "1. Na węźle docelowym włącz moduł „Zdalny sprzęt” (Remote Hardware) i w polu „Dostępne piny” wpisz piny, którymi wolno sterować (albo zezwól na dowolne).\n2. Na obu urządzeniach, Twoim i docelowym, utwórz kanał o nazwie „gpio” na pozycji 1 (zaraz po kanale głównym, który ma pozycję 0) i ustaw na obu ten sam klucz (PSK).\n3. Tutaj wpisz numer pinu i użyj przycisków: „1” ustawia na pinie stan wysoki (włącza go), „0” ustawia stan niski (wyłącza go), a „Odczyt” sprawdza, jaki stan jest teraz (1 = włączony, 0 = wyłączony).\nIntegracja zawsze wysyła polecenia kanałem na pozycji 1. Bez tego kanału albo bez włączonego modułu polecenie nie zadziała, a przy odczycie zobaczysz brak odpowiedzi.",
     gpio_state: "Odczyt GPIO: {v}",
     gpio_no_response: "Brak odpowiedzi ze zdalnego radia — może jeszcze dotrzeć.",
     settings: "Ustawienia zdalnego węzła",
@@ -94,13 +93,12 @@ const TEXT = {
     add: "Add",
     gpio: "GPIO",
     pin: "GPIO pin",
-    pin_mask: "Mask: {m}",
-    high: "On",
-    low: "Off",
+    high: "1",
+    low: "0",
     read: "Read",
     gpio_help_title: "How GPIO control works",
     gpio_help:
-      "1. On the target node, enable the Remote Hardware module and list the pins it may control under Available pins (or allow any pin).\n2. On both devices, yours and the target, create a channel named gpio at position 1 (right after the primary channel at position 0) and set the same key (PSK) on both.\n3. Enter the pin number here and use the buttons: On sets the pin high, Off sets it low, and Read checks its state.\nThe gateway always sends the commands on the channel at position 1. Without that channel, or without the module enabled, the command will not work and a read shows no response.",
+      "1. On the target node, enable the Remote Hardware module and list the pins it may control under Available pins (or allow any pin).\n2. On both devices, yours and the target, create a channel named gpio at position 1 (right after the primary channel at position 0) and set the same key (PSK) on both.\n3. Enter the pin number here and use the buttons: 1 sets the pin high (turns it on), 0 sets it low (turns it off), and Read checks its current state (1 = on, 0 = off).\nThe integration always sends the commands on the channel at position 1. Without that channel, or without the module enabled, the command will not work and a read shows no response.",
     gpio_state: "GPIO read: {v}",
     gpio_no_response: "No response from node",
     settings: "Remote node settings",
@@ -538,6 +536,7 @@ class MeshRemoteAdmin extends LitElement {
     return html`
       <div class="sub">${this._tr("gpio")}</div>
       <div class="row">
+        <span class="value">${this._tr("pin")}:</span>
         <input
           class="short"
           type="number"
@@ -547,9 +546,6 @@ class MeshRemoteAdmin extends LitElement {
           .value=${String(this._pin)}
           @input=${(e) => (this._pin = Number(e.target.value))}
         />
-        ${Number.isInteger(this._pin) && this._pin >= 0 && this._pin <= 62
-          ? html`<span class="value">${this._tr("pin_mask", { m: "0x" + (1n << BigInt(this._pin)).toString(16) })}</span>`
-          : ""}
         <button ?disabled=${busy} @click=${() => this._gpioWrite(true)}>${this._tr("high")}</button>
         <button ?disabled=${busy} @click=${() => this._gpioWrite(false)}>${this._tr("low")}</button>
         <button ?disabled=${busy} @click=${() => this._gpioRead()}>${this._tr("read")}</button>
