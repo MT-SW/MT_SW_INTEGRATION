@@ -939,7 +939,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         from .node_merge import find_merge_plans  # noqa: PLC0415
 
         runtime = getattr(self.config_entry, "runtime_data", None)
-        if runtime is None or not runtime.stats.enabled:
+        if runtime is None:
             return self.async_abort(reason="not_loaded")
         if user_input is None:
             try:
@@ -1076,12 +1076,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         current_filter_node_option = (
             self.options[CONF_OPTION_FILTER_NODES]
             if CONF_OPTION_FILTER_NODES in self.options
-            else self.config_entry.options[CONF_OPTION_FILTER_NODES]
+            else self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])
         )
         already_selected_node_ids = [el["id"] for el in current_filter_node_option]
 
         if user_input is not None:
-            new_data = {}
+            # zachowaj pozostałe opcje (np. sniffer MQTT), zmieniamy tylko to, co jest w tym formularzu
+            new_data = dict(self.config_entry.options)
             selected_ids = {int(value) for value in user_input.get(CONF_OPTION_FILTER_NODES, [])}
             # kolejność i zapisane dane (identity_key) istniejących wpisów zostają
             updated_filter_node_option = [

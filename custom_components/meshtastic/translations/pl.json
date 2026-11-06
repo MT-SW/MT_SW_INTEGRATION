@@ -215,7 +215,7 @@
     },
     "abort": {
       "no_devices": "Nie dodano jeszcze żadnych urządzeń.",
-      "not_loaded": "Statystyki są wyłączone lub integracja jeszcze się nie uruchomiła.",
+      "not_loaded": "Integracja jeszcze się nie uruchomiła.",
       "merge_done": "Gotowe. Zmienionych wpisów encji: {count}. Szczegóły w logu Home Assistanta (INFO).",
       "merge_none": "Nie znaleziono duplikatów do scalenia."
     }

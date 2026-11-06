@@ -215,7 +215,7 @@
     },
     "abort": {
       "no_devices": "No devices have been added yet.",
-      "not_loaded": "Statistics are disabled or the integration has not started yet.",
+      "not_loaded": "The integration has not started yet.",
       "merge_done": "Done. Entity registry entries changed: {count}. Details are in the Home Assistant log (INFO).",
       "merge_none": "No duplicates to merge were found."
     }

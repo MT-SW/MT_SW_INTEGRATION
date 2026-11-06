@@ -88,13 +88,15 @@ def find_filter_successors(
     protected = set(protected_nums)
     old_entries = []
     for el in entries:
-        if el["id"] in node_infos or el["id"] in protected or not _is_keyless(el.get("identity_key")):
+        if el["id"] in protected or not _is_keyless(el.get("identity_key")):
             continue
+        # stary numer wciąż w bazie radia: następca musi się odzywać wyraźnie później
+        old_heard = (node_infos[el["id"]].get("lastHeard") or 0) if el["id"] in node_infos else None
         name = (el.get("name") or "").strip()
         hw = str(el.get("hw_model") or "")
         if not name or not hw:
             continue
-        old_entries.append((el["id"], (name, (el.get("short_name") or "").strip(), hw)))
+        old_entries.append((el["id"], (name, (el.get("short_name") or "").strip(), hw), old_heard))
 
     cand_sigs = {}
     for num, info in node_infos.items():
@@ -104,9 +106,11 @@ def find_filter_successors(
 
     forward: dict[int, list[int]] = {}
     backward: dict[int, list[int]] = {}
-    for old_num, sig in old_entries:
+    for old_num, sig, old_heard in old_entries:
         for num, csig in cand_sigs.items():
             if num == old_num or num in protected:
+                continue
+            if old_heard is not None and not (old_heard + STALE_SUPERSEDED_SECONDS < (node_infos[num].get("lastHeard") or 0)):
                 continue
             if _sig_matches(sig, csig):
                 forward.setdefault(old_num, []).append(num)

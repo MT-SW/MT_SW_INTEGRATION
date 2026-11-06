@@ -428,8 +428,8 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
 
         # Offline entries without a public key: follow them by long/short name +
         # hardware model when exactly one live node matches (see identity.py).
+        gateway_num = (getattr(getattr(self.config_entry, "runtime_data", None), "gateway_node", None) or {}).get("num")
         try:
-            gateway_num = (getattr(self.config_entry.runtime_data, "gateway_node", None) or {}).get("num")
             successors = find_filter_successors(filter_nodes, node_infos, [gateway_num] if gateway_num else [])
         except Exception:  # noqa: BLE001
             self._logger.warning("Matching nodes by name failed", exc_info=True)
@@ -440,6 +440,45 @@ class MeshtasticDataUpdateCoordinator(DataUpdateCoordinator):
         filter_changed = False
         for el_config in filter_nodes:
             tracked_num = el_config["id"]
+            # Ten sam klucz publiczny pod nowym numerem, a stary numer jeszcze siedzi w bazie radia:
+            # idziemy za węzłem na nowy numer (to samo urządzenie, zbieranie trwa dalej).
+            if tracked_num in node_infos and tracked_num != gateway_num:
+                same_key = node_identity_key(tracked_num, node_infos[tracked_num])
+                newer_num = live_identity_index.get(same_key) if same_key.startswith("pk_") else None
+                if newer_num is not None and live_identity_last_heard[same_key] <= (
+                    node_infos[tracked_num].get("lastHeard") or 0
+                ):
+                    newer_num = None
+                if newer_num is None and not same_key.startswith("pk_") and tracked_num in successors:
+                    # bez klucza: te same nazwy i model, a stary numer od dawna milczy
+                    newer_num = successors[tracked_num]
+                    same_key = node_identity_key(newer_num, node_infos[newer_num])
+                if (
+                    newer_num is not None
+                    and newer_num != tracked_num
+                    and newer_num not in filter_node_nums
+                ):
+                    self._logger.info(
+                        "Node %d has a new number %d (same public key %s) — continuing collection under the new number",
+                        tracked_num,
+                        newer_num,
+                        same_key,
+                    )
+                    resolved_node_nums.add(newer_num)
+                    self._node_id_migrations[tracked_num] = newer_num
+                    self.hass.bus.async_fire(
+                        EVENT_MESHTASTIC_NODE_IDENTITY_MIGRATED,
+                        {
+                            ATTR_EVENT_MESHTASTIC_IDENTITY_CONFIG_ENTRY_ID: self.config_entry.entry_id,
+                            ATTR_EVENT_MESHTASTIC_IDENTITY_KEY: same_key,
+                            ATTR_EVENT_MESHTASTIC_IDENTITY_OLD_NODE: tracked_num,
+                            ATTR_EVENT_MESHTASTIC_IDENTITY_NEW_NODE: newer_num,
+                        },
+                    )
+                    self._queue_removal(tracked_num)
+                    updated_filter_nodes.append({**el_config, "id": newer_num, "identity_key": same_key})
+                    filter_changed = True
+                    continue
             if tracked_num in node_infos:
                 resolved_node_nums.add(tracked_num)
                 # keep the stored identity in sync with live data — fills
