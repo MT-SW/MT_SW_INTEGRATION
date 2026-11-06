@@ -46,6 +46,23 @@ const TEXT = {
     active: "Aktywne w 24 h",
     favorites: "Ulubione",
     export: "Zapisz wyniki",
+    groups: "Grupy węzłów",
+    group_all: "Wszystkie węzły",
+    group_new: "Nazwa nowej grupy",
+    group_create: "Utwórz z pokazanych",
+    group_add: "Dodaj pokazane do grupy",
+    group_remove: "Usuń pokazane z grupy",
+    group_delete: "Usuń grupę",
+    group_help: "Grupy są Twoje, zapisują się w Home Assistancie i służą do filtrowania oraz zbiorczego śledzenia. Wybierz grupę, a lista i wyniki pokażą tylko jej węzły.",
+    group_saved: "Grupy zapisane.",
+    group_failed: "Nie udało się zapisać grup.",
+    charts: "Rozkłady",
+    ch_snr: "Sygnał (SNR)",
+    ch_battery: "Bateria",
+    ch_activity: "Ostatnio słyszany",
+    b_snr1: "poniżej −10 dB", b_snr2: "−10…0 dB", b_snr3: "0…5 dB", b_snr4: "powyżej 5 dB",
+    b_bat1: "poniżej 20%", b_bat2: "20–50%", b_bat3: "50–100%", b_bat4: "zasilanie",
+    b_act1: "do 2 h", b_act2: "do 24 h", b_act3: "do 7 dni", b_act4: "dawniej / nigdy",
     bulk: "Śledzenie w Home Assistancie",
     track_fav: "Śledź ulubione",
     track_shown: "Śledź pokazane",
@@ -90,6 +107,23 @@ const TEXT = {
     active: "Active in 24 h",
     favorites: "Favorites",
     export: "Save results",
+    groups: "Node groups",
+    group_all: "All nodes",
+    group_new: "New group name",
+    group_create: "Create from shown",
+    group_add: "Add shown to group",
+    group_remove: "Remove shown from group",
+    group_delete: "Delete group",
+    group_help: "Groups are yours, are stored in Home Assistant and are used for filtering and bulk tracking. Pick a group and the list and results show only its nodes.",
+    group_saved: "Groups saved.",
+    group_failed: "Could not save groups.",
+    charts: "Distributions",
+    ch_snr: "Signal (SNR)",
+    ch_battery: "Battery",
+    ch_activity: "Last heard",
+    b_snr1: "below −10 dB", b_snr2: "−10…0 dB", b_snr3: "0…5 dB", b_snr4: "above 5 dB",
+    b_bat1: "below 20%", b_bat2: "20–50%", b_bat3: "50–100%", b_bat4: "powered",
+    b_act1: "up to 2 h", b_act2: "up to 24 h", b_act3: "up to 7 days", b_act4: "older / never",
     bulk: "Tracking in Home Assistant",
     track_fav: "Track favorites",
     track_shown: "Track shown",
@@ -141,6 +175,9 @@ class MeshHealthTab extends LitElement {
       _hideIgnored: { type: Boolean },
       _onlyActive: { type: Boolean },
       _notice: { type: String },
+      _groups: { type: Object },
+      _group: { type: String },
+      _groupName: { type: String },
     };
   }
 
@@ -153,6 +190,61 @@ class MeshHealthTab extends LitElement {
     this._hideIgnored = true;
     this._onlyActive = false;
     this._notice = "";
+    this._groups = {};
+    this._group = "";
+    this._groupName = "";
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._loadGroups();
+  }
+
+  async _loadGroups() {
+    try {
+      const r = await this.hass.callWS({ type: "meshtastic/ui_settings" });
+      this._groups = (r && r.settings && r.settings.node_groups) || {};
+    } catch (err) {
+      console.warn("MT_SW: grupy węzłów", err);
+    }
+  }
+
+  async _saveGroups(groups) {
+    try {
+      const r = await this.hass.callWS({ type: "meshtastic/ui_settings_set", settings: { node_groups: groups } });
+      this._groups = (r && r.settings && r.settings.node_groups) || groups;
+      this._notice = this._tr("group_saved");
+    } catch (err) {
+      this._notice = (err && err.message) || this._tr("group_failed");
+    }
+  }
+
+  _shownIds() {
+    return this._rows().map((r) => r.node.node_id);
+  }
+
+  _createGroup() {
+    const name = this._groupName.trim().slice(0, 40);
+    if (!name) return;
+    const groups = { ...this._groups, [name]: [...new Set(this._shownIds())].slice(0, 1000) };
+    this._groupName = "";
+    this._group = name;
+    return this._saveGroups(groups);
+  }
+
+  _editGroup(add) {
+    if (!this._group || !this._groups[this._group]) return;
+    const ids = new Set(this._groups[this._group]);
+    this._shownIds().forEach((id) => (add ? ids.add(id) : ids.delete(id)));
+    return this._saveGroups({ ...this._groups, [this._group]: [...ids].slice(0, 1000) });
+  }
+
+  _deleteGroup() {
+    if (!this._group) return;
+    const groups = { ...this._groups };
+    delete groups[this._group];
+    this._group = "";
+    return this._saveGroups(groups);
   }
 
   _tr(key) {
@@ -210,7 +302,9 @@ class MeshHealthTab extends LitElement {
 
   _rows() {
     const q = this._search.trim().toLowerCase();
+    const members = this._group && this._groups[this._group] ? new Set(this._groups[this._group]) : null;
     return (this.nodes || [])
+      .filter((n) => !members || members.has(n.node_id))
       .filter((n) => !(this._onlyFav && !n.is_favorite))
       .filter((n) => !(this._hideIgnored && n.is_ignored))
       .map((n) => this._row(n))
@@ -302,6 +396,14 @@ class MeshHealthTab extends LitElement {
       const h = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
       const text = `<!doctype html><meta charset="utf-8"><title>${h(this._tr("title"))}</title><style>body{font-family:sans-serif}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 8px}th{background:#eee}</style><h1>${h(this._tr("title"))} (${stamp})</h1><table><tr>${head.map((x) => `<th>${h(x)}</th>`).join("")}</tr>${cells.map((r) => `<tr>${r.map((x) => `<td>${h(x)}</td>`).join("")}</tr>`).join("")}</table>`;
       this._download(`${base}.html`, "text/html", text);
+    } else if (kind === "pdf") {
+      const h = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const w = window.open("", "_blank");
+      if (!w) return;
+      w.document.write(`<!doctype html><meta charset="utf-8"><title>${h(this._tr("title"))}</title><style>body{font-family:sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:3px 6px;text-align:left}th{background:#eee}</style><h1>${h(this._tr("title"))} (${stamp})</h1><table><tr>${head.map((x) => `<th>${h(x)}</th>`).join("")}</tr>${cells.map((r) => `<tr>${r.map((x) => `<td>${h(x)}</td>`).join("")}</tr>`).join("")}</table>`);
+      w.document.close();
+      w.focus();
+      w.print();
     } else {
       const text = `${this._tr("title")} (${stamp})\n\n${cells.map((r) => r.join(" | ")).join("\n")}\n`;
       this._download(`${base}.txt`, "text/plain", text);
@@ -331,6 +433,63 @@ class MeshHealthTab extends LitElement {
         <text x="70" y="68" text-anchor="middle" class="pct">${pct}%</text>
         <text x="70" y="88" text-anchor="middle" class="sub">${this._tr("score")}</text>
       </svg>
+    `;
+  }
+
+  /* Rozkład w czterech przedziałach, jako poziome słupki. */
+  _dist(titleKey, labels, counts) {
+    const max = Math.max(1, ...counts);
+    return html`
+      <div class="rank">
+        <div class="rank-title">${this._tr(titleKey)}</div>
+        ${labels.map(
+          (l, i) => html`<div class="bar-row">
+            <span class="bl">${this._tr(l)}</span>
+            <span class="bt"><i style="width:${(counts[i] / max) * 100}%"></i></span>
+            <b>${counts[i]}</b>
+          </div>`
+        )}
+      </div>
+    `;
+  }
+
+  _distributions(rows) {
+    const bucket = (values, fn) => {
+      const c = [0, 0, 0, 0];
+      values.forEach((v) => (c[fn(v)] += 1));
+      return c;
+    };
+    const snr = bucket(rows.filter((r) => r.snr !== null).map((r) => r.snr), (v) => (v < -10 ? 0 : v < 0 ? 1 : v < 5 ? 2 : 3));
+    const bat = bucket(rows.filter((r) => r.battery !== null).map((r) => r.battery), (v) => (v > 100 ? 3 : v < 20 ? 0 : v < 50 ? 1 : 2));
+    const act = bucket(rows.map((r) => r.age), (v) => (v === null ? 3 : v < 7200 ? 0 : v < DAY ? 1 : v < 7 * DAY ? 2 : 3));
+    return html`<div class="ranks">
+      ${this._dist("ch_snr", ["b_snr1", "b_snr2", "b_snr3", "b_snr4"], snr)}
+      ${this._dist("ch_battery", ["b_bat1", "b_bat2", "b_bat3", "b_bat4"], bat)}
+      ${this._dist("ch_activity", ["b_act1", "b_act2", "b_act3", "b_act4"], act)}
+    </div>`;
+  }
+
+  _groupBar() {
+    const names = Object.keys(this._groups).sort((a, b) => a.localeCompare(b));
+    return html`
+      <h4>${this._tr("groups")}</h4>
+      <div class="bar">
+        <button class="chip ${this._group === "" ? "on" : ""}" @click=${() => (this._group = "")}>${this._tr("group_all")}</button>
+        ${names.map(
+          (n) => html`<button class="chip ${this._group === n ? "on" : ""}" @click=${() => (this._group = n)}>${n} <b>${this._groups[n].length}</b></button>`
+        )}
+      </div>
+      <div class="bar">
+        <input class="search" placeholder="${this._tr("group_new")}" maxlength="40" .value=${this._groupName}
+          @input=${(e) => (this._groupName = e.target.value)} />
+        <button class="chip" @click=${() => this._createGroup()}>${this._tr("group_create")}</button>
+        ${this._group
+          ? html`<button class="chip" @click=${() => this._editGroup(true)}>${this._tr("group_add")}</button>
+              <button class="chip" @click=${() => this._editGroup(false)}>${this._tr("group_remove")}</button>
+              <button class="chip" @click=${() => this._deleteGroup()}>${this._tr("group_delete")}</button>`
+          : ""}
+      </div>
+      <p class="legend">${this._tr("group_help")}</p>
     `;
   }
 
@@ -387,6 +546,10 @@ class MeshHealthTab extends LitElement {
           ${this._rank("silent", this._top(rows, "age", "desc"), (r) => this._fmtAge(r.age))}
         </div>
 
+        <h4>${this._tr("charts")}</h4>
+        ${this._distributions(rows)}
+        ${this._groupBar()}
+
         <div class="bar">
           ${this._chip("all", this._tr("filter_all"), rows.length)}
           ${this._chip("good", this._tr("good"), counts.good)}
@@ -426,7 +589,7 @@ class MeshHealthTab extends LitElement {
 
         <div class="bar">
           <span class="lbl">${this._tr("export")}:</span>
-          ${["csv", "md", "html", "txt"].map(
+          ${["csv", "md", "html", "txt", "pdf"].map(
             (k) => html`<button class="chip" @click=${() => this._export(k)}>${k.toUpperCase()}</button>`
           )}
         </div>
@@ -460,6 +623,10 @@ class MeshHealthTab extends LitElement {
       .rank-title { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 4px; }
       .rank-row { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; padding: 2px 0; }
       .rank-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bar-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
+      .bl { width: 110px; flex: none; color: var(--secondary-text-color); }
+      .bt { flex: 1; height: 10px; background: var(--divider-color); border-radius: 5px; overflow: hidden; }
+      .bt i { display: block; height: 100%; background: var(--primary-color); }
       .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
       .chip { appearance: none; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); border-radius: 16px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
       .chip.on { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }

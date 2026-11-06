@@ -2013,7 +2013,7 @@ async def ws_map_settings_set(
 UI_SETTINGS_VERSION = 1
 # Domyślnie włączone: panel działa na urządzeniu na stałe podłączonym do sieci, nie na telefonie
 # z pakietem danych. Wyłączone, obrazek ładuje się dopiero po kliknięciu (przycisk przy polu pisania).
-UI_SETTINGS_DEFAULTS: dict[str, Any] = {"auto_load_images": True}
+UI_SETTINGS_DEFAULTS: dict[str, Any] = {"auto_load_images": True, "node_groups": {}}
 
 
 def _ui_settings_store(hass: HomeAssistant) -> Store:
@@ -2041,7 +2041,16 @@ async def ws_ui_settings(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{WS_PREFIX}/ui_settings_set",
-        vol.Required("settings"): vol.Schema({vol.Optional("auto_load_images"): bool}),
+        vol.Required("settings"): vol.Schema(
+            {
+                vol.Optional("auto_load_images"): bool,
+                # własne grupy węzłów: nazwa grupy -> numery węzłów (do filtrowania i zbiorczego śledzenia)
+                vol.Optional("node_groups"): vol.All(
+                    {vol.All(str, vol.Length(min=1, max=40)): vol.All([int], vol.Length(max=1000))},
+                    vol.Length(max=50),
+                ),
+            }
+        ),
     }
 )
 @websocket_api.require_admin
