@@ -8,7 +8,6 @@ import "./intervals.js";
 import { registerVersionClick, intervalsUnlocked } from "./intervals.js";
 import { PL } from "./pl-settings.js";
 import "./modules.js";
-import "./collection.js";
 import "./sniffer-panel.js";
 import "./debug-logs.js";
 import "./nodedb-panel.js";
@@ -232,7 +231,6 @@ const NAV_ITEMS = [
     group: "Other",
     items: [
       { id: "mtsw_functions", label: "Funkcje MT_SW", icon: "mdi:star-box" },
-      { id: "collection", label: "Zbieranie danych", icon: "mdi:database-plus" },
       { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
       { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
       { id: "ota", label: PL("Firmware (OTA)"), icon: "mdi:update" },
@@ -617,8 +615,6 @@ export class MeshSettingsTab extends LitElement {
             }
           }}
         ></mtsw-functions-tab>`;
-      case "collection":
-        return html`<mtsw-collection-tab .wsCommand=${(type, data) => this._ws(type, data)}></mtsw-collection-tab>`;
       case "ota":
         return html`<mesh-settings-ota
           .hass=${this.hass}

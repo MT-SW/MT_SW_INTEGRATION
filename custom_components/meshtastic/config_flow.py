@@ -974,7 +974,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_merge_pick(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Krok 2 (dla każdej grupy): który węzeł zostaje; pozostałe znikają z listy i (opcjonalnie) z bazy radia."""
-        from .node_merge import apply_merge_plan, merge_tracked_list, plan_with_kept_node  # noqa: PLC0415
+        from .node_merge import apply_merge_plan, plan_with_kept_node  # noqa: PLC0415
 
         queue = getattr(self, "_merge_queue", [])
         if not queue:
@@ -991,7 +991,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             dropped = [n for n in plan.nums if n != kept and n != gateway]
             options = self._merge_options
             tracked = list(options.get(CONF_OPTION_FILTER_NODES, []))
-            new_tracked = merge_tracked_list(tracked, plan, kept, dropped, nodes)
+            info = nodes.get(kept) or {}
+            user = info.get("user") or {}
+            was_tracked = any(e["id"] in plan.nums for e in tracked)
+            new_tracked, seen_kept = [], False
+            for entry_el in tracked:
+                if entry_el["id"] == kept:
+                    seen_kept = True
+                    new_tracked.append({**entry_el, "identity_key": plan.target_key})
+                elif entry_el["id"] in dropped:
+                    continue
+                else:
+                    new_tracked.append(entry_el)
+            if was_tracked and not seen_kept:
+                template = next((e for e in tracked if e["id"] in dropped), {})
+                new_tracked.append(
+                    {
+                        **template,
+                        "id": kept,
+                        "name": user.get("longName") or template.get("name"),
+                        "short_name": user.get("shortName") or template.get("short_name"),
+                        "identity_key": plan.target_key,
+                    }
+                )
             options[CONF_OPTION_FILTER_NODES] = new_tracked
             if user_input.get("remove_from_radio", True):
                 self._merge_removals.extend(n for n in dropped if n in nodes)

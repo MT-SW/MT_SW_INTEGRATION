@@ -204,38 +204,3 @@ async def async_reconcile_nodes(
     except Exception:  # noqa: BLE001
         LOGGER.warning("Node identity reconciliation failed — continuing without it", exc_info=True)
     return changed_entities
-
-
-def merge_tracked_list(
-    tracked: list[dict[str, Any]],
-    plan: MergePlan,
-    kept: int,
-    dropped: typing.Iterable[int],
-    live_nodes: typing.Mapping[int, typing.Mapping[str, Any]],
-) -> list[dict[str, Any]]:
-    """Lista węzłów zbieranych po scaleniu: zostaje wybrany węzeł (z nowym kluczem), reszta znika."""
-    dropped = set(dropped)
-    user = (live_nodes.get(kept) or {}).get("user") or {}
-    was_tracked = any(e["id"] in plan.nums for e in tracked)
-    result: list[dict[str, Any]] = []
-    seen_kept = False
-    for el in tracked:
-        if el["id"] == kept:
-            seen_kept = True
-            result.append({**el, "identity_key": plan.target_key})
-        elif el["id"] in dropped:
-            continue
-        else:
-            result.append(el)
-    if was_tracked and not seen_kept:
-        template = next((e for e in tracked if e["id"] in dropped), {})
-        result.append(
-            {
-                **template,
-                "id": kept,
-                "name": user.get("longName") or template.get("name"),
-                "short_name": user.get("shortName") or template.get("short_name"),
-                "identity_key": plan.target_key,
-            }
-        )
-    return result

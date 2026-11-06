@@ -567,23 +567,6 @@ class MeshtasticPanel extends LitElement {
           const stats = await this.hass.callWS({ type: "meshtastic/storage_stats", entry_id: entryId });
           return { success: true, ...stats, nodes: (this._nodes || []).length };
         }
-        case "collection_state":
-          return await this.hass.callWS({ type: "meshtastic/collection_state", entry_id: entryId });
-        case "collection_track":
-          return await this.hass.callWS({
-            type: "meshtastic/set_tracked",
-            entry_id: entryId,
-            node_ids: data.node_ids,
-            tracked: data.tracked,
-          });
-        case "merge_apply":
-          return await this.hass.callWS({
-            type: "meshtastic/merge_apply",
-            entry_id: entryId,
-            survivor_id: data.survivor_id,
-            keep: data.keep,
-            remove_from_radio: data.remove_from_radio,
-          });
         case "retention_set": {
           await this.hass.callWS({
             type: "meshtastic/retention_set",
