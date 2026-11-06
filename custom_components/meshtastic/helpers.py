@@ -102,10 +102,14 @@ def stats_enabled(entry: Any) -> bool:
 def device_config_entry_ids(device: Any) -> set[str]:
     """Zbiór wpisów konfiguracji urządzenia — działa na starym i nowym HA.
 
-    Nowy HA oznacza pole `config_entries` jako przestarzałe (ostrzeżenie w logu),
-    a daje `config_entries_subentries`. Na starszym HA, który go nie ma,
-    używamy dawnego pola.
+    Najnowszy HA ma jedno `config_entry_id` (urządzenie należy do jednego wpisu),
+    a `config_entries` i `config_entries_subentries` oznacza jako przestarzałe
+    (ostrzeżenie w logu). Średnio nowy HA ma `config_entries_subentries`,
+    a starszy tylko dawne `config_entries`; używamy pierwszego, które istnieje.
     """
+    single = getattr(device, "config_entry_id", None)
+    if single is not None:
+        return {single}
     subentries = getattr(device, "config_entries_subentries", None)
     if subentries is not None:
         return set(subentries)
