@@ -233,10 +233,10 @@
       },
       "areas": {
         "title": "Area management",
-        "description": "Collected devices: {count}. The Home Assistant areas you already have are groups here.",
+        "description": "Collected devices: {count}. The Home Assistant areas you already have are groups in the panel (they hold devices you already collect).",
         "menu_options": {
           "area_create": "Create an area",
-          "area_collect": "Add devices from areas and sets to collection",
+          "area_collect": "Add to collection from sets and custom groups",
           "area_delete": "Delete custom groups"
         }
       },
@@ -249,10 +249,10 @@
         }
       },
       "area_collect": {
-        "title": "Add to collection from areas and sets",
+        "title": "Add to collection from sets and custom groups",
         "description": "Collected devices: {count}. This window only ADDS devices to collection, it removes nothing. The number next to a set is devices you are not yet collecting.",
         "data": {
-          "areas": "Areas and custom groups",
+          "areas": "Custom groups",
           "presets": "Ready-made sets"
         }
       },

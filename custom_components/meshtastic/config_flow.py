@@ -1071,7 +1071,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(step_id="area_create", data_schema=schema)
 
     async def async_step_area_collect(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Dodaj do zbierania urządzenia z wybranych obszarów, własnych grup albo gotowych zestawów (nic nie usuwa)."""
+        """Dodaj do zbierania urządzenia z własnych grup albo gotowych zestawów (nic nie usuwa). Obszary HA tu nie pasują: mają tylko już zbierane urządzenia."""
         from .groups import async_all_groups  # noqa: PLC0415
 
         loaded = await self._load_radio()
@@ -1081,7 +1081,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         polish = self._is_polish()
         tracked = [deepcopy(el) for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])]
         tracked_ids = {el["id"] for el in tracked}
-        all_groups = await async_all_groups(self.hass, self.config_entry)
+        all_groups = await async_all_groups(self.hass, self.config_entry, include_areas=False)
 
         if user_input is not None:
             wanted: set[int] = set()

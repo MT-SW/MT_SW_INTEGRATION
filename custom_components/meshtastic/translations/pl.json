@@ -233,10 +233,10 @@
       },
       "areas": {
         "title": "Zarządzanie obszarami",
-        "description": "Zbierane urządzenia: {count}. Obszary Home Assistanta, które już masz, są tu grupami.",
+        "description": "Zbierane urządzenia: {count}. Obszary Home Assistanta, które już masz, są w panelu grupami (zawierają urządzenia, które już zbierasz).",
         "menu_options": {
           "area_create": "Utwórz obszar",
-          "area_collect": "Dodaj do zbierania urządzenia z obszarów i zestawów",
+          "area_collect": "Dodaj do zbierania z zestawów i własnych grup",
           "area_delete": "Usuń własne grupy"
         }
       },
@@ -249,10 +249,10 @@
         }
       },
       "area_collect": {
-        "title": "Dodaj do zbierania z obszarów i zestawów",
+        "title": "Dodaj do zbierania z zestawów i własnych grup",
         "description": "Zbierane urządzenia: {count}. To okno tylko DODAJE urządzenia do zbierania, niczego nie usuwa. Liczba przy zestawie to urządzenia, których jeszcze nie zbierasz.",
         "data": {
-          "areas": "Obszary i własne grupy",
+          "areas": "Własne grupy",
           "presets": "Gotowe zestawy"
         }
       },
