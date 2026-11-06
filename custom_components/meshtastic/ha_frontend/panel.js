@@ -572,7 +572,6 @@ class MeshtasticPanel extends LitElement {
             type: "meshtastic/retention_set",
             entry_id: entryId,
             retention_days: data.retention_days,
-            grace_days: data.grace_days,
           });
           return { success: true };
         }

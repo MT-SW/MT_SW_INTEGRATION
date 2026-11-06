@@ -1091,18 +1091,17 @@ async def ws_remove_node(hass, connection, msg) -> None:
         vol.Required("type"): f"{WS_PREFIX}/retention_set",
         vol.Required("entry_id"): str,
         vol.Required("retention_days"): vol.All(int, vol.Range(min=1, max=60)),
-        vol.Required("grace_days"): vol.All(int, vol.Range(min=1, max=60)),
     }
 )
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_retention_set(hass, connection, msg) -> None:
-    """Ile dni panel trzyma historię (maks. 60) i jak długo pamięta węzeł usunięty z radia."""
+    """Ile dni panel trzyma historię (maks. 60)."""
     store = get_store(msg["entry_id"])
     if store is None:
         connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
         return
-    connection.send_result(msg["id"], store.set_retention(msg["retention_days"], msg["grace_days"]))
+    connection.send_result(msg["id"], store.set_retention(msg["retention_days"]))
 
 
 @websocket_api.websocket_command(

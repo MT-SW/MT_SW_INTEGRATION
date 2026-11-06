@@ -248,7 +248,6 @@ class PanelStore:
         self.gateway_position = saved_position if isinstance(saved_position, dict) else None
         self.auto_clean = normalize_auto(data.get("auto_clean"))
         self.retention_days = _clamp_days(data.get("retention_days"), DEFAULT_RETENTION_DAYS)
-        self.grace_days = _clamp_days(data.get("grace_days"), DEFAULT_GRACE_DAYS)
         saved_removed = data.get("removed_tracked")
         self.removed_tracked = saved_removed if isinstance(saved_removed, dict) else {}
         self._purge_removed_tracked()
@@ -319,7 +318,6 @@ class PanelStore:
             "gateway_position": self.gateway_position,
             "auto_clean": self.auto_clean,
             "retention_days": self.retention_days,
-            "grace_days": self.grace_days,
             "removed_tracked": self.removed_tracked,
             "mqtt_sniffer_enabled": self.sniffer.mqtt_enabled,
             "log_capacity": self.log_capacity,
@@ -484,10 +482,9 @@ class PanelStore:
             "removed_tracked": len(self.removed_tracked),
         }
 
-    def set_retention(self, retention_days: int, grace_days: int) -> dict[str, int]:
-        """Ustaw, ile dni trzymać historię (1–60) i jak długo pamiętać usunięty węzeł (1–60)."""
+    def set_retention(self, retention_days: int) -> dict[str, int]:
+        """Ustaw, ile dni panel trzyma historię (1–60). Czas pamiętania usuniętego węzła jest stały (30 dni)."""
         self.retention_days = _clamp_days(retention_days, DEFAULT_RETENTION_DAYS)
-        self.grace_days = _clamp_days(grace_days, DEFAULT_GRACE_DAYS)
         # krótszy okres obcina istniejące serie od razu, nie dopiero przy następnym punkcie
         cutoff = _now_ms() - self.retention_days * DAY_MS
         for kinds in self._node_history.values():
@@ -499,7 +496,7 @@ class PanelStore:
                     del series[:drop]
         self._purge_removed_tracked()
         self._schedule_save()
-        return {"retention_days": self.retention_days, "grace_days": self.grace_days}
+        return {"retention_days": self.retention_days}
 
     def _purge_removed_tracked(self) -> None:
         """Zapomnij usunięte węzły, których czas oczekiwania na powrót minął."""
