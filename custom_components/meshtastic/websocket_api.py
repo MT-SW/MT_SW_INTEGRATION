@@ -28,7 +28,7 @@ from homeassistant.helpers.storage import Store
 from .ota import async_register_ota
 from . import debug_logs, nodedb_cleanup, ondemand
 from .aiomeshtastic.interface import TelemetryType
-from .const import DOMAIN
+from .const import CONF_OPTION_FILTER_NODES, DOMAIN
 from .helpers import panel_enabled, preset_channel_name
 from .planner_proxy import async_register_planner_proxy
 from .node_action_errors import classify_node_action_error
@@ -1009,6 +1009,61 @@ async def ws_set_ignored(hass, connection, msg) -> None:
             else c.set_node_ignored(m["node_id"], m["ignored"])
         ),
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/set_tracked",
+        vol.Required("entry_id"): str,
+        vol.Required("node_ids"): vol.All([int], vol.Length(min=1, max=500)),
+        vol.Optional("node_id"): int,  # panel dopisuje go do każdej akcji na węźle
+        vol.Required("tracked"): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_set_tracked(hass, connection, msg) -> None:
+    """Dodaj albo usuń węzły z listy śledzonych (te, dla których powstają encje Home Assistanta).
+
+    Działa na wiele węzłów naraz, więc panel może śledzić np. wszystkie ulubione jednym kliknięciem.
+    Zmiana jest stosowana na żywo, bez rozłączania z radiem.
+    """
+    from .config_flow import _signature_fields  # noqa: PLC0415
+    from .identity import node_identity_key  # noqa: PLC0415
+
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    tracked = [dict(el) for el in entry.options.get(CONF_OPTION_FILTER_NODES, [])]
+    current = {el["id"] for el in tracked}
+    wanted = set(msg["node_ids"])
+    changed: list[int] = []
+    if msg["tracked"]:
+        nodes = entry.runtime_data.client.interface.nodes()
+        for node_id in sorted(wanted - current):
+            info = nodes.get(node_id)
+            if info is None:
+                continue
+            tracked.append(
+                {
+                    "id": node_id,
+                    "name": info.get("user", {}).get("longName") or f"!{node_id:08x}",
+                    "identity_key": node_identity_key(node_id, info),
+                    **_signature_fields(info),
+                }
+            )
+            changed.append(node_id)
+    else:
+        changed = sorted(wanted & current)
+        tracked = [el for el in tracked if el["id"] not in wanted]
+    if changed:
+        hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_OPTION_FILTER_NODES: tracked})
+        if not msg["tracked"]:
+            coordinator = entry.runtime_data.coordinator
+            for node_id in changed:
+                hass.async_create_task(coordinator.async_request_node_removal(node_id))
+    connection.send_result(msg["id"], {"changed": changed, "tracked_total": len(tracked)})
 
 
 @websocket_api.websocket_command(_node_action_schema("remove_node"))
@@ -2228,6 +2283,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_config,
         ws_set_favorite,
         ws_set_ignored,
+        ws_set_tracked,
         ws_remove_node,
         ws_request_position,
         ws_gateway_debug,

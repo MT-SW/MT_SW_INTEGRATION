@@ -68,6 +68,9 @@ const TEXT = {
     busy: "Wysyłam…",
     remote_banner: "Edytujesz ustawienia ZDALNEGO węzła:",
     back: "Wróć do szczegółów",
+    quick: "Szybkie komendy",
+    quick_help: "Wysyła do tego węzła zwykłą wiadomość prywatną (nawet jeśli nie ma go na liście kontaktów). Odpowiedź zobaczysz w zakładce Wiadomości.",
+    quick_sent: "Wysłano {c}.",
   },
   en: {
     title: "Remote administration",
@@ -120,6 +123,9 @@ const TEXT = {
     busy: "Sending…",
     remote_banner: "You are editing settings of the REMOTE node:",
     back: "Back to details",
+    quick: "Quick commands",
+    quick_help: "Sends a plain direct message to this node (even if it is not in your contacts). The reply appears in the Messages tab.",
+    quick_sent: "Sent {c}.",
   },
 };
 
@@ -273,6 +279,41 @@ class MeshRemoteAdmin extends LitElement {
     } finally {
       this._busy = "";
     }
+  }
+
+  async _quick(text) {
+    if (this._busy) {
+      return;
+    }
+    this._busy = "quick";
+    this._error = "";
+    this._notice = "";
+    try {
+      await this.hass.callWS({
+        type: "meshtastic/send_message",
+        entry_id: this.entryId,
+        node_id: this.nodeId,
+        text,
+      });
+      this._notice = this._tr("quick_sent", { c: text });
+    } catch (err) {
+      this._error = (err && err.message) || this._tr("failed");
+    } finally {
+      this._busy = "";
+    }
+  }
+
+  _renderQuick() {
+    const busy = Boolean(this._busy);
+    return html`
+      <div class="sub">${this._tr("quick")}</div>
+      <div class="buttons">
+        ${["/ping", "/hello", "/test"].map(
+          (c) => html`<button ?disabled=${busy} @click=${() => this._quick(c)}>${c}</button>`
+        )}
+      </div>
+      <div class="help">${this._tr("quick_help")}</div>
+    `;
   }
 
   async _startSession() {
@@ -587,7 +628,7 @@ class MeshRemoteAdmin extends LitElement {
       ${this._busy ? html`<div class="status">${this._tr("busy")}</div>` : ""}
       ${this._notice ? html`<div class="status ok">${this._notice}</div>` : ""}
       ${this._error ? html`<div class="status err">${this._error}</div>` : ""}
-      ${this._renderSession()} ${this._renderNodeDb()} ${this._renderGpio()} ${this._renderSettings()}
+      ${this._renderSession()} ${this._renderQuick()} ${this._renderNodeDb()} ${this._renderGpio()} ${this._renderSettings()}
     `;
   }
 

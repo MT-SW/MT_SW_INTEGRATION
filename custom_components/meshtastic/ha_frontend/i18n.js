@@ -25,6 +25,7 @@ const STRINGS = {
     "tab.messages": "Wiadomości",
     "tab.nodes": "Węzły",
     "tab.map": "Mapa",
+    "tab.health": "Zdrowie sieci",
     "tab.settings": "Ustawienia",
     "tab.neighbors": "Sąsiedzi",
 
@@ -262,6 +263,8 @@ const STRINGS = {
     "nodes.filter.hide_mqtt": "Ukryj MQTT",
     "nodes.filter.show_ignored": "Pokaż ignorowane",
     "nodes.action.message": "Napisz wiadomość",
+    "nodes.action.track": "Śledź w Home Assistancie",
+    "nodes.action.untrack": "Przestań śledzić",
     "nodes.action.favorite": "Dodaj do ulubionych",
     "nodes.action.unfavorite": "Usuń z ulubionych",
     "nodes.action.ignore": "Ignoruj",
@@ -500,6 +503,7 @@ const STRINGS = {
     "tab.messages": "Messages",
     "tab.nodes": "Nodes",
     "tab.map": "Map",
+    "tab.health": "Network health",
     "tab.settings": "Settings",
     "tab.neighbors": "Neighbors",
 
@@ -737,6 +741,8 @@ const STRINGS = {
     "nodes.filter.hide_mqtt": "Hide MQTT",
     "nodes.filter.show_ignored": "Show ignored",
     "nodes.action.message": "Send a message",
+    "nodes.action.track": "Track in Home Assistant",
+    "nodes.action.untrack": "Stop tracking",
     "nodes.action.favorite": "Add to favourites",
     "nodes.action.unfavorite": "Remove from favourites",
     "nodes.action.ignore": "Ignore",

@@ -16,6 +16,7 @@ import "./views.js";
 import "./messages.js";
 import "./nodes.js";
 import "./map.js";
+import "./health.js";
 import "./settings.js";
 
 const POLL_MS = 10000;
@@ -32,7 +33,7 @@ const DEVICE_ACTIONS = {
   factory_reset_device: "factory_reset_device",
   reboot_ota: "reboot_ota",
 };
-const TABS = ["radio", "messages", "nodes", "map", "settings"];
+const TABS = ["radio", "messages", "nodes", "health", "map", "settings"];
 
 function tabFromPath() {
   const parts = location.pathname.replace(/\/+$/, "").split("/");
@@ -688,6 +689,8 @@ class MeshtasticPanel extends LitElement {
           .entryId=${entryId}
           .nodes=${this._nodes}
         ></mesh-nodes-tab>`;
+      case "health":
+        return html`<mtsw-health-tab .hass=${this.hass} .entryId=${entryId} .nodes=${this._nodes}></mtsw-health-tab>`;
       case "map":
         return html`<mesh-map-tab
           .hass=${this.hass}

@@ -303,6 +303,12 @@ class MeshNodesTab extends LitElement {
     return this._toggleFlag(node, "set_favorite", { favorite }, { is_favorite: favorite });
   }
 
+  /* Śledzenie w Home Assistancie (encje węzła) — bez wchodzenia w opcje integracji. */
+  _toggleTracked(node) {
+    const tracked = !node.is_tracked;
+    return this._toggleFlag(node, "set_tracked", { node_ids: [node.node_id], tracked }, { is_tracked: tracked });
+  }
+
   _toggleIgnored(node) {
     const ignored = !node.is_ignored;
     // firmware zdejmuje ulubienie z ignorowanego węzła
@@ -497,6 +503,12 @@ class MeshNodesTab extends LitElement {
           @click=${() => this._toggleIgnored(node)}
         >
           ${tr(node.is_ignored ? "nodes.action.unignore" : "nodes.action.ignore")}
+        </button>
+        <button
+          class="action"
+          @click=${() => this._toggleTracked(node)}
+        >
+          ${tr(node.is_tracked ? "nodes.action.untrack" : "nodes.action.track")}
         </button>
         <button class="action danger" ?disabled=${busy} @click=${() => this._confirmRemove(node)}>
           ${tr("nodes.action.remove")}
