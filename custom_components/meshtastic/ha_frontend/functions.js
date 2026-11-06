@@ -17,6 +17,7 @@ const ITEMS = [
   { id: "planner", where: "tab:map", icon: "mdi:map-marker-path", pl: ["Planer zasięgu", "Profil terenu, budżet łącza, pokrycie, kable i zasilanie na mapie."], en: ["Coverage planner", "Terrain profile, link budget, coverage, cables and feeders on the map."] },
   { id: "ota", where: "settings:ota", icon: "mdi:update", pl: ["Firmware (OTA)", "Aktualizacja radia przez Wi-Fi lub Bluetooth oraz czasowe odłączenie integracji od radia."], en: ["Firmware (OTA)", "Update the radio over Wi-Fi or Bluetooth and temporarily disconnect the integration from the radio."] },
   { id: "quick", where: "tab:radio", icon: "mdi:flash", pl: ["Szybkie komendy i zdalne funkcje", "Gotowe komendy dla zdalnego węzła oraz zdalna administracja."], en: ["Quick commands and remote functions", "Ready-made commands for a remote node and remote administration."] },
+  { id: "support", where: "settings:support", icon: "mdi:heart-outline", pl: ["Wsparcie i zgłoszenia", "Dobrowolne wsparcie projektu, zgłaszanie błędów i pomysłów (Discord, WhatsApp, Signal) z logami oraz przełącznik zbierania logów."], en: ["Support and reports", "Voluntary support of the project, reporting bugs and ideas (Discord, WhatsApp, Signal) with logs, and a log collection switch."] },
 ];
 
 class MtswFunctionsTab extends LitElement {

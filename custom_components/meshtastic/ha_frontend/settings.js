@@ -10,6 +10,7 @@ import { PL } from "./pl-settings.js";
 import "./modules.js";
 import "./sniffer-panel.js";
 import "./debug-logs.js";
+import "./support.js";
 import "./nodedb-panel.js";
 import "./ota-panel.js";
 import "./functions.js";
@@ -237,6 +238,7 @@ const NAV_ITEMS = [
       { id: "storage", label: PL("Storage"), icon: "mdi:database" },
       { id: "chat", label: PL("Chat"), icon: "mdi:chat-outline" },
       { id: "debug_logs", label: PL("Debug"), icon: "mdi:bug-outline" },
+      { id: "support", label: "Wsparcie i zgłoszenia", icon: "mdi:heart-outline" },
     ],
   },
 ];
@@ -632,6 +634,11 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-debug-logs
           .wsCommand=${(type, data) => this._ws(type, data)}
         ></mesh-settings-debug-logs>`;
+      case "support":
+        return html`<mesh-settings-support
+          .hass=${this.hass}
+          .wsCommand=${(type, data) => this._ws(type, data)}
+        ></mesh-settings-support>`;
       default:
         return html`<div class="empty-state">${PL("Select a settings panel")}</div>`;
     }
