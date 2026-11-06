@@ -10,6 +10,7 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { signalInfo } from "./hops.js";
+import "./health-metrics.js";
 
 const TEXT = {
   pl: {
@@ -36,6 +37,7 @@ const TEXT = {
     ago: "temu",
     never: "nigdy",
     summary: "Podsumowanie",
+    metrics: "Metryki",
     best_signal: "Najlepszy sygnał",
     worst_signal: "Najsłabszy sygnał",
     low_battery: "Najniższa bateria",
@@ -97,6 +99,7 @@ const TEXT = {
     ago: "ago",
     never: "never",
     summary: "Summary",
+    metrics: "Metrics",
     best_signal: "Best signal",
     worst_signal: "Weakest signal",
     low_battery: "Lowest battery",
@@ -168,6 +171,7 @@ class MeshHealthTab extends LitElement {
     return {
       hass: { type: Object },
       entryId: { type: String },
+      _view: { type: String },
       nodes: { type: Array },
       _filter: { type: String },
       _search: { type: String },
@@ -183,6 +187,7 @@ class MeshHealthTab extends LitElement {
 
   constructor() {
     super();
+    this._view = "metrics";
     this.nodes = [];
     this._filter = "all";
     this._search = "";
@@ -537,6 +542,13 @@ class MeshHealthTab extends LitElement {
     return html`
       <div class="wrap">
         <h3>${this._tr("title")}</h3>
+        <div class="viewbar">
+          <button class="vb ${this._view !== "metrics" ? "on" : ""}" @click=${() => (this._view = "summary")}>${this._tr("summary")}</button>
+          <button class="vb ${this._view === "metrics" ? "on" : ""}" @click=${() => (this._view = "metrics")}>${this._tr("metrics")}</button>
+        </div>
+        ${this._view === "metrics"
+          ? html`<mtsw-health-metrics .hass=${this.hass} .entryId=${this.entryId} .nodes=${this.nodes}></mtsw-health-metrics>`
+          : html`
         <div class="top">
           ${this._ring(rows, counts)}
           <div class="tiles">
@@ -611,6 +623,7 @@ class MeshHealthTab extends LitElement {
           ${this._notice ? html`<span class="lbl">${this._notice}</span>` : ""}
         </div>
         <p class="legend">${this._tr("legend")}</p>
+        `}
       </div>
     `;
   }
@@ -618,6 +631,9 @@ class MeshHealthTab extends LitElement {
   static get styles() {
     return css`
       :host { display: block; height: var(--mtsw-tab-height, 100%); overflow: auto; }
+      .viewbar { display: flex; gap: 8px; margin: 4px 0 8px; }
+      .vb { appearance: none; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); border-radius: 16px; padding: 4px 14px; font: inherit; cursor: pointer; }
+      .vb.on { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
       .wrap { padding: 8px 16px 24px; max-width: 1100px; margin: 0 auto; }
       h3, h4 { margin: 12px 0 8px; font-weight: 500; }
       .top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }

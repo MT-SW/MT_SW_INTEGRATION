@@ -1039,6 +1039,55 @@ class PanelStore:
             return list(series)
         return series[-limit:]
 
+    # Zdrowie sieci: z której serii i którego pola bierzemy małe wykresy przy węzłach.
+    # (rodzaj historii, pole, czy to licznik, z którego liczymy przyrosty)
+    HEALTH_SPARK_SOURCES: dict[str, tuple[str, str, bool]] = {
+        "power": ("device_metrics", "batteryLevel", False),
+        "signal": ("signal", "snr", False),
+        "ether": ("device_metrics", "channelUtilization", False),
+        "environment": ("environment_metrics", "temperature", False),
+        "resources": ("local_stats_extended", "cpuUsagePercent", False),
+        "traffic": ("local_stats", "numPacketsRx", True),
+        "neighbors": ("neighbor_count", "count", False),
+    }
+
+    def health_sparklines(self, metric: str, since_ms: int, buckets: int = 24) -> dict[str, dict[str, Any]]:
+        """Dla każdego węzła: ostatnia wartość i ``buckets`` uśrednionych próbek od ``since_ms`` (None = brak danych)."""
+        source = self.HEALTH_SPARK_SOURCES.get(metric)
+        if source is None:
+            return {}
+        kind, field, counter = source
+        now = _now_ms()
+        span = max(1, now - since_ms)
+        out: dict[str, dict[str, Any]] = {}
+        for node_id, kinds in self._node_history.items():
+            series = kinds.get(kind) or []
+            values = [(int(p.get("ts", 0)), p.get(field)) for p in series if isinstance(p.get(field), (int, float))]
+            if not values:
+                continue
+            last = values[-1][1]
+            if counter:
+                # licznik rośnie, więc rysujemy przyrosty; reset po restarcie węzła pomijamy
+                values = [
+                    (values[i][0], max(0, values[i][1] - values[i - 1][1]))
+                    for i in range(1, len(values))
+                    if values[i][1] >= values[i - 1][1]
+                ]
+            sums = [0.0] * buckets
+            counts = [0] * buckets
+            for ts, value in values:
+                if ts < since_ms:
+                    continue
+                index = min(buckets - 1, max(0, int((ts - since_ms) * buckets / span)))
+                sums[index] += value
+                counts[index] += 1
+            line = [
+                (round(sums[i], 2) if counter else round(sums[i] / counts[i], 2)) if counts[i] else None
+                for i in range(buckets)
+            ]
+            out[node_id] = {"last": last, "values": line}
+        return out
+
     def _remember_signed(self, node_id: Any, signed: Any) -> None:
         if node_id is None or signed is None:
             return

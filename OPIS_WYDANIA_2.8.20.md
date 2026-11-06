@@ -2,6 +2,7 @@
 
 ### Nowe
 - **Zdrowie sieci** – nowa zakładka: oceny, rankingi, rozkłady, grupy węzłów (własne, do tworzenia i edycji) i eksport (CSV, MD, HTML, TXT, PDF).
+- **Zdrowie sieci jak w aplikacji** – widok „Metryki”: 7 zakładek, lista węzłów z małym wykresem, po kliknięciu duże wykresy z zakresem czasu.
 - **Śledzenie węzłów w Home Assistancie** – jednym przyciskiem na węźle albo hurtem z grup.
 - **Kalkulator anten** (okno na mapie) – 13 typów anten: wymiary, zysk, impedancja, straty w kablu i złączach, moc wypromieniowana na tle limitów pasm. Wzory jak w aplikacji MT_SW_APP.
 - **Panorama terenu** (okno na mapie) – sylwetka terenu dookoła stacji z naniesionymi węzłami (widoczne i zasłonięte).
@@ -28,6 +29,7 @@
 
 ### New
 - **Network health** – new tab: ratings, rankings, distributions, node groups (your own, create and edit) and export (CSV, MD, HTML, TXT, PDF).
+- **Network health like the app** – "Metrics" view: 7 tabs, node list with a small chart, large charts with time range on click.
 - **Tracking nodes in Home Assistant** – with one button on a node or in bulk from groups.
 - **Antenna calculator** (window on the map) – 13 antenna types: dimensions, gain, impedance, cable and connector losses, radiated power against band limits. Same maths as the MT_SW_APP app.
 - **Terrain panorama** (window on the map) – terrain skyline around the station with nodes placed on it (visible and hidden).

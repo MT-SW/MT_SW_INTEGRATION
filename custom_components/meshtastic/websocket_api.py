@@ -1473,6 +1473,25 @@ async def ws_node_history(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{WS_PREFIX}/health_series",
+        vol.Required("entry_id"): str,
+        vol.Required("metric"): vol.In(["power", "signal", "ether", "environment", "resources", "traffic", "neighbors"]),
+        vol.Optional("days", default=7): vol.All(int, vol.Range(min=1, max=60)),
+    }
+)
+@websocket_api.async_response
+async def ws_health_series(hass, connection, msg) -> None:
+    """Zdrowie sieci: ostatnia wartość i mały wykres wybranej metryki dla wszystkich węzłów naraz."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    since = int(time.time() * 1000) - msg["days"] * 86400 * 1000
+    connection.send_result(msg["id"], {"nodes": store.health_sparklines(msg["metric"], since)})
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{WS_PREFIX}/device_action",
         vol.Required("entry_id"): str,
         vol.Required("action"): vol.In(
@@ -2325,6 +2344,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_set_tracked,
         ws_remove_node,
         ws_retention_set,
+        ws_health_series,
         ws_request_position,
         ws_gateway_debug,
         ws_request_neighbors,
