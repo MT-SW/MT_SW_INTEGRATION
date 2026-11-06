@@ -122,7 +122,7 @@
         "description": "Wybierz, co chcesz zrobić.",
         "menu_options": {
           "settings": "Ustawienia (tryb pracy, śledzone węzły, powiadomienia, serwery)",
-          "devices": "Dane urządzeń — dodawanie, obszary i scalanie",
+          "devices": "Zarządzanie urządzeniami — dodawanie, obszary i scalanie",
           "groups": "Obszary i grupy — tworzenie i dodawanie węzłów",
           "device_list": "Dodane urządzenia — szczegóły i usuwanie"
         }
@@ -178,7 +178,7 @@
         }
       },
       "devices": {
-        "title": "Dane urządzeń",
+        "title": "Zarządzanie urządzeniami",
         "description": "Teraz zbierasz: {count}.\n\n{merge_hint}\n\nTu w jednym oknie możesz scalić duplikaty, dodać nowe urządzenia i przypisać urządzenia do obszaru Home Assistanta (obszary, które już masz, są na liście). Nic tu nie usuwa urządzeń poza scaleniem.",
         "data": {
           "merge": "Scal (zostaje najświeższy węzeł, stary znika z listy, z bazy radia i z urządzeń; encje przechodzą na zostające urządzenie)",

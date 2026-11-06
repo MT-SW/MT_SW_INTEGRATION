@@ -122,7 +122,7 @@
         "description": "Choose what you want to do.",
         "menu_options": {
           "settings": "Settings (mode, tracked nodes, notifications, servers)",
-          "devices": "Device data — adding, areas and merging",
+          "devices": "Device management — adding, areas and merging",
           "groups": "Areas and groups — create and add nodes",
           "device_list": "Added devices — details and removal"
         }
@@ -178,7 +178,7 @@
         }
       },
       "devices": {
-        "title": "Device data",
+        "title": "Device management",
         "description": "Currently collecting: {count}.\n\n{merge_hint}\n\nIn one window you can merge duplicates, add new devices and assign devices to a Home Assistant area (your existing areas are listed). Nothing here removes devices except merging.",
         "data": {
           "merge": "Merge (the freshest node stays; the old one disappears from the list, the radio database and the devices; entities move to the remaining device)",
