@@ -15,27 +15,6 @@
   },
   "lastConnectedAt": "Ostatnie połączenie: {{date}}",
   "neverConnected": "Nigdy nie połączono",
-  "toasts": {
-    "connected": "Połączony",
-    "nowConnected": "Połączono z {{name}}",
-    "nowDisconnected": "{{name}} are now disconnecte",
-    "disconnected": "Rozłączono",
-    "failed": "Nie udało się połączyć",
-    "checkConnetion": "Check your device or settings and try again",
-    "defaultSet": "Ustawiono domyślne",
-    "defaultConnection": "Domyślne połączenie to teraz {{nameisconnected}}",
-    "deleted": "Usunięto",
-    "deletedByName": "Usunięto {{name}}",
-    "pickConnectionAgain": "Nie udało się połączyć. Może być potrzebne ponowne wybranie urządzenia lub portu.",
-    "added": "Dodano połączenie",
-    "savedByName": "Zapisano {{name}}.",
-    "savedCantConnect": "Połączenie zostało zapisane, ale nie udało się połączyć.",
-    "checkConnection": "Sprawdź urządzenie lub ustawienia i spróbuj ponownie",
-    "renamed": "Zmieniono nazwę",
-    "renamedByName": "Nowa nazwa połączenia: {{name}}.",
-    "updated": "Zaktualizowano",
-    "updatedByName": "Zaktualizowano {{name}}."
-  },
   "default": "Domyślne",
   "button": {
     "addConnection": "Dodaj połączenie",
@@ -56,8 +35,34 @@
     "title": "Edytuj połączenie",
     "description": "Zmień ustawienia tego połączenia."
   },
+  "toasts": {
+    "connected": "Połączony",
+    "nowDisconnected": "{{name}} are now disconnecte",
+    "disconnected": "Rozłączono",
+    "failed": "Nie udało się połączyć",
+    "checkConnection": "Sprawdź urządzenie lub ustawienia i spróbuj ponownie",
+    "defaultSet": "Ustawiono domyślne",
+    "defaultConnection": "Domyślne połączenie to teraz {{nameisconnected}}",
+    "deleted": "Usunięto",
+    "deletedByName": "Usunięto {{name}}",
+    "pickConnectionAgain": "Nie udało się połączyć. Może być potrzebne ponowne wybranie urządzenia lub portu.",
+    "added": "Dodano połączenie",
+    "savedByName": "Zapisano {{name}}.",
+    "savedCantConnect": "Połączenie zostało zapisane, ale nie udało się połączyć.",
+    "renamed": "Zmieniono nazwę",
+    "renamedByName": "Nowa nazwa połączenia: {{name}}.",
+    "updated": "Zaktualizowano",
+    "updatedByName": "Zaktualizowano {{name}}.",
+    "firmwareOutdated": "Zalecana aktualizacja firmware",
+    "firmwareOutdatedDescription": "To radio ma firmware {{version}}. Niektóre funkcje wymagają {{minimum}} lub nowszego.",
+    "storageUnavailable": "Wiadomości nie zostaną zapisane",
+    "storageUnavailableDescription": "Przeglądarka nie mogła otworzyć pamięci aplikacji, więc wiadomości z tej sesji znikną po odświeżeniu. To się zdarza w oknie prywatnym albo gdy aplikacja jest otwarta w kilku kartach."
+  },
   "overlay": {
-    "srTitle": "Łączenie z urządzeniem",
+    "title": {
+      "connecting": "Łączenie",
+      "reconnecting": "Ponowne łączenie"
+    },
     "phase": {
       "connecting": "Otwieranie połączenia…",
       "configuring": "Pobieranie konfiguracji…"
@@ -75,9 +80,40 @@
     "certNotTrusted": "Certyfikat z podpisem własnym nie jest zaufany. Otwórz {{url}} w nowej karcie, zaakceptuj ostrzeżenie bezpieczeństwa, wróć tutaj i spróbuj ponownie.",
     "httpsNotReachable": "Adres HTTPS jest nieosiągalny. Sprawdź, czy urządzenie jest w sieci.",
     "httpNotReachable": "Adres HTTP jest nieosiągalny (może blokować go CORS albo problem z siecią)",
-    "openInNewTab": "Otwórz w nowej karcie →"
+    "openInNewTab": "Otwórz w nowej karcie →",
+    "firmwareTooOld": "Firmware {{version}} jest za stary dla klienta webowego. Zaktualizuj radio do {{minimum}} lub nowszego."
   },
   "httpTest": {
     "certNotTrusted": "Certyfikat nie jest zaufany. <0>Otwórz w nowej karcie</0>, zaakceptuj ostrzeżenie i sprawdź ponownie."
+  },
+  "certGuide": {
+    "title": "Przeglądarka nie ufa jeszcze certyfikatowi tego radia",
+    "titleUncertain": "Jeśli radio jest włączone, przeglądarka może jeszcze nie ufać jego certyfikatowi",
+    "description": "Radia używają certyfikatu własnego. Zaakceptuj go raz, a przeglądarka zapamięta go dla tego radia; nic nie trzeba instalować.",
+    "steps": {
+      "firefox": [
+        "Kliknij Otwórz radio poniżej.",
+        "Na stronie z ostrzeżeniem kliknij Zaawansowane…",
+        "Kliknij Zaakceptuj ryzyko i kontynuuj.",
+        "Wróć do tej karty. Połączenie sprawdzi się automatycznie."
+      ],
+      "safari": [
+        "Kliknij Otwórz radio poniżej.",
+        "Na stronie z ostrzeżeniem kliknij Pokaż szczegóły.",
+        "Kliknij odwiedź tę witrynę, potem Odwiedź witrynę i w razie pytania wpisz hasło do Maca.",
+        "Wróć do tej karty. Połączenie sprawdzi się automatycznie."
+      ],
+      "chromium": [
+        "Kliknij Otwórz radio poniżej.",
+        "Na stronie z ostrzeżeniem kliknij Zaawansowane.",
+        "Kliknij Przejdź do adresu radia (niebezpieczne).",
+        "Wróć do tej karty. Połączenie sprawdzi się automatycznie."
+      ]
+    },
+    "openRadio": "Otwórz radio",
+    "openAgain": "Otwórz radio ponownie",
+    "waiting": "Czekam na zaakceptowanie certyfikatu…",
+    "timedOut": "Nadal brak zaufania. Otwórz radio ponownie i zaakceptuj ostrzeżenie.",
+    "trusted": "Certyfikat zaakceptowany. Radio jest osiągalne."
   }
 }

@@ -7,30 +7,78 @@
     "import": "Importuj",
     "export": "Eksport"
   },
+  "header": {
+    "frequency": "Częst.: {{frequency}} MHz",
+    "slot": "Slot: {{slot}}",
+    "slotAuto": "Slot: auto"
+  },
+  "list": {
+    "add": "Dodaj kanał",
+    "edit": "Edytuj {{name}}",
+    "delete": "Usuń {{name}}"
+  },
+  "legend": {
+    "primary": "Główny",
+    "secondary": "Dodatkowy",
+    "dialog": {
+      "title": "Funkcje kanałów",
+      "description": "Do czego służą kanały główny i dodatkowe oraz co znaczą ikony kanałów.",
+      "primaryFeature": "Okresowe wysyłanie pozycji i telemetrii",
+      "secondaryNoTelemetry": "Brak okresowego wysyłania telemetrii",
+      "secondaryPositionFeature": "Wyłączenie pozycji na kanale głównym pozwala wysyłać pozycję okresowo na pierwszym kanale dodatkowym z włączoną pozycją; w przeciwnym razie trzeba poprosić o pozycję ręcznie.",
+      "manualPositionRequest": "Wymagana ręczna prośba o pozycję",
+      "iconMeanings": "Znaczenie ikon"
+    }
+  },
+  "icons": {
+    "location": {
+      "label": "Udostępnianie pozycji",
+      "description": "Okresowe wysyłanie pozycji"
+    },
+    "uplink": {
+      "label": "Wysyłanie do MQTT włączone",
+      "description": "Wiadomości z sieci mesh będą wysyłane do publicznego internetu przez skonfigurowaną bramkę dowolnego węzła."
+    },
+    "downlink": {
+      "label": "Odbiór z MQTT włączony",
+      "description": "Wiadomości z publicznej bramki internetowej są przekazywane do lokalnej sieci mesh. Z powodu zasady zero przeskoków ruch z domyślnego serwera MQTT nie dotrze dalej niż to urządzenie."
+    }
+  },
+  "security": {
+    "label": "Stan zabezpieczeń",
+    "secure": {
+      "label": "Bezpieczny",
+      "description": "Zielona kłódka oznacza kanał szyfrowany kluczem AES 128 lub 256 bitów."
+    },
+    "insecureNoPrecise": {
+      "label": "Kanał niezabezpieczony, bez dokładnej pozycji",
+      "description": "Żółta otwarta kłódka oznacza kanał bez bezpiecznego szyfrowania, niewykorzystywany do dokładnej pozycji, z kluczem znanym 1-bajtowym albo bez klucza."
+    },
+    "insecurePreciseOnly": {
+      "label": "Kanał niezabezpieczony, dokładna pozycja",
+      "description": "Czerwona otwarta kłódka oznacza kanał bez bezpiecznego szyfrowania, używany do dokładnej pozycji, z kluczem znanym 1-bajtowym albo bez klucza."
+    },
+    "insecurePreciseMqtt": {
+      "label": "Uwaga: niezabezpieczony, dokładna pozycja i wysyłanie do MQTT",
+      "description": "Czerwona otwarta kłódka z ostrzeżeniem oznacza kanał bez bezpiecznego szyfrowania, używany do dokładnej pozycji, która trafia do internetu przez MQTT, z kluczem znanym 1-bajtowym albo bez klucza."
+    }
+  },
+  "editDialog": {
+    "addTitle": "Dodaj kanał",
+    "editTitle": "Edytuj kanał {{index}}",
+    "description": "Zmiany trafią do radia po zapisaniu ustawień."
+  },
   "validation": {
     "pskInvalid": "Musisz wprowadzić prawidłowy {{bits}} bitowy klucz."
   },
-  "settings": {
-    "label": "Ustawienia kanału",
-    "description": "Kryptografia, MQTT i inne ustawienia"
-  },
-  "role": {
-    "label": "Rola",
-    "description": "Telemetria urządzenia jest tylko wysyłania przez GŁOWNY. Tylko jeden GŁOWNY jest dozwolony",
-    "options": {
-      "primary": "GŁOWNY",
-      "disabled": "WYŁĄCZONY",
-      "secondary": "DODATKOWY"
-    }
+  "name": {
+    "label": "Nazwa",
+    "description": "Unikalna nazwa kanału mniejsza niż 12 bajtów, pusty jako domyślny"
   },
   "psk": {
     "label": "Klucz współdzielony",
     "description": "Wspierane długości klucza: 256, 128, 8, pusty (0) bitów",
     "generate": "Wygeneruj"
-  },
-  "name": {
-    "label": "Nazwa",
-    "description": "Unikalna nazwa kanału mniejsza niż 12 bajtów, pusty jako domyślny"
   },
   "uplinkEnabled": {
     "label": "Wysył włączony",
@@ -40,12 +88,16 @@
     "label": "Odbiór włączony",
     "description": "Wysyłaj wiadomości z MQTT to lokalnej sieci"
   },
+  "positionEnabled": {
+    "label": "Pozycja włączona",
+    "description": "Udostępniaj pozycję tego węzła na tym kanale."
+  },
+  "preciseLocation": {
+    "label": "Dokładna pozycja"
+  },
   "positionPrecision": {
     "label": "Lokalizacja",
-    "description": "Precyzja lokalizacji, która jest wysyłana na kanale. Może zostać wyłączona.",
     "options": {
-      "none": "Nie udostępniaj lokalizacji",
-      "precise": "Precyzyjna lokalizacja",
       "metric_km23": "W zasięgu 23 kilometrów",
       "metric_km12": "W zasięgu 12 kilometrów",
       "metric_km5_8": "W zasięgu 5,8 kilometrów",
@@ -67,5 +119,15 @@
       "imperial_ft300": "W zasięgu 300 stóp",
       "imperial_ft150": "W zasięgu 150 stóp"
     }
+  },
+  "beaconOffers": {
+    "title": "Oferty Mesh Beacon",
+    "from": "Zaproszenie od {{sender}}",
+    "defaultChannel": "Kanał domyślny",
+    "addHint": "Dołączenie dodaje ten kanał. Radio zostaje przy obecnych ustawieniach.",
+    "switchHint": "Dołączenie zastępuje kanał główny i ustawienia LoRa. Radio przestroi się i uruchomi ponownie.",
+    "join": "Dołącz",
+    "switch": "Przełącz",
+    "dismiss": "Odrzuć"
   }
 }

@@ -13,7 +13,28 @@
     "tabSecurity": "Bezpieczeństwo"
   },
   "sidebar": {
-    "label": "Konfiguracja"
+    "label": "Konfiguracja",
+    "configuration": "Konfiguracja",
+    "backupRestore": "Kopia i przywracanie",
+    "advanced": "Zaawansowane",
+    "app": "Aplikacja",
+    "information": "Informacje"
+  },
+  "navigation": {
+    "user": "Użytkownik",
+    "lora": "LoRa",
+    "channels": "Kanały",
+    "security": "Bezpieczeństwo",
+    "deviceConfiguration": "Konfiguracja urządzenia",
+    "moduleConfiguration": "Konfiguracja modułów",
+    "administration": "Administracja",
+    "deviceProfile": "Import / eksport konfiguracji",
+    "firmwareUpdate": "Aktualizacja firmware",
+    "cleanNodeDb": "Czyszczenie bazy węzłów",
+    "debugPanel": "Panel debugowania",
+    "appSettings": "Ustawienia aplikacji",
+    "about": "O aplikacji",
+    "help": "Pomoc i dokumentacja"
   },
   "device": {
     "title": "Ustawienia Urządzenia",
@@ -26,17 +47,17 @@
       "description": "Nadpisanie pinu buzzera",
       "label": "Pin buzzera"
     },
-    "disableTripleClick": {
-      "description": "Wyłącz potrójne kliknięcie",
-      "label": "Wyłącz potrójne kliknięcie"
+    "tripleClickAdHocPing": {
+      "label": "Ping po potrójnym kliknięciu",
+      "description": "Wyślij pozycję na kanale głównym po potrójnym kliknięciu przycisku użytkownika."
     },
     "doubleTapAsButtonPress": {
       "description": "Traktuj podwójne dotknięcie jako naciśnięcie przycisku",
       "label": "Podwójne dotknięcie jako naciśnięcie przycisku"
     },
-    "ledHeartbeatDisabled": {
-      "description": "Wyłącz domyślne miganie diody LED",
-      "label": "Pulsowanie diodą LED wyłączone"
+    "ledHeartbeat": {
+      "label": "Mruganie diody (heartbeat)",
+      "description": "Steruje mrugającą diodą urządzenia. W większości urządzeń to jedna z maksymalnie 4 diod; diody ładowarki i GPS nie są sterowalne."
     },
     "nodeInfoBroadcastInterval": {
       "description": "Jak często nadawać informacje o węźle",
@@ -67,6 +88,7 @@
       "description": "Strefa czasowa POSIX dla dat na ekranie urządzenia i w logach"
     },
     "gpio": {
+      "label": "GPIO",
       "description": "Przypisania pinów GPIO"
     },
     "useBrowserTimeZone": {
@@ -141,10 +163,6 @@
       "description": "Obudź urządzenie przy dotknięciu lub ruchu",
       "label": "Wybudź przy dotknięciu lub ruchu"
     },
-    "enableMessageBubbles": {
-      "label": "Dymki wiadomości",
-      "description": "Pokazuj przychodzące wiadomości jako dymki na ekranie urządzenia"
-    },
     "deviceDisplay": {
       "label": "Ekran urządzenia",
       "description": "Orientacja ekranu i zegar"
@@ -173,9 +191,12 @@
       "description": "mianownik tempa kodowania",
       "label": "Szybkość kodowania"
     },
-    "frequencyOffset": {
-      "description": "Przesunięcie częstotliwości w celu skorygowania błędów kalibracji kryształu",
-      "label": "Przesunięcie częstotliwości"
+    "codingRateOverride": {
+      "label": "Nadpisanie współczynnika kodowania",
+      "description": "Dodaje korekcję błędów ponad ustawienie presetu. Wyższy współczynnik wydłuża każdy pakiet w eterze i zużywa więcej budżetu czasu nadawania oraz zajętości kanału.",
+      "maxDescription": "Ten preset już używa najwyższego współczynnika kodowania.",
+      "presetDefault": "Domyślny presetu ({{rate}})",
+      "fraction": "4/{{rate}}"
     },
     "frequencySlot": {
       "description": "Numer kanału częstotliwości LoRa",
@@ -191,6 +212,8 @@
     },
     "modemPreset": {
       "description": "Ustawienie modemu do użycia",
+      "descriptionForRegion": "Presety dozwolone w wybranym regionie. Domyślny dla regionu jest oznaczony.",
+      "defaultSuffix": "(domyślny)",
       "label": "Ustawienie modemu"
     },
     "okToMqtt": {
@@ -205,8 +228,13 @@
       "description": "Nadpisz częstotliwość",
       "label": "Nadpisz częstotliwość"
     },
+    "paFanDisabled": {
+      "label": "Wentylator wzmacniacza wyłączony",
+      "description": "Wyłącz wentylator chłodzący wzmacniacz mocy"
+    },
     "region": {
       "description": "Ustawia region dla Twojego węzła",
+      "licensedOnlySuffix": "(tylko dla licencjonowanych operatorów)",
       "label": "Region"
     },
     "spreadingFactor": {
@@ -236,14 +264,6 @@
     "radioSettings": {
       "label": "Ustawienia radia",
       "description": "Ustawienia dla radia LoRa"
-    },
-    "femLnaMode": {
-      "label": "Tryb FEM/LNA",
-      "description": "Sterowanie zewnętrznym modułem RF / wzmacniaczem niskoszumowym (tylko na płytkach, które go mają)"
-    },
-    "serialHalOnly": {
-      "label": "Tylko szeregowy HAL",
-      "description": "Komunikacja z radiem wyłącznie przez szeregową warstwę abstrakcji sprzętu"
     },
     "optionsCard": {
       "label": "Opcje",
@@ -294,9 +314,9 @@
       "description": "Włącz lub wyłącz radio Wi-Fi",
       "label": "Włączony"
     },
-    "meshViaUdp": {
-      "label": "Mesh przez UDP",
-      "description": "Przekazuj pakiety sieci mesh przez UDP"
+    "udpBroadcast": {
+      "label": "Rozgłaszanie UDP",
+      "description": "Włącz rozgłaszanie pakietów przez UDP w sieci lokalnej."
     },
     "ntpServer": {
       "label": "Serwer NTP"
@@ -437,6 +457,10 @@
       "description": "Używane do poprawiania odczytu napięcia baterii",
       "label": "Współczynnik nadpisania mnożnika ADC"
     },
+    "adcOverrideEnabled": {
+      "label": "Nadpisanie mnożnika ADC",
+      "description": "Nadpisz mnożnik ADC odczytu napięcia baterii"
+    },
     "ina219Address": {
       "description": "Adres monitora baterii INA219",
       "label": "Adres INA219"
@@ -481,11 +505,6 @@
   "security": {
     "description": "Ustawienia dla konfiguracji zabezpieczeń",
     "title": "Ustawienia bezpieczeństwa",
-    "button_backupKey": "Kopia zapasowa klucza",
-    "adminChannelEnabled": {
-      "description": "Zezwalaj na kontrolę urządzenia przez niezabezpieczony kanał admina (stare)",
-      "label": "Zezwalaj na kontrolę admina (stare)"
-    },
     "enableDebugLogApi": {
       "description": "Wyjście logowania debugowania na żywo nad serwerem, widok i eksport logów urządzenia poprawionego pozycją przez Bluetooth",
       "label": "Włącz API logów debugowania"
@@ -541,6 +560,36 @@
     "administration": {
       "label": "Administracja",
       "description": "Tryb zarządzany i dawny kanał administracyjny"
+    },
+    "packetSignaturesCard": {
+      "label": "Autentyczność pakietów",
+      "description": "Jak urządzenie traktuje odbierane pakiety podpisane i niepodpisane (firmware 2.8+)"
+    },
+    "packetSignaturePolicy": {
+      "label": "Poziom ochrony",
+      "description": "Zgodny przyjmuje pakiety niepodpisane, ale odrzuca te z błędnym podpisem. Zrównoważony odrzuca też niepodpisane rozgłoszenia od węzłów, które wcześniej podpisywały. Ścisły przyjmuje tylko pakiety ze zweryfikowanym podpisem lub poprawnie odszyfrowane PKI, więc pakiety od starszych węzłów mogą być ignorowane.",
+      "compatible": "Zgodny – przyjmuj niepodpisane",
+      "balanced": "Zrównoważony – preferuj uwierzytelnione",
+      "strict": "Ścisły – wymagaj uwierzytelnienia",
+      "unsupported": "To urządzenie nie obsługuje weryfikacji podpisów pakietów."
+    },
+    "lockdown": {
+      "label": "Tryb blokady",
+      "description": "Szyfruje zapisane ustawienia radia i nie wydaje ich klientom, dopóki nie odblokują ich hasłem.",
+      "status": "Stan",
+      "state": {
+        "off": "Wyłączona",
+        "unlocked": "Odblokowana",
+        "locked": "Zablokowana",
+        "needsProvision": "Nieskonfigurowana",
+        "unlockFailed": "Odblokowanie nie powiodło się"
+      },
+      "bootsRemaining": "Pozostałe restarty: {{count}}",
+      "expires": "Wygasa: {{date}}",
+      "lockNow": "Zablokuj teraz",
+      "lockNowDescription": "Uruchamia radio ponownie w stanie zablokowanym. Do dalszego użycia potrzebne będzie hasło.",
+      "disable": "Wyłącz blokadę",
+      "disableDescription": "Wyłącza blokadę na stałe. Wymaga hasła."
     }
   },
   "user": {
@@ -581,6 +630,10 @@
     "hardwareModel": {
       "label": "Model sprzętu",
       "description": "Tylko do odczytu — zgłaszany przez urządzenie"
+    },
+    "statusMessage": {
+      "label": "Komunikat statusu",
+      "description": "Publiczny komunikat statusu rozgłaszany w sieci mesh po zmianie i co 12 godzin. Do 80 bajtów."
     }
   }
 }

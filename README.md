@@ -116,6 +116,7 @@ Dodane funkcje:
 - Kalkulator anten (2.8.20): okno na zakładce Mapa, 13 typów anten (ground plane, dipol, folded, 5/8, J-pole, Slim Jim, collinear, Yagi, Moxon, biquad, helisa, patch, odcinki kabla): wymiary, zysk, impedancja, straty w kablu i złączach, moc wypromieniowana na tle limitów pasm. Matematyka jak w aplikacji MT_SW_APP.
 - Funkcje MT_SW (2.8.20): Ustawienia → Inne → Funkcje MT_SW to jedno miejsce z listą wszystkich naszych funkcji i przyciskiem, który każdą otwiera.
 - Protobufy 2.8.2 (2.8.20): wbudowane definicje protokołu odświeżone do najnowszych oryginalnych (meshtastic/protobufs v2.8.2), tej samej wersji co w aplikacji MT_SW_APP; w ustawieniach modułu serial doszły tryby WS85, VE.Direct, MS config, Log, Log text i Modbus, a lista modeli sprzętu zna nowe urządzenia (np. Nodara, Heltec Mesh Pocket V2).
+- Klient webowy MT_SW (2.8.20): wbudowany klient webowy przebudowany na najnowszej wersji oryginału (z 19.10.2026) z naszą oprawą (nazwa, logo, kolory, mapa OpenStreetMap) i pełnym polskim tłumaczeniem; nowe teksty (blokada radia, status dostarczenia wiadomości, Mesh Beacon, czujniki, administracja) są przetłumaczone.
 - Szybkie komendy (2.8.20): w administracji zdalnej węzła przyciski /ping, /hello i /test wysyłają zwykłą wiadomość prywatną do tego węzła.
 
 Licencja, nazwa i cudze treści:
@@ -246,6 +247,7 @@ Added features:
 - Antenna calculator (2.8.20): a window on the Map tab, 13 antenna types (ground plane, dipole, folded, 5/8, J-pole, Slim Jim, collinear, Yagi, Moxon, biquad, helix, patch, coax sections): dimensions, gain, impedance, cable and connector losses, radiated power against band limits. Same maths as the MT_SW_APP app.
 - MT_SW functions (2.8.20): Settings → Other → MT_SW functions is one place listing all our functions with a button that opens each.
 - Protobufs 2.8.2 (2.8.20): the built-in protocol definitions were refreshed to the latest original ones (meshtastic/protobufs v2.8.2), the same version as in the MT_SW_APP app; the serial module settings gained the WS85, VE.Direct, MS config, Log, Log text and Modbus modes, and the hardware model list knows the new devices (e.g. Nodara, Heltec Mesh Pocket V2).
+- MT_SW web client (2.8.20): the built-in web client was rebuilt on the latest upstream version (from 2026-10-19) with our branding (name, logo, colours, OpenStreetMap map) and a full Polish translation; the new texts (radio lockdown, message delivery status, Mesh Beacon, sensors, administration) are translated.
 - Quick commands (2.8.20): in a node's remote administration the /ping, /hello and /test buttons send a plain direct message to that node.
 
 Licence, name and third-party content:

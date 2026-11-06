@@ -18,22 +18,104 @@
     "addReactionLabel": "Dodaj reakcję",
     "replyLabel": "Odpowiedz"
   },
-  "deliveryStatus": {
-    "delivered": {
-      "label": "Wiadomość doręczona",
-      "displayText": "Wiadomość doręczona"
-    },
-    "failed": {
-      "label": "Nie udało się dostarczyć wiadomości",
-      "displayText": "Dostawa nie powiodła się"
-    },
-    "unknown": {
-      "label": "Status wiadomości nieznany",
-      "displayText": "Nieznany stan"
-    },
-    "waiting": {
-      "label": "Wysyłanie wiadomości",
-      "displayText": "Oczekiwanie na dostawę"
+  "signature": {
+    "signed": {
+      "label": "Wiadomość podpisana",
+      "tooltip": "Podpisana przez nadawcę (XEdDSA) i zweryfikowana przez Twoje radio."
     }
+  },
+  "diagnostics": {
+    "snr": {
+      "value": "SNR {{value}} dB",
+      "tooltip": "Stosunek sygnału do szumu, tak jak usłyszało go Twoje radio"
+    },
+    "rssi": {
+      "value": "RSSI {{value}} dBm",
+      "tooltip": "Siła sygnału, tak jak usłyszało ją Twoje radio"
+    },
+    "hops": {
+      "value_one": "{{count}} przeskok stąd",
+      "value_other": "{{count}} przeskoku stąd",
+      "unknown": "Nieznana liczba przeskoków",
+      "value_few": "{{count}} przeskoki stąd",
+      "value_many": "{{count}} przeskoków stąd"
+    },
+    "transport": {
+      "mqtt": {
+        "label": "Przez MQTT",
+        "tooltip": "Dotarła do sieci mesh przez bramkę MQTT."
+      },
+      "udp": {
+        "label": "Przez UDP",
+        "tooltip": "Dotarła do Twojego radia przez multicast UDP."
+      },
+      "api": {
+        "label": "Przez API",
+        "tooltip": "Wysłana do Twojego radia przez połączoną z nim aplikację."
+      }
+    }
+  },
+  "status": {
+    "title": "Stan dostarczenia wiadomości",
+    "errorTitle": "Błąd",
+    "showDetails": "Pokaż stan wiadomości",
+    "resend": "Wyślij ponownie",
+    "close": "Zamknij",
+    "relays_one": "Potwierdzone przez {{count}} węzeł",
+    "relays_other": "Potwierdzone przez {{count}} węzła",
+    "enroute": "Wysyłanie…",
+    "delivered": "Dostarczona do sieci mesh",
+    "relayedNotConfirmed": "Przekazana dalej, brak potwierdzenia od odbiorcy",
+    "recipientDelivered": "Dostarczona do odbiorcy",
+    "recipientDeliveredProven": "Dostarczona do odbiorcy · z dowodem",
+    "ackProofInvalid": "Dowód dostarczenia nie powiódł się",
+    "unknown": "Nieznany",
+    "error": {
+      "maxRetransmit": "Nie udało się dostarczyć do sieci mesh",
+      "noRoute": "Brak trasy",
+      "noChannel": "Niezgodny kanał lub klucz",
+      "noInterface": "Brak interfejsu radiowego",
+      "dutyCycleLimit": "Limit czasu nadawania",
+      "rateLimitExceeded": "Ograniczenie tempa",
+      "tooLarge": "Wiadomość jest za duża do wysłania",
+      "noResponse": "Brak odpowiedzi aplikacji",
+      "badRequest": "Nieprawidłowe żądanie",
+      "notAuthorized": "Brak uprawnień",
+      "pkiFailed": "Nie udało się wysłać zaszyfrowanej wiadomości",
+      "pkiUnknownPubkey": "Odbiorca potrzebuje Twojego klucza",
+      "pkiSendFailPublicKey": "Klucz odbiorcy niedostępny",
+      "adminBadSessionKey": "Sesja administracyjna wygasła",
+      "adminPublicKeyUnauthorized": "Klucz administratora nieautoryzowany",
+      "unknownError": "Niedostarczona"
+    },
+    "detail": {
+      "noRoute": "W sieci mesh nie znaleziono trasy do węzła docelowego. Spróbuj ponownie, gdy dostępnych będzie więcej węzłów.",
+      "gotNak": "Jakiś węzeł odrzucił tę wiadomość. Spróbuj ponownie, gdy zmieni się trasa.",
+      "timeout": "Nie otrzymano potwierdzenia na czas. Spróbuj ponownie przy lepszym sygnale lub większym zasięgu sieci.",
+      "maxRetransmit": "Żaden węzeł nie potwierdził tej wiadomości. Spróbuj ponownie przy lepszym sygnale lub większym zasięgu sieci.",
+      "noChannel": "Nadawca lub odbiorca nie mógł użyć pasującego kanału lub klucza dla tej wiadomości.",
+      "noInterface": "Nadawca nie ma użytecznego interfejsu radiowego dla tej wiadomości.",
+      "dutyCycleLimit": "Lokalne limity czasu nadawania chwilowo blokują wysyłanie. Poczekaj i spróbuj ponownie.",
+      "rateLimitExceeded": "Wiadomości są wysyłane zbyt szybko. Poczekaj i spróbuj ponownie.",
+      "tooLarge": "Skróć wiadomość i wyślij ją ponownie.",
+      "noResponse": "Cel otrzymał żądanie, ale żadna aplikacja ani moduł nie odpowiedział. Spróbuj ponownie, gdy odbiorca będzie osiągalny.",
+      "badRequest": "Cel odrzucił to żądanie jako nieprawidłowe.",
+      "notAuthorized": "Cel odmówił, bo żądanie nie jest autoryzowane.",
+      "pkiFailed": "Nie można było użyć zaszyfrowanej ścieżki wysyłania. Poczekaj na synchronizację informacji o węzłach lub kluczy i spróbuj ponownie.",
+      "pkiUnknownPubkey": "Odbiorca nie zna jeszcze Twojego klucza publicznego. Twój węzeł może udostępnić swoje informacje automatycznie; spróbuj ponownie po synchronizacji.",
+      "pkiSendFailPublicKey": "Twój węzeł nie ma jeszcze klucza publicznego odbiorcy. Poczekaj na synchronizację informacji o węzłach i spróbuj ponownie.",
+      "adminBadSessionKey": "Klucz sesji administracyjnej jest brakujący, wygasły lub nieprawidłowy. Poproś o nową sesję i spróbuj ponownie.",
+      "adminPublicKeyUnauthorized": "Zdalny węzeł nie autoryzuje Twojego klucza administratora."
+    },
+    "proof": {
+      "verified": "Dostarczenie potwierdzone dowodem",
+      "verifiedInfo": "Węzeł, do którego adresowano wiadomość, udowodnił, że ją otrzymał.",
+      "failed": "Dowód dostarczenia nie powiódł się",
+      "failedInfo": "Coś potwierdziło tę wiadomość bez klucza, który ma tylko odbiorca.",
+      "noKey": "Dowód dostarczenia niesprawdzony",
+      "noKeyInfo": "Dowód dostarczenia nadszedł, ale nie było klucza, żeby go sprawdzić."
+    },
+    "relays_few": "Potwierdzone przez {{count}} węzły",
+    "relays_many": "Potwierdzone przez {{count}} węzłów"
   }
 }

@@ -1,11 +1,17 @@
 {
   "maplibre": {
-    "GeolocateControl.FindMyLocation": "Znajdź moją lokalizację",
-    "NavigationControl.ZoomIn": "Przybliż",
-    "NavigationControl.ZoomOut": "Oddal",
-    "CooperativeGesturesHandler.WindowsHelpText": "Użyj Ctrl + kółko, żeby przybliżyć mapę",
-    "CooperativeGesturesHandler.MacHelpText": "Użyj ⌘ + kółko, żeby przybliżyć mapę",
-    "CooperativeGesturesHandler.MobileHelpText": "Przesuwaj mapę dwoma palcami"
+    "GeolocateControl": {
+      "FindMyLocation": "Znajdź moją lokalizację"
+    },
+    "NavigationControl": {
+      "ZoomIn": "Przybliż",
+      "ZoomOut": "Oddal"
+    },
+    "CooperativeGesturesHandler": {
+      "WindowsHelpText": "Użyj Ctrl + kółko, żeby przybliżyć mapę",
+      "MacHelpText": "Użyj ⌘ + kółko, żeby przybliżyć mapę",
+      "MobileHelpText": "Przesuwaj mapę dwoma palcami"
+    }
   },
   "layerTool": {
     "nodeMarkers": "Pokaż węzły",

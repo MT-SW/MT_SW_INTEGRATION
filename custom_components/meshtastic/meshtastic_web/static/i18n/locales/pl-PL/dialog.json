@@ -16,7 +16,14 @@
     "channelSetUrl": "Adres zestawu kanałów / kodu QR",
     "useLoraConfig": "Importuj konfigurację LoRa",
     "presetDescription": "Bieżąca konfiguracja LoRa zostanie zastąpiona.",
-    "title": "Import Channel Set"
+    "title": "Import Channel Set",
+    "beacon": {
+      "addTitle": "Dołączanie do oferty Mesh Beacon",
+      "addDescription": "Oferowany kanał trafia do wolnego slotu dodatkowego, a radio zostaje przy obecnych ustawieniach. Zastosuj przygotowuje zmianę; zapisz ją w Ustawieniach.",
+      "noFreeSlot": "Wszystkie sloty dodatkowe są zajęte. Wybierz slot poniżej; kanał w nim zostanie zastąpiony.",
+      "switchTitle": "Przełączanie na inną sieć",
+      "switchDescription": "Oferowany kanał zastępuje kanał główny, a ustawienia LoRa zmieniają się na ofertowaną sieć. Zastosuj przygotowuje zmianę. Po zapisaniu w Ustawieniach radio przestroi się i uruchomi ponownie, a Ty opuścisz obecną sieć."
+    }
   },
   "locationResponse": {
     "title": "Pozycja: {{identifier}}",
@@ -79,6 +86,10 @@
       "inputPlaceholder": "192.168.1.10 albo homeassistant.local:4408",
       "heading": "Adres URL lub IP",
       "useHttps": "Użyj HTTPS",
+      "localNetwork": {
+        "denied": "Dostęp do sieci lokalnej jest zablokowany dla tej strony. Zezwól na niego w ustawieniach witryny (ikona obok paska adresu) albo przełącz się na HTTPS.",
+        "unsupported": "Ta przeglądarka wymaga HTTPS na tej stronie. Chrome i Edge potrafią łączyć się przez HTTP z urządzeniami w sieci lokalnej."
+      },
       "invalidUrl": {
         "title": "Nieprawidłowy adres",
         "description": "Wpisz poprawny adres HTTP lub HTTPS."
@@ -91,6 +102,7 @@
         },
         "reachable": "Osiągalne",
         "notReachable": "Nieosiągalne",
+        "slowLocalName": "Wyszukanie tej nazwy .local zajęło kilka sekund. Użycie adresu IP radia połączy szybciej.",
         "success": {
           "title": "Test połączenia udany",
           "description": "Urządzenie wygląda na osiągalne."
@@ -129,24 +141,146 @@
     "messageable": "Można pisać: ",
     "KeyManuallyVerifiedTrue": "Klucz publiczny został ręcznie zweryfikowany",
     "KeyManuallyVerifiedFalse": "Klucz publiczny nie jest ręcznie zweryfikowany",
-    "verifyKey": "Zweryfikuj klucz"
+    "verifyKey": "Zweryfikuj klucz",
+    "telemetry": {
+      "title": "Czujniki:",
+      "kind": {
+        "environmentMetrics": "Środowisko",
+        "airQualityMetrics": "Jakość powietrza",
+        "soilWaterMetrics": "Gleba i woda",
+        "powerMetrics": "Zasilanie",
+        "healthMetrics": "Zdrowie",
+        "localStats": "Statystyki lokalne",
+        "trafficManagementStats": "Zarządzanie ruchem",
+        "hostMetrics": "Host"
+      },
+      "field": {
+        "environmentMetrics": {
+          "temperature": "Temperatura",
+          "relativeHumidity": "Wilgotność względna",
+          "barometricPressure": "Ciśnienie atmosferyczne",
+          "gasResistance": "Rezystancja gazu",
+          "iaq": "Jakość powietrza wewnątrz (IAQ)",
+          "voltage": "Napięcie",
+          "current": "Prąd",
+          "lux": "Światło",
+          "whiteLux": "Światło białe",
+          "irLux": "Podczerwień",
+          "uvLux": "Ultrafiolet",
+          "windDirection": "Kierunek wiatru",
+          "windSpeed": "Prędkość wiatru",
+          "windGust": "Porywy wiatru",
+          "windLull": "Cisza wiatru",
+          "rainfall1h": "Opady (1 h)",
+          "rainfall24h": "Opady (24 h)",
+          "lightningStrikeCount1h": "Wyładowania (1 h)",
+          "lightningDistanceKm": "Odległość burzy",
+          "soilMoisture": "Wilgotność gleby",
+          "soilTemperature": "Temperatura gleby",
+          "distance": "Odległość",
+          "weight": "Waga",
+          "radiation": "Promieniowanie",
+          "oneWireTemperature": "Temperatura 1-Wire (kan. {{channel}})",
+          "adcVoltage": "Napięcie ADC (kan. {{channel}})"
+        },
+        "airQualityMetrics": {
+          "pm10Standard": "PM1.0 (standardowe)",
+          "pm25Standard": "PM2.5 (standardowe)",
+          "pm40Standard": "PM4.0 (standardowe)",
+          "pm100Standard": "PM10 (standardowe)",
+          "pm10Environmental": "PM1.0 (środowiskowe)",
+          "pm25Environmental": "PM2.5 (środowiskowe)",
+          "pm100Environmental": "PM10 (środowiskowe)",
+          "particles03um": "Cząstki ≥0,3 µm",
+          "particles05um": "Cząstki ≥0,5 µm",
+          "particles10um": "Cząstki ≥1,0 µm",
+          "particles25um": "Cząstki ≥2,5 µm",
+          "particles40um": "Cząstki ≥4,0 µm",
+          "particles50um": "Cząstki ≥5,0 µm",
+          "particles100um": "Cząstki ≥10 µm",
+          "particlesTps": "Typowy rozmiar cząstek",
+          "co2": "CO₂",
+          "co2Temperature": "Temperatura czujnika CO₂",
+          "co2Humidity": "Wilgotność czujnika CO₂",
+          "formFormaldehyde": "Formaldehyd",
+          "formTemperature": "Temperatura czujnika formaldehydu",
+          "formHumidity": "Wilgotność czujnika formaldehydu",
+          "pmTemperature": "Temperatura czujnika PM",
+          "pmHumidity": "Wilgotność czujnika PM",
+          "pmVocIdx": "Wskaźnik VOC",
+          "pmNoxIdx": "Wskaźnik NOx",
+          "pmStatusFlags": "Flagi stanu czujnika PM"
+        },
+        "soilWaterMetrics": {
+          "soilPh": "pH gleby",
+          "ph": "pH",
+          "electricalConductivity": "Przewodność elektryczna",
+          "salinity": "Zasolenie",
+          "nitrogen": "Azot",
+          "phosphorus": "Fosfor",
+          "potassium": "Potas",
+          "nitrate": "Azotany",
+          "ammonium": "Amon",
+          "dissolvedOxygen": "Tlen rozpuszczony",
+          "orp": "Potencjał redoks",
+          "chemicalOxygenDemand": "Chemiczne zapotrzebowanie na tlen",
+          "biochemicalOxygenDemand": "Biochemiczne zapotrzebowanie na tlen",
+          "turbidity": "Mętność",
+          "solarIrradiance": "Natężenie promieniowania słonecznego"
+        },
+        "powerMetrics": {
+          "channelVoltage": "Napięcie kanału {{channel}}",
+          "channelCurrent": "Prąd kanału {{channel}}"
+        },
+        "healthMetrics": {
+          "heartBpm": "Tętno",
+          "spO2": "SpO₂",
+          "temperature": "Temperatura ciała"
+        },
+        "localStats": {
+          "uptimeSeconds": "Czas pracy",
+          "channelUtilization": "Zajętość kanału",
+          "airUtilTx": "Zajętość eteru (TX)",
+          "noiseFloor": "Poziom szumu",
+          "numOnlineNodes": "Węzły online",
+          "numTotalNodes": "Węzły razem",
+          "numPacketsTx": "Pakiety wysłane",
+          "numPacketsRx": "Pakiety odebrane",
+          "numPacketsRxBad": "Uszkodzone pakiety odebrane",
+          "numRxDupe": "Zdublowane pakiety odebrane",
+          "numTxRelay": "Pakiety przekazane dalej",
+          "numTxRelayCanceled": "Anulowane przekazania",
+          "numTxDropped": "Pakiety odrzucone (pełna kolejka)",
+          "heapFreeBytes": "Wolna sterta",
+          "heapTotalBytes": "Sterta razem"
+        },
+        "trafficManagementStats": {
+          "packetsInspected": "Sprawdzone pakiety",
+          "positionDedupDrops": "Odrzucone zdublowane pozycje",
+          "nodeinfoCacheHits": "Trafienia w pamięci podręcznej NodeInfo",
+          "rateLimitDrops": "Odrzucone przez limit tempa",
+          "unknownPacketDrops": "Odrzucone nieznane pakiety",
+          "hopExhaustedPackets": "Wyczerpany limit przeskoków",
+          "routerHopsPreserved": "Zachowane przeskoki routera"
+        },
+        "hostMetrics": {
+          "uptimeSeconds": "Czas pracy",
+          "freememBytes": "Wolna pamięć",
+          "diskfree1Bytes": "Wolny dysk (/)",
+          "diskfree2Bytes": "Wolny dysk (drugi)",
+          "diskfree3Bytes": "Wolny dysk (trzeci)",
+          "load": "Obciążenie (1 / 5 / 15 min)",
+          "userString": "Informacje"
+        }
+      }
+    },
+    "statusMessage": "Status: ",
+    "signedTrue": "Podpisuje swoje pakiety (XEdDSA)"
   },
-  "pkiBackup": {
-    "loseKeysWarning": "Jeśli stracisz klucze, trzeba będzie zresetować urządzenie.",
-    "secureBackup": "Zrób kopię klucza publicznego i prywatnego i przechowuj ją w bezpiecznym miejscu!",
-    "footer": "=== KONIEC KLUCZY ===",
-    "header": "=== KLUCZE MESHTASTIC DLA {{longName}} ({{shortName}}) ===",
-    "privateKey": "Klucz prywatny:",
-    "publicKey": "Klucz publiczny:",
-    "fileName": "meshtastic_keys_{{longName}}_{{shortName}}.txt",
-    "title": "Kopia kluczy"
-  },
-  "pkiBackupReminder": {
-    "description": "Zalecamy regularne robienie kopii kluczy. Zrobić kopię teraz?",
-    "title": "Przypomnienie o kopii",
-    "remindLaterPrefix": "Przypomnij za",
-    "remindNever": "Nie przypominaj",
-    "backupNow": "Zrób kopię teraz"
+  "regionSetup": {
+    "title": "Ustaw region",
+    "description": "To urządzenie nie ma ustawionego regionu LoRa i nie będzie nadawać, dopóki go nie wybierzesz.",
+    "cta": "Ustaw region"
   },
   "pkiRegenerate": {
     "description": "Czy na pewno wygenerować ponownie parę kluczy?",
@@ -210,7 +344,9 @@
   "clientNotification": {
     "title": "Powiadomienie",
     "TraceRoute can only be sent once every 30 seconds": "Traceroute można wysyłać najwyżej raz na 30 sekund",
-    "Compromised keys were detected and regenerated.": "Wykryto skompromitowane klucze i wygenerowano nowe."
+    "Compromised keys were detected and regenerated": {
+      "": "Wykryto skompromitowane klucze i wygenerowano nowe."
+    }
   },
   "resetNodeDb": {
     "title": "Wyczyść bazę węzłów",
@@ -236,11 +372,6 @@
     "confirm": "Zresetuj ustawienia do ustawień fabrycznych",
     "failedTitle": "Nie udało się przywrócić ustawień fabrycznych. Spróbuj ponownie."
   },
-  "regionSetup": {
-    "title": "Ustaw region",
-    "description": "To urządzenie nie ma ustawionego regionu LoRa i nie będzie nadawać, dopóki go nie wybierzesz.",
-    "cta": "Ustaw region"
-  },
   "keyVerification": {
     "continue": "Dalej",
     "cancel": "Anuluj",
@@ -259,6 +390,63 @@
       "description": "Sprawdź, czy te znaki zgadzają się z widocznymi na urządzeniu {{name}}:",
       "verify": "Zweryfikuj",
       "reject": "Nie weryfikuj"
+    }
+  },
+  "lockdown": {
+    "title": "Radio zablokowane",
+    "description": "To radio jest w trybie blokady. Wpisz hasło, żeby je odblokować. Jego kanały i węzły pozostają ukryte, dopóki tego nie zrobisz.",
+    "provision": {
+      "title": "Ustaw hasło blokady",
+      "description": "To radio potrzebuje hasła blokady, zanim będzie można go używać. Ustawione tu hasło szyfruje zapisane ustawienia i od teraz będziesz je wpisywać, żeby odblokować radio.",
+      "warning": "Zgubionego hasła nie da się odzyskać. Blokada na stałe zamyka też port debugowania radia, nawet jeśli później ją wyłączysz.",
+      "submit": "Ustaw hasło i odblokuj"
+    },
+    "failed": {
+      "title": "Odblokowanie nie powiodło się",
+      "description": "Radio odrzuciło hasło.",
+      "backoff": "Za dużo prób. Spróbuj ponownie za {{seconds}} s."
+    },
+    "reason": {
+      "label": "Powód: {{reason}}",
+      "needs_auth": "To połączenie wymaga hasła",
+      "token_missing": "W radiu nie ma zapisanego odblokowania",
+      "token_expired": "Poprzednie odblokowanie wygasło",
+      "token_boots_zero": "Poprzedniemu odblokowaniu skończyły się restarty",
+      "token_hmac_fail": "Zapisane odblokowanie jest nieprawidłowe",
+      "token_dek_fail": "Zapisane odblokowanie jest nieprawidłowe",
+      "token_wrong_size": "Zapisane odblokowanie jest uszkodzone",
+      "token_bad_magic": "Zapisane odblokowanie jest uszkodzone",
+      "not_provisioned": "Hasło nie zostało jeszcze ustawione"
+    },
+    "passphrase": {
+      "label": "Hasło",
+      "confirmLabel": "Powtórz hasło",
+      "length": "Użyj od 1 do 32 bajtów.",
+      "mismatch": "Hasła się różnią."
+    },
+    "advanced": {
+      "label": "Zaawansowane",
+      "boots": {
+        "label": "Restarty do ponownej blokady",
+        "description": "Radio pozostaje odblokowane przez tyle restartów. 0 oznacza wartość domyślną radia."
+      },
+      "validFor": {
+        "label": "Wygasa po (godziny)",
+        "description": "0 oznacza brak limitu czasu."
+      },
+      "maxSession": {
+        "label": "Limit sesji (sekundy)",
+        "description": "Najdłuższy czas sesji po każdym uruchomieniu. 0 oznacza bez limitu."
+      }
+    },
+    "unlock": "Odblokuj",
+    "waiting": "Czekam na radio…",
+    "disconnect": "Rozłącz",
+    "disable": {
+      "title": "Wyłączyć blokadę?",
+      "description": "Radio odszyfruje zapisane ustawienia, usunie hasło i uruchomi się ponownie bez blokady. Nie da się tego cofnąć: żeby znów użyć blokady, trzeba ją skonfigurować od zera. Port debugowania radia pozostaje zamknięty.",
+      "confirmUnderstanding": "Rozumiem, że tego nie da się cofnąć",
+      "submit": "Wyłącz blokadę"
     }
   }
 }

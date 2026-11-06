@@ -81,6 +81,10 @@
       "title": "Zapisano",
       "description": "Wszystkie zmiany konfiguracji zostały zapisane."
     },
+    "savePending": {
+      "title": "Zapisano",
+      "description": "Zmiany wprowadzone w trakcie zapisu nie zostały jeszcze wysłane. Zapisz ponownie, żeby je wysłać."
+    },
     "favoriteNode": {
       "title": "{{action}} {{nodeName}} {{direction}} ulubionych.",
       "action": {
@@ -195,9 +199,9 @@
   "showUnheard": {
     "label": "Never heard"
   },
-  "language": {
+  "languagePicker": {
     "label": "Język",
-    "changeLanguage": "Change Language"
+    "changeLanguage": "Zmień język"
   },
   "theme": {
     "dark": "Ciemny",
@@ -227,8 +231,162 @@
     "text": "MT_SW | Meshtastic® jest zastrzeżonym znakiem towarowym Meshtastic LLC. | <1>Informacje prawne</1>",
     "commitSha": "Commit SHA: {{sha}}"
   },
-  "languagePicker": {
-    "label": "Język",
-    "changeLanguage": "Zmień język"
+  "settingsPages": {
+    "notConnected": "Połącz węzeł, żeby użyć tych działań.",
+    "administration": {
+      "title": "Administracja",
+      "description": "Działania zasilania i resetu wykonują się od razu na połączonym węźle. Te destrukcyjne najpierw proszą o potwierdzenie.",
+      "reboot": {
+        "label": "Restart",
+        "description": "Uruchom węzeł ponownie teraz lub z opóźnieniem, opcjonalnie w trybie OTA.",
+        "action": "Restart…"
+      },
+      "dfu": {
+        "label": "Restart do trybu DFU",
+        "description": "Tylko płytki nRF52. Węzeł zostaje w bootloaderze i poza siecią mesh, dopóki nie zostanie wgrany nowy firmware albo nie zostanie zresetowany.",
+        "action": "Wejdź w tryb DFU…",
+        "confirmTitle": "Uruchomić ponownie w trybie DFU?",
+        "confirm": "Wejdź w tryb DFU",
+        "sent": "Wysłano żądanie DFU",
+        "failed": "Nie udało się wysłać żądania DFU"
+      },
+      "shutdown": {
+        "label": "Wyłączenie",
+        "description": "Wyłącz węzeł teraz lub z opóźnieniem.",
+        "action": "Wyłącz…"
+      },
+      "factoryResetDevice": {
+        "label": "Reset do ustawień fabrycznych",
+        "description": "Przywróć cały stan i konfigurację urządzenia do ustawień fabrycznych oraz wyczyść sparowania Bluetooth. Węzły i wiadomości zapisane w tej aplikacji też zostaną usunięte.",
+        "action": "Reset fabryczny…"
+      },
+      "factoryResetConfig": {
+        "label": "Reset konfiguracji do fabrycznej",
+        "description": "Przywróć cały stan i konfigurację urządzenia do ustawień fabrycznych, zachowując sparowania Bluetooth.",
+        "action": "Resetuj konfigurację…"
+      },
+      "resetNodeDb": {
+        "label": "Reset bazy węzłów",
+        "description": "Wyczyść bazę węzłów urządzenia i historię wiadomości zapisaną w tej aplikacji.",
+        "action": "Resetuj bazę węzłów…"
+      }
+    },
+    "backup": {
+      "title": "Profil urządzenia",
+      "description": "Profil (plik .cfg) zawiera nazwy węzła, kanały, konfigurację i konfigurację modułów. Ten sam format jest używany przez klienty Android, Apple i wiersza poleceń.",
+      "export": {
+        "label": "Eksport konfiguracji",
+        "description": "Wybierz, co dołączyć, a potem zapisz plik .cfg z bieżącymi ustawieniami tego węzła.",
+        "action": "Eksportuj…",
+        "dialogTitle": "Eksport konfiguracji",
+        "dialogDescription": "Wybierz, które części ustawień tego węzła trafią do pliku.",
+        "confirm": "Eksportuj",
+        "pendingChanges": "Zapisz lub cofnij niezapisane zmiany przed eksportem, żeby plik odpowiadał temu, co jest w węźle.",
+        "failed": "Nie udało się wyeksportować profilu"
+      },
+      "import": {
+        "label": "Import konfiguracji",
+        "description": "Wybierz plik .cfg i zdecyduj, które jego części zastosować. Nic nie jest jeszcze wysyłane do węzła: zmiany są przygotowywane jak każda inna edycja, więc możesz je przejrzeć na stronach konfiguracji i nacisnąć Zapisz albo Cofnij, żeby je odrzucić.",
+        "action": "Wybierz plik…",
+        "dialogTitle": "Import konfiguracji",
+        "dialogDescription": "Można wybrać tylko te części, które zawiera plik.",
+        "confirm": "Przygotuj zmiany",
+        "staged": "Profil przygotowany",
+        "stagedDescription": "Przejrzyj zmiany, a potem naciśnij Zapisz, żeby zapisać je w węźle.",
+        "failed": "Import nie powiódł się",
+        "invalidFile": "Ten plik nie jest prawidłowym profilem urządzenia.",
+        "invalidChannels": "Adres URL kanałów w profilu jest nieprawidłowy; nic nie zostało przygotowane.",
+        "notConnected": "Połącz węzeł przed importem."
+      },
+      "fields": {
+        "longName": "Nazwa długa",
+        "shortName": "Nazwa krótka",
+        "channelUrl": "Kanały (adres URL kanałów)",
+        "config": "Konfiguracja",
+        "moduleConfig": "Konfiguracja modułów",
+        "fixedPosition": "Stała pozycja",
+        "isUnmessagable": "Bez wiadomości",
+        "isLicensed": "Licencjonowane krótkofalarstwo",
+        "privateKey": "Klucz prywatny"
+      },
+      "privateKeyWarning": "Klucz prywatny to tożsamość Twojego węzła. Każdy, kto ma ten plik, mógłby podszyć się pod węzeł i czytać jego wiadomości bezpośrednie. Dołączaj go tylko do własnej kopii zapasowej i trzymaj plik w bezpiecznym miejscu.",
+      "privateKeyExcludedNote": "Bez klucza prywatnego ta aplikacja zachowuje własne klucze importowanego węzła, ale inne klienty mogą nadać mu nową parę kluczy podczas instalowania ustawień bezpieczeństwa.",
+      "privateKeyImportWarning": "Import klucza prywatnego zastępuje tożsamość tego węzła. Inne węzły zobaczą go jako węzeł, z którego pochodzi plik.",
+      "notApplied": "Nie stosowane przy imporcie",
+      "skipped": {
+        "title": "Nie zastosowano:",
+        "owner": "nazwy (dane użytkownika węzła nie zostały wczytane)",
+        "isLicensed": "flaga licencji (tryb krótkofalarski zmienisz na stronie Użytkownik)",
+        "security": "bezpieczeństwo (bieżące klucze węzła nie zostały wczytane)",
+        "trafficManagement": "zarządzanie ruchem",
+        "ringtone": "dzwonek",
+        "cannedMessages": "gotowe wiadomości"
+      }
+    },
+    "cleanNodes": {
+      "title": "Czyszczenie bazy węzłów",
+      "description": "Uwaga: usuwa węzły zarówno z aplikacji, jak i z bazy węzła. Wybory się sumują.",
+      "olderThan": "Usuń węzły słyszane ostatnio ponad {{count}} dni temu",
+      "olderThanDescription": "Węzły nigdy niesłyszane liczą się jako stare. Twój węzeł, ulubione i ignorowane zawsze zostają.",
+      "onlyUnknown": "Usuń tylko nieznane węzły",
+      "onlyUnknownDescription": "Nieznane węzły to takie, które nigdy nie wysłały danych użytkownika (brak nazwy długiej).",
+      "queued": "Węzły do usunięcia: {{count}}",
+      "queued_one": "{{count}} węzeł do usunięcia",
+      "queued_other": "{{count}} węzła do usunięcia",
+      "none": "Żaden węzeł nie pasuje.",
+      "cleanNow": "Wyczyść teraz",
+      "confirmTitle": "Wyczyścić bazę węzłów?",
+      "confirmDescription": "Usunąć węzły ({{count}}) z aplikacji i z bazy węzła. Nie da się tego cofnąć.",
+      "confirmDescription_one": "Usunąć {{count}} węzeł z aplikacji i z bazy węzła. Nie da się tego cofnąć.",
+      "confirmDescription_other": "Usunąć {{count}} węzła z aplikacji i z bazy węzła. Nie da się tego cofnąć.",
+      "done": "Usunięto węzły: {{count}}",
+      "done_one": "Usunięto {{count}} węzeł",
+      "done_other": "Usunięto {{count}} węzła",
+      "failed": "Nie udało się usunąć: {{count}}",
+      "queued_few": "{{count}} węzły do usunięcia",
+      "queued_many": "{{count}} węzłów do usunięcia",
+      "confirmDescription_few": "Usunąć {{count}} węzły z aplikacji i z bazy węzła. Nie da się tego cofnąć.",
+      "confirmDescription_many": "Usunąć {{count}} węzłów z aplikacji i z bazy węzła. Nie da się tego cofnąć.",
+      "done_few": "Usunięto {{count}} węzły",
+      "done_many": "Usunięto {{count}} węzłów"
+    },
+    "debug": {
+      "title": "Logi urządzenia",
+      "description": "Wpisy logu, które węzeł wysłał od otwarcia tej strony. Węzeł wysyła je tylko wtedy, gdy na stronie Bezpieczeństwo włączone jest „API logów debugowania”; nie są zapisywane, więc wyjście z tej strony je czyści.",
+      "securityLink": "Otwórz ustawienia bezpieczeństwa",
+      "search": "Filtruj logi",
+      "clear": "Wyczyść",
+      "export": "Eksportuj",
+      "empty": "Brak wpisów logu.",
+      "noMatch": "Żaden wpis logu nie pasuje do filtra.",
+      "count": "{{shown}} z {{total}} wpisów",
+      "capped": "Zachowywanych jest tylko ostatnie {{max}} wpisów."
+    },
+    "app": {
+      "appearance": "Wygląd",
+      "appearanceDescription": "Te ustawienia są zapisywane tylko w tej przeglądarce.",
+      "theme": "Motyw",
+      "themeDescription": "Jasny, ciemny albo zgodny z ustawieniem systemu.",
+      "language": "Język",
+      "languageDescription": "Język aplikacji."
+    },
+    "about": {
+      "whatIs": "Czym jest sieć mesh?",
+      "whatIsDescription": "Otwarta, niezależna od infrastruktury, zdecentralizowana sieć mesh działająca na tanich, energooszczędnych radiach.",
+      "app": "MT_SW Web — zmodyfikowana wersja aplikacji Meshtastic Web",
+      "version": "Wersja aplikacji",
+      "github": "Repozytorium GitHub",
+      "githubDescription": "Kod źródłowy, zgłoszenia i wydania tej aplikacji.",
+      "project": "Informacje o projekcie",
+      "website": "Strona internetowa",
+      "documentation": "Dokumentacja",
+      "license": "Licencja",
+      "licenseDescription": "GNU General Public License v3.0",
+      "needHardware": "Potrzebujesz sprzętu?",
+      "needHardwareDescription": "Sieć mesh wymaga zgodnego urządzenia. Zobacz obsługiwane urządzenia, żeby wybrać jedno.",
+      "devices": "Obsługiwane urządzenia",
+      "copyright": "Meshtastic® Copyright Meshtastic LLC",
+      "licenseNotice": "Wolne oprogramowanie na licencji GNU General Public License v3, bez gwarancji. Możesz je dalej rozpowszechniać na tej samej licencji."
+    }
   }
 }

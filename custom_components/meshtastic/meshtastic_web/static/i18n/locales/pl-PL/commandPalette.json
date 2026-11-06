@@ -18,6 +18,9 @@
       "nodes": "Węzły"
     }
   },
+  "settings": {
+    "label": "Ustawienia"
+  },
   "manage": {
     "label": "Zarządzaj",
     "command": {

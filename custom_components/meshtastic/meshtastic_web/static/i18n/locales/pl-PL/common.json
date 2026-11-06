@@ -3,7 +3,7 @@
     "apply": "Zastosuj",
     "addConnection": "Dodaj połączenie",
     "saveConnection": "Zapisz połączenie",
-    "backupKey": "Kopia klucza",
+    "saveChanges": "Zapisz zmiany",
     "cancel": "Anuluj",
     "connect": "Połącz",
     "clearMessages": "Wyczyść wiadomości",
@@ -31,8 +31,7 @@
     "unsetDefault": "Usuń jako domyślne",
     "scanQr": "Skanuj kod QR",
     "traceRoute": "Śledź trasę",
-    "submit": "Wyślij",
-    "saveChanges": "Zapisz zmiany"
+    "submit": "Wyślij"
   },
   "app": {
     "title": "MT_SW",
@@ -41,6 +40,7 @@
   "loading": "Ładowanie...",
   "unit": {
     "cps": "CPS",
+    "db": "dB",
     "dbm": "dBm",
     "hertz": "Hz",
     "hop": {
@@ -159,7 +159,11 @@
     },
     "invalidOverrideFreq": {
       "number": "Nieprawidłowa wartość — oczekiwany zakres 410–930 MHz albo 0 (domyślna)."
-    }
+    },
+    "presetNotAllowedInRegion": "Ten preset nie jest dozwolony w wybranym regionie. Wybierz jeden z wymienionych.",
+    "presetNeedsFirmware28": "Ten preset wymaga firmware 2.8 lub nowszego. Starszy firmware wraca do Long Fast.",
+    "longNameTooManyBytes": "Za długie: {{params.current}} z {{params.maximum}} bajtów. Emoji i litery z akcentami zajmują więcej niż jeden bajt, a dłuższe nazwy firmware ucina.",
+    "regionNeedsFirmware28": "Ten region wymaga firmware 2.8 lub nowszego. Zaktualizuj firmware węzła, żeby z niego korzystać."
   },
   "yes": "Tak",
   "no": "Nie"

@@ -13,8 +13,8 @@
     "tabStoreAndForward": "S&F",
     "tabTelemetry": "Telemetria",
     "tabRemoteHardware": "Zdalny sprzęt",
-    "tabTrafficManagement": "Zarządzanie ruchem",
-    "tabStatusMessage": "Wiadomość statusu"
+    "tabTak": "TAK",
+    "tabMeshBeacon": "Mesh Beacon"
   },
   "ambientLighting": {
     "title": "Ustawienia oświetlenia",
@@ -42,6 +42,14 @@
     "ambientLightingConfig": {
       "label": "Konfiguracja oświetlenia",
       "description": "Konfiguracja oświetlenia"
+    },
+    "color": {
+      "label": "Kolor",
+      "description": "Kolor diody LED"
+    },
+    "advanced": {
+      "label": "Zaawansowane",
+      "description": "Poziomy czerwonego, zielonego i niebieskiego, 0–255"
     }
   },
   "audio": {
@@ -134,6 +142,12 @@
     "enabled": {
       "label": "Gotowe wiadomości włączone",
       "description": "Włącz gotowe wiadomości"
+    },
+    "messages": {
+      "label": "Wiadomości",
+      "description": "Wiadomości do wyboru na urządzeniu, rozdzielone znakiem |. Do 200 bajtów",
+      "loading": "Odczyt wiadomości z urządzenia…",
+      "unavailable": "Nie udało się odczytać wiadomości z urządzenia"
     }
   },
   "detectionSensor": {
@@ -254,6 +268,12 @@
     "advanced": {
       "label": "Zaawansowane",
       "description": "Przypisania pinów i czasy"
+    },
+    "ringtone": {
+      "label": "Dzwonek",
+      "description": "Melodia odtwarzana na buzzerze, w formacie RTTTL. Do 230 bajtów",
+      "loading": "Odczyt dzwonka z urządzenia…",
+      "unavailable": "Nie udało się odczytać dzwonka z urządzenia"
     }
   },
   "mqtt": {
@@ -408,7 +428,8 @@
     "rangeTestConfig": {
       "label": "Konfiguracja testu zasięgu",
       "description": "Konfiguracja testu zasięgu"
-    }
+    },
+    "publicChannel": "Test zasięgu nie może działać, gdy kanał główny używa klucza domyślnego albo żadnego, więc zostanie wyłączony przy zapisie."
   },
   "serial": {
     "title": "Ustawienia portu szeregowego",
@@ -525,10 +546,6 @@
       "label": "Ekran zasilania włączony",
       "description": "Włącz ekran telemetrii zasilania"
     },
-    "airQualityScreenEnabled": {
-      "label": "Ekran jakości powietrza włączony",
-      "description": "Pokazuj jakość powietrza na ekranie urządzenia"
-    },
     "telemetryConfig": {
       "label": "Konfiguracja telemetrii",
       "description": "Konfiguracja telemetrii"
@@ -548,14 +565,19 @@
     "allowUndefinedPinAccess": {
       "label": "Dostęp do niezdefiniowanych pinów",
       "description": "Pozwól odczytywać i zapisywać piny GPIO spoza listy dostępnych pinów"
-    }
-  },
-  "statusMessage": {
-    "title": "Ustawienia wiadomości statusu",
-    "description": "Okresowo rozgłaszaj krótką wiadomość o stanie tego węzła",
-    "nodeStatus": {
-      "label": "Wiadomość statusu",
-      "description": "Tekst statusu rozgłaszany przez węzeł przy zmianie i cyklicznie"
+    },
+    "availablePins": {
+      "label": "Dostępne piny",
+      "description": "Piny GPIO, które inne węzły mogą odczytywać lub zapisywać przez ten moduł, maksymalnie cztery",
+      "gpioPin": "Pin GPIO",
+      "name": "Nazwa",
+      "type": "Typ",
+      "types": {
+        "1": "Odczyt cyfrowy",
+        "2": "Zapis cyfrowy"
+      },
+      "add": "Dodaj",
+      "remove": "Usuń"
     }
   },
   "tak": {
@@ -568,66 +590,54 @@
     "role": {
       "label": "Rola",
       "description": "Rola członka zgłaszana do ATAK"
+    },
+    "teamColor": {
+      "label": "Kolor zespołu",
+      "description": "Wybierz zespół według koloru"
     }
   },
-  "trafficManagement": {
-    "title": "Ustawienia zarządzania ruchem",
-    "description": "Inspekcja pakietów i kształtowanie ruchu, żeby zmniejszyć obciążenie kanału",
-    "enabled": {
-      "label": "Moduł włączony",
-      "description": "Włącz inspekcję pakietów i kształtowanie ruchu"
+  "meshBeacon": {
+    "title": "Mesh Beacon",
+    "description": "Odbieraj i wysyłaj zaproszenia, dzięki którym pobliskie radia mogą dołączyć do kanału",
+    "regionRequired": "Ustaw region radia, zanim skonfigurujesz beacon.",
+    "requiresPreset": "Beacon rozgłasza preset modemu, do którego inni mogą dołączyć. To radio używa własnych ustawień LoRa zamiast standardowego presetu, więc beacon mógłby zapraszać na ustawienia, których nikt nie usłyszy. Nadawanie można tu wyłączyć, ale nie włączyć, dopóki radio nie użyje standardowego presetu.",
+    "region": {
+      "label": "Region",
+      "description": "Beacon zawsze rozgłasza region i preset tego radia"
     },
-    "positionDedupEnabled": {
-      "label": "Deduplikacja pozycji",
-      "description": "Odrzucaj zbędne rozgłoszenia pozycji"
+    "listenEnabled": {
+      "label": "Nasłuchuj beaconów",
+      "description": "Odbieraj beacony od innych węzłów. Ich tekst trafia do wiadomości, a oferty kanałów pojawiają się na stronie Kanały"
     },
-    "positionPrecisionBits": {
-      "label": "Bity precyzji pozycji",
-      "description": "Liczba bitów precyzji używana przy deduplikacji pozycji (0–32)"
+    "broadcastEnabled": {
+      "label": "Nadawaj beacon",
+      "description": "Okresowo ogłaszaj tę sieć pobliskim węzłom"
     },
-    "positionMinIntervalSecs": {
-      "label": "Minimalny odstęp pozycji",
-      "description": "Minimalna liczba sekund między aktualizacjami pozycji od tego samego węzła"
+    "broadcastMessage": {
+      "label": "Wiadomość",
+      "description": "Tekst wysyłany z każdym beaconem, do 100 bajtów"
     },
-    "nodeinfoDirectResponse": {
-      "label": "Bezpośrednie odpowiedzi NodeInfo",
-      "description": "Odpowiadaj na prośby o NodeInfo prosto z lokalnej pamięci"
+    "broadcastIntervalSecs": {
+      "label": "Odstęp nadawania",
+      "description": "Jak często wysyłać beacon. Minimum to jedna godzina"
     },
-    "nodeinfoDirectResponseMaxHops": {
-      "label": "Maks. skoków odpowiedzi NodeInfo",
-      "description": "Minimalna odległość w skokach od pytającego, zanim odpowiemy na prośbę o NodeInfo"
+    "offerChannel": {
+      "groupLabel": "Oferowany kanał",
+      "groupDescription": "Kanał, do którego beacon zaprasza pobliskie radia",
+      "label": "Oferowany kanał",
+      "description": "Kanał, którego nazwę i klucz beacon oferuje słuchaczom",
+      "keep": "Obecny: {{name}}"
     },
-    "rateLimitEnabled": {
-      "label": "Ograniczanie częstotliwości",
-      "description": "Przyhamuj zbyt gadatliwe węzły limitem na węzeł"
-    },
-    "rateLimitWindowSecs": {
-      "label": "Okno limitu",
-      "description": "Okno czasowe (s) do liczenia limitu"
-    },
-    "rateLimitMaxPackets": {
-      "label": "Maks. pakietów w oknie",
-      "description": "Najwięcej pakietów od jednego węzła w oknie limitu"
-    },
-    "dropUnknownEnabled": {
-      "label": "Odrzucaj nieznane pakiety",
-      "description": "Odrzucaj nieodczytywalne pakiety w oknie limitu"
-    },
-    "unknownPacketThreshold": {
-      "label": "Próg nieznanych pakietów",
-      "description": "Po ilu nieznanych pakietach od węzła zacząć je odrzucać"
-    },
-    "exhaustHopTelemetry": {
-      "label": "Wyczerpanie skoków (telemetria)",
-      "description": "Ustaw limit skoków 0 dla przekazywanych rozgłoszeń telemetrii"
-    },
-    "exhaustHopPosition": {
-      "label": "Wyczerpanie skoków (pozycja)",
-      "description": "Ustaw limit skoków 0 dla przekazywanych rozgłoszeń pozycji"
-    },
-    "routerPreserveHops": {
-      "label": "Zachowuj skoki routerów",
-      "description": "Zachowuj limit skoków dla ruchu między routerami"
+    "targets": {
+      "label": "Cele nadawania",
+      "description": "Gdzie wysyłany jest każdy beacon. Domyślnie używa działającego presetu i kanału radia",
+      "target": "Cel {{number}}",
+      "channel": "Kanał",
+      "preset": "Preset nadawania",
+      "default": "Domyślny",
+      "channelNumber": "Kanał {{index}}",
+      "add": "Dodaj cel",
+      "remove": "Usuń cel"
     }
   }
 }

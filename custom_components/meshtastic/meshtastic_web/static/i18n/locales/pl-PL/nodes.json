@@ -58,5 +58,22 @@
     "ignoreNode": "Ignoruj węzeł",
     "unignoreNode": "Od-ignoruj węzeł",
     "requestPosition": "Poproś o pozycję"
+  },
+  "trust": {
+    "signed": {
+      "label": "Podpisany",
+      "tooltip": "Ten węzeł podpisuje swoje pakiety (XEdDSA), więc radio może sprawdzić, że naprawdę od niego pochodzą."
+    },
+    "unheard": {
+      "label": "Niesłyszany przy obecnych ustawieniach LoRa",
+      "tooltip": "Ostatnio słyszany, zanim zmieniły się ustawienia LoRa tego radia. Może być nieosiągalny przy obecnych ustawieniach."
+    },
+    "muted": {
+      "label": "Wyciszony",
+      "tooltip": "Powiadomienia z tego węzła są wyciszone."
+    },
+    "statusMessage": {
+      "label": "Komunikat statusu"
+    }
   }
 }
