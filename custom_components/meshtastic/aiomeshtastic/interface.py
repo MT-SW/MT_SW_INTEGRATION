@@ -365,6 +365,15 @@ class MeshInterface:
         with contextlib.suppress(Exception):
             await self._connection.send_disconnect()
         await self._connection.force_close()
+        if self._reconnect_lock.locked():
+            # Akurat trwa próba ponownego łączenia — po jej zakończeniu pętla sama zamknie łącze (patrz
+            # _reconnect_while_running); tu dajemy jej chwilę, żeby nie zostawić otwartego gniazda.
+            for _ in range(20):
+                await asyncio.sleep(0.5)
+                if not self._reconnect_lock.locked():
+                    break
+            if self._connection.is_connected:
+                await self._connection.force_close()
 
     async def resume_link(self) -> None:
         """Zakończ odłączenie — pętla ponownego łączenia sama wróci do radia."""
@@ -1144,7 +1153,7 @@ class MeshInterface:
             if node_id in (0, self.my_node_num()):
                 self._own_position_packets_seen = getattr(self, "_own_position_packets_seen", 0) + 1
                 with contextlib.suppress(Exception):
-                    self._logger.warning(
+                    self._logger.debug(
                         "POZYCJA bramki z łącza: from=%s payload=%s",
                         node_id,
                         google.protobuf.json_format.MessageToDict(packet.app_payload),
@@ -1332,6 +1341,9 @@ class MeshInterface:
             if self.link_paused:
                 # Użytkownik odłączył integrację (np. na czas OTA) — nie dotykamy radia, tylko czekamy.
                 await asyncio.sleep(min(2.0, max(0.2, self.link_pause_remaining())))
+                if not self.link_paused:
+                    self._logger.info("Odłączenie od radia dobiegło końca — łączę ponownie")
+                    self._set_link_state("disconnected")
                 continue
             if reconnect_counter < reconnect_counter_max:
                 reconnect_counter += 1
@@ -1368,6 +1380,12 @@ class MeshInterface:
                     else:
                         self._logger.debug("Reconnect connection succeeded, requesting config")
 
+                    if self.link_paused:
+                        # Odłączenie włączono w trakcie łączenia — nie zostawiamy radia zajętego.
+                        self._logger.info("Odłączenie włączone w trakcie łączenia — zamykam łącze")
+                        await self._connection.force_close()
+                        continue
+
                     try:
                         # Warm reconnect doesn't need the full node database again — we
                         # already have it in memory (_node_database survives reconnect,
@@ -1395,6 +1413,10 @@ class MeshInterface:
                         await asyncio.sleep(reconnect_delay)
                         continue
                     else:
+                        if self.link_paused:
+                            self._logger.info("Odłączenie włączone w trakcie łączenia — zamykam łącze")
+                            await self._connection.force_close()
+                            continue
                         force_reconnect = False
                         self._logger.info("Połączono ponownie z radiem (%s) po %d próbach", self._connection_label(), attempt)
                         self._reconnect_done.set()

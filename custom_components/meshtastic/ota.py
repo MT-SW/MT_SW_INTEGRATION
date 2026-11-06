@@ -140,6 +140,8 @@ class OtaJob:
         return self.state in STATES_RUNNING
 
     def set(self, state: str, message: str = "", progress: float | None = None) -> None:
+        if state != self.state or state in ("error", "done"):
+            _LOGGER.info("OTA: %s — %s", state, message)  # ślad w logu, żeby było widać, na czym stanęło
         self.state = state
         self.message = message
         if progress is not None:
@@ -415,7 +417,14 @@ async def _run(  # noqa: PLR0913
             msg = "Do OTA przez Bluetooth podaj adres BLE radia (AA:BB:CC:DD:EE:FF)."
             raise OtaError(msg)
         job.set("preparing", "Proszę radio o restart do trybu OTA…", 0.0)
-        await interface.request_reboot_ota(REBOOT_MODE_BLE if mode == "ble" else REBOOT_MODE_WIFI, digest_bytes)
+        try:
+            await asyncio.wait_for(
+                interface.request_reboot_ota(REBOOT_MODE_BLE if mode == "ble" else REBOOT_MODE_WIFI, digest_bytes),
+                timeout=30.0,
+            )
+        except TimeoutError as err:
+            msg = "Radio nie odpowiedziało na prośbę o restart do trybu OTA (brak połączenia z radiem?)."
+            raise OtaError(msg) from err
 
         # Radio potwierdza „Rebooting to WiFi OTA” albo odrzuca („OTA Loader does not support …”) — jak w aplikacji.
         deadline = time.monotonic() + PREFLIGHT_TIMEOUT_S
@@ -423,10 +432,13 @@ async def _run(  # noqa: PLR0913
             note = interface.last_client_notification()
             if note:
                 if note.startswith("Rebooting to"):
+                    _LOGGER.info("OTA: radio potwierdziło restart (%s)", note)
                     break
                 msg = f"Radio odmówiło wejścia w tryb OTA: {note}"
                 raise OtaError(msg)
             await asyncio.sleep(0.25)
+        else:
+            _LOGGER.info("OTA: radio nie przysłało potwierdzenia restartu w %.0f s — kontynuuję", PREFLIGHT_TIMEOUT_S)
 
         # Od tej chwili radio się restartuje — integracja nie może go zagadywać ani łączyć się ponownie.
         await interface.pause_link(PAUSE_FOR_OTA_S)
