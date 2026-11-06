@@ -873,7 +873,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         tracked = len(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
         return self.async_show_menu(
             step_id="devices",
-            menu_options=["device_add", "device_area", "device_remove", "device_merge", "device_list"],
+            menu_options=["device_add", "device_remove", "device_merge", "device_list"],
             description_placeholders={"count": str(tracked), "merge_hint": hint},
         )
 
@@ -916,8 +916,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         )
         return self.async_show_form(step_id="device_add", data_schema=schema)
 
-    async def async_step_device_area(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Przypisz zbierane urządzenia do obszaru Home Assistanta (z już utworzonych)."""
+    async def async_step_areas(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Zarządzanie obszarami: dodaj zbierane urządzenia do obszaru Home Assistanta (rozwijana lista urządzeń)."""
         from .groups import assign_nodes_to_area  # noqa: PLC0415
 
         tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
@@ -930,17 +930,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=dict(self.config_entry.options))
         schema = vol.Schema(
             {
+                vol.Required("area"): AreaSelector(),
                 vol.Required("assign_nodes"): SelectSelector(
                     SelectSelectorConfig(
                         options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
                         multiple=True,
-                        mode=SelectSelectorMode.LIST,
+                        mode=SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Required("area"): AreaSelector(),
             }
         )
-        return self.async_show_form(step_id="device_area", data_schema=schema)
+        return self.async_show_form(step_id="areas", data_schema=schema)
 
     async def async_step_device_remove(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Usuń urządzenia ze zbierania (znikają też z bazy radia i z listy w panelu)."""
@@ -1017,43 +1017,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 kept = max(plan.nums, key=lambda n: (nodes.get(n) or {}).get("lastHeard") or 0)
                 self._apply_merge_choice(plan, kept, remove_from_radio=True)
         return await self._merge_finish()
-
-    # --- Zarządzanie obszarami: tworzenie, dodawanie ich urządzeń do zbierania, usuwanie własnych grup ---
-
-    async def async_step_areas(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
-        """Menu zarządzania obszarami."""
-        return self.async_show_menu(
-            step_id="areas",
-            menu_options=["area_create", "device_area"],
-            description_placeholders={"count": str(len(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])))},
-        )
-
-    async def async_step_area_create(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Utwórz obszar w Home Assistancie i przypisz do niego wybrane, już zbierane urządzenia."""
-        from .groups import assign_nodes_to_area, get_or_create_area  # noqa: PLC0415
-
-        tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
-        if not tracked:
-            return self.async_abort(reason="no_devices")
-        if user_input is not None:
-            ids = {int(v) for v in user_input["new_nodes"]}
-            assign_nodes_to_area(
-                self.hass, self.config_entry, ids, get_or_create_area(self.hass, user_input["new_name"].strip())
-            )
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
-        schema = vol.Schema(
-            {
-                vol.Required("new_name"): str,
-                vol.Required("new_nodes"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
-                        multiple=True,
-                        mode=SelectSelectorMode.LIST,
-                    )
-                ),
-            }
-        )
-        return self.async_show_form(step_id="area_create", data_schema=schema)
 
     async def async_step_device_list(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Lista dodanych urządzeń — wybór dowolnego otwiera jego szczegóły i akcje."""
