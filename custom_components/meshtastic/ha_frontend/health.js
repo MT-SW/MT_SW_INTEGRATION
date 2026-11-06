@@ -10,7 +10,7 @@
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
 import { signalInfo } from "./hops.js";
-import "./health-metrics.js";
+import { METRICS } from "./health-metrics.js";
 
 const TEXT = {
   pl: {
@@ -187,7 +187,7 @@ class MeshHealthTab extends LitElement {
 
   constructor() {
     super();
-    this._view = "metrics";
+    this._view = "power";
     this.nodes = [];
     this._filter = "all";
     this._search = "";
@@ -543,11 +543,11 @@ class MeshHealthTab extends LitElement {
       <div class="wrap">
         <h3>${this._tr("title")}</h3>
         <div class="viewbar">
-          <button class="vb ${this._view !== "metrics" ? "on" : ""}" @click=${() => (this._view = "summary")}>${this._tr("summary")}</button>
-          <button class="vb ${this._view === "metrics" ? "on" : ""}" @click=${() => (this._view = "metrics")}>${this._tr("metrics")}</button>
+          ${METRICS.map((m) => html`<button class="vb ${this._view === m.id ? "on" : ""}" @click=${() => (this._view = m.id)}>${(this.hass && this.hass.language || "pl").startsWith("pl") ? m.pl : m.en}</button>`)}
+          <button class="vb ${this._view === "summary" ? "on" : ""}" @click=${() => (this._view = "summary")}>${this._tr("summary")}</button>
         </div>
-        ${this._view === "metrics"
-          ? html`<mtsw-health-metrics .hass=${this.hass} .entryId=${this.entryId} .nodes=${this.nodes}></mtsw-health-metrics>`
+        ${this._view !== "summary"
+          ? html`<mtsw-health-metrics .metric=${this._view} .hass=${this.hass} .entryId=${this.entryId} .nodes=${this.nodes}></mtsw-health-metrics>`
           : html`
         <div class="top">
           ${this._ring(rows, counts)}
@@ -631,7 +631,7 @@ class MeshHealthTab extends LitElement {
   static get styles() {
     return css`
       :host { display: block; height: var(--mtsw-tab-height, 100%); overflow: auto; }
-      .viewbar { display: flex; gap: 8px; margin: 4px 0 8px; }
+      .viewbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
       .vb { appearance: none; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); border-radius: 16px; padding: 4px 14px; font: inherit; cursor: pointer; }
       .vb.on { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
       .wrap { padding: 8px 16px 24px; max-width: 1100px; margin: 0 auto; }

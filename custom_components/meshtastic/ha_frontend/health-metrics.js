@@ -18,7 +18,7 @@ const H = 3600e3;
 const D = 24 * H;
 
 /* kinds: klucz historii dla wykresów -> rodzaj serii w magazynie */
-const METRICS = [
+export const METRICS = [
   { id: "power", pl: "Zasilanie", en: "Power", charts: ["battery", "voltage", "current"], kinds: { device: "device_metrics", environment: "environment_metrics", power: "power_metrics" } },
   { id: "signal", pl: "Sygnał", en: "Signal", charts: ["snr", "rssi", "noise"], kinds: { signal: "signal", stats: "local_stats" } },
   { id: "ether", pl: "Eter", en: "Airtime", charts: ["airtime"], kinds: { device: "device_metrics" } },
@@ -71,6 +71,7 @@ class MtswHealthMetrics extends LitElement {
       hass: { type: Object },
       entryId: { type: String },
       nodes: { type: Array },
+      metric: { type: String },
       _metric: { type: String },
       _search: { type: String },
       _sort: { type: String },
@@ -105,6 +106,10 @@ class MtswHealthMetrics extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     clearInterval(this._timer);
+  }
+
+  updated(changed) {
+    if (changed.has("metric") && this.metric && this.metric !== this._metric) this._pick(this.metric);
   }
 
   _tr(key) {
@@ -276,9 +281,6 @@ class MtswHealthMetrics extends LitElement {
     const rows = this._rows();
     return html`
       <div class="wrap">
-        <div class="bar">${METRICS.map(
-          (m) => html`<button class="chip ${m.id === this._metric ? "on" : ""}" @click=${() => this._pick(m.id)}>${this._label(m)}</button>`
-        )}</div>
         <div class="bar">
           <input class="search" placeholder=${this._tr("search")} .value=${this._search} @input=${(e) => (this._search = e.target.value)} />
           <select @change=${(e) => (this._sort = e.target.value)}>
