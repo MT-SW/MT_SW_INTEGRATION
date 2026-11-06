@@ -25,6 +25,7 @@ CONF_CONNECTION_TCP_PORT = "tcp_port"
 
 CONF_OPTION_FILTER_NODES = "nodes"
 CONF_OPTION_NODE = "node"
+CONF_OPTION_NODE_GROUPS = "node_groups"  # własne grupy węzłów do zbierania: [{"name": str, "node_ids": [int]}]
 CONF_OPTION_ADD_ANOTHER_NODE = "add_another_node"
 
 CONF_OPTION_NOTIFY_PLATFORM = "notify_platform"

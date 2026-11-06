@@ -11,6 +11,7 @@
 - **Klient webowy** przebudowany na najnowszej wersji oryginału z naszą oprawą i pełnym polskim tłumaczeniem.
 - **Trzy niezależne części** – zbieranie danych (encje), panel i klient web działają osobno. Panel widzi wszystko, co jest w radiu, i sam zapisuje dane.
 - **Okres trzymania danych panelu** – Ustawienia → Pamięć: od 1 do 60 dni (domyślnie 30).
+- **Grupy węzłów do zbierania** – Opcje integracji: gotowe zestawy (ulubione, słyszane 24 godz. i 7 dni, routery, z pozycją) i własne grupy zapisywane pod nazwą. Tylko dokładają węzły, już dodane zostają.
 - **Węzeł usunięty z radia** (ręcznie albo czyszczeniem bazy) – zbieranie kończy się bez błędów; integracja pamięta go 30 dni (stałe) i sama wznawia zbieranie, jeśli węzeł wróci.
 
 ### Poprawki
@@ -36,6 +37,7 @@
 - **Web client** rebuilt on the latest upstream version with our branding and a full Polish translation.
 - **Three independent parts** – data collection (entities), the panel and the web client work separately. The panel sees everything on the radio and stores data on its own.
 - **Panel data retention** – Settings → Storage: 1 to 60 days (default 30).
+- **Node groups for collection** – integration Options: ready-made sets (favorites, heard in 24 h and 7 days, routers, with a position) and your own named groups. They only add nodes; the ones already added stay.
 - **Data collection** – Settings → Data collection: list of collected nodes, adding with search, removing (also removes from the radio, so it disappears from the panel) and merging duplicates.
 - **Node removed from the radio** (by hand or by database cleanup) – collection ends without errors; the integration remembers it for 30 days (fixed) and resumes collection by itself if the node returns.
 

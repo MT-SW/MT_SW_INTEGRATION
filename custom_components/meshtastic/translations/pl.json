@@ -123,7 +123,8 @@
         "menu_options": {
           "settings": "Ustawienia (tryb pracy, śledzone węzły, powiadomienia, serwery)",
           "devices": "Dodane urządzenia — otwórz szczegóły",
-          "merge": "Scal duplikaty węzłów (zmiana numeru)"
+          "merge": "Scal duplikaty węzłów (zmiana numeru)",
+          "groups": "Dodaj grupę węzłów do zbierania"
         }
       },
       "settings": {
@@ -203,6 +204,17 @@
         "data": {
           "keep": "Węzeł, który zostaje",
           "remove_from_radio": "Usuń pozostałe też z bazy węzłów w radiu"
+        }
+      },
+      "groups": {
+        "title": "Grupy węzłów do zbierania",
+        "description": "Teraz zbierasz: {count}. To okno tylko DODAJE węzły, niczego nie usuwa, więc już dodane zostają. Liczba przy zestawie to węzły, których jeszcze nie zbierasz.",
+        "data": {
+          "presets": "Gotowe zestawy",
+          "saved": "Moje grupy (dodaj)",
+          "delete_groups": "Moje grupy (usuń grupę, węzły zostają)",
+          "new_nodes": "Własna grupa: wybierz węzły",
+          "new_name": "Własna grupa: nazwa (zapisze grupę na później)"
         }
       }
     },

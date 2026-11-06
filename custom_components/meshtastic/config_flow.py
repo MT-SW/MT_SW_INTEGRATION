@@ -33,6 +33,7 @@ from .const import (
     CONF_CONNECTION_TYPE,
     CONF_OPTION_ADD_ANOTHER_NODE,
     CONF_OPTION_FILTER_NODES,
+    CONF_OPTION_NODE_GROUPS,
     CONF_OPTION_NODE,
     CONF_OPTION_NOTIFY_PLATFORM,
     CONF_OPTION_NOTIFY_PLATFORM_CHANNELS,
@@ -816,7 +817,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
         """Menu: ustawienia / lista śledzonych urządzeń (każde do otwarcia) / scalanie duplikatów."""
-        return self.async_show_menu(step_id="init", menu_options=["settings", "devices", "merge"])
+        return self.async_show_menu(step_id="init", menu_options=["settings", "devices", "groups", "merge"])
 
     async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Lista dodanych urządzeń — wybór dowolnego otwiera jego szczegóły i akcje."""
@@ -907,6 +908,121 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 "identity": el.get("identity_key") or "—",
                 "device_link": link,
             },
+        )
+
+    # --- Grupy węzłów do zbierania: gotowe zestawy + własne zapisane grupy. Zawsze tylko DOKŁADAJĄ ---
+
+    _PRESETS = ("favorites", "heard_24h", "heard_7d", "routers", "with_position")
+
+    @staticmethod
+    def _preset_ids(preset: str, nodes: Mapping[int, Any], own: int | None) -> set[int]:
+        import time  # noqa: PLC0415
+
+        now = time.time()
+        routers = {"ROUTER", "ROUTER_CLIENT", "ROUTER_LATE", "REPEATER"}
+        out: set[int] = set()
+        for num, info in nodes.items():
+            if num == own or info.get("isIgnored"):
+                continue
+            heard = info.get("lastHeard") or 0
+            pos = info.get("position") or {}
+            if (
+                (preset == "favorites" and info.get("isFavorite"))
+                or (preset == "heard_24h" and heard and now - heard <= 86400)  # noqa: PLR2004
+                or (preset == "heard_7d" and heard and now - heard <= 7 * 86400)  # noqa: PLR2004
+                or (preset == "routers" and (info.get("user") or {}).get("role") in routers)
+                or (preset == "with_position" and (pos.get("latitudeI") or pos.get("latitude")))
+            ):
+                out.add(num)
+        return out
+
+    async def async_step_groups(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Dodaj do zbierania całą grupę naraz (gotowy zestaw albo własna grupa); nic nie usuwa."""
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        if runtime is None or not runtime.client:
+            return self.async_abort(reason="not_loaded")
+        try:
+            nodes = dict(await runtime.client.async_get_all_nodes())
+        except Exception:  # noqa: BLE001
+            return self.async_abort(reason="not_loaded")
+        nodes = {n: i for n, i in nodes.items() if (i.get("user") or {}).get("hwModel") != "UNSET"}
+        own = (runtime.gateway_node or {}).get("num")
+        tracked = [deepcopy(el) for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])]
+        tracked_ids = {el["id"] for el in tracked}
+        saved = [dict(g) for g in self.config_entry.options.get(CONF_OPTION_NODE_GROUPS, [])]
+        polish = (self.hass.config.language or "").lower().startswith("pl")
+
+        if user_input is not None:
+            wanted: set[int] = set()
+            for preset in user_input.get("presets", []):
+                wanted |= self._preset_ids(preset, nodes, own)
+            for name in user_input.get("saved", []):
+                for g in saved:
+                    if g.get("name") == name:
+                        wanted |= {int(n) for n in g.get("node_ids", [])}
+            new_ids = {int(v) for v in user_input.get("new_nodes", [])}
+            wanted |= new_ids
+            new_name = (user_input.get("new_name") or "").strip()
+            if new_name and new_ids:
+                saved = [g for g in saved if g.get("name") != new_name]
+                saved.append({"name": new_name, "node_ids": sorted(new_ids)})
+            delete = set(user_input.get("delete_groups", []))
+            if delete:
+                saved = [g for g in saved if g.get("name") not in delete]
+            for num in sorted(wanted - tracked_ids):
+                info = nodes.get(num)
+                if info is None or num == own:
+                    continue
+                tracked.append(
+                    {
+                        "id": num,
+                        "name": (info.get("user") or {}).get("longName") or f"!{num:08x}",
+                        "identity_key": node_identity_key(num, info),
+                        **_signature_fields(info),
+                    }
+                )
+            return self.async_create_entry(
+                title="",
+                data={**self.config_entry.options, CONF_OPTION_FILTER_NODES: tracked, CONF_OPTION_NODE_GROUPS: saved},
+            )
+
+        labels = {
+            "favorites": ("Ulubione", "Favorites"),
+            "heard_24h": ("Słyszane w ostatnich 24 godzinach", "Heard in the last 24 hours"),
+            "heard_7d": ("Słyszane w ostatnich 7 dniach", "Heard in the last 7 days"),
+            "routers": ("Routery i repeatery", "Routers and repeaters"),
+            "with_position": ("Z pozycją", "With a position"),
+        }
+        presets = [
+            SelectOptionDict(
+                value=p,
+                label=f"{labels[p][0 if polish else 1]} ({len(self._preset_ids(p, nodes, own) - tracked_ids)})",
+            )
+            for p in self._PRESETS
+        ]
+        fields: dict[Any, Any] = {
+            vol.Optional("presets", default=[]): SelectSelector(
+                SelectSelectorConfig(options=presets, multiple=True, mode=SelectSelectorMode.LIST)
+            )
+        }
+        if saved:
+            names = [
+                SelectOptionDict(value=g["name"], label=f"{g['name']} ({len(g.get('node_ids', []))})") for g in saved
+            ]
+            fields[vol.Optional("saved", default=[])] = SelectSelector(
+                SelectSelectorConfig(options=names, multiple=True, mode=SelectSelectorMode.LIST)
+            )
+            fields[vol.Optional("delete_groups", default=[])] = SelectSelector(
+                SelectSelectorConfig(options=names, multiple=True, mode=SelectSelectorMode.LIST)
+            )
+        fields[vol.Optional("new_nodes", default=[])] = _tracked_nodes_selector(
+            {n: i for n, i in nodes.items() if n != own}, tracked, self.hass.config.language
+        )
+        fields[vol.Optional("new_name", default="")] = str
+        return self.async_show_form(
+            step_id="groups",
+            data_schema=vol.Schema(fields),
+            description_placeholders={"count": str(len(tracked))},
         )
 
     # --- Scalanie duplikatów: lista znalezionych grup -> wybór, który węzeł zostaje -> potwierdzenie ---

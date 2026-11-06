@@ -123,7 +123,8 @@
         "menu_options": {
           "settings": "Settings (mode, tracked nodes, notifications, servers)",
           "devices": "Added devices — open details",
-          "merge": "Merge duplicate nodes (number change)"
+          "merge": "Merge duplicate nodes (number change)",
+          "groups": "Add a group of nodes to collection"
         }
       },
       "settings": {
@@ -203,6 +204,17 @@
         "data": {
           "keep": "Node to keep",
           "remove_from_radio": "Also remove the others from the radio's node database"
+        }
+      },
+      "groups": {
+        "title": "Node groups for collection",
+        "description": "Collecting now: {count}. This window only ADDS nodes and never removes any, so the ones already added stay. The number next to a preset is nodes you are not collecting yet.",
+        "data": {
+          "presets": "Ready-made sets",
+          "saved": "My groups (add)",
+          "delete_groups": "My groups (delete the group, nodes stay)",
+          "new_nodes": "Own group: choose nodes",
+          "new_name": "Own group: name (saves the group for later)"
         }
       }
     },
