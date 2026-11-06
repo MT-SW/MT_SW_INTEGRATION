@@ -86,6 +86,7 @@ from .helpers import (
 from .image_upload import async_register_upload_view
 from .logbook import async_setup_message_logger
 from .meshtastic_tcp import async_setup_tcp_proxy, async_unload_tcp_proxy
+from .groups import async_sync_group_labels
 from .node_merge import async_reconcile_nodes
 from .store import async_setup_store, async_unload_store
 from .websocket_api import async_register_websocket_api
@@ -574,6 +575,9 @@ async def _setup_meshtastic_devices(
         except Exception:  # noqa: BLE001
             LOGGER.warning("Could not link device for node %s", node_id, exc_info=True)
             failed.append(node_id)
+
+    # grupy węzłów -> etykiety Home Assistanta (do pulpitów, automatyzacji i skryptów)
+    await async_sync_group_labels(hass, entry)
 
     # remove devices for nodes no longer in the filter, based on what is
     # actually registered for this config entry — not just nodes that

@@ -208,14 +208,13 @@
       },
       "groups": {
         "title": "Node groups for collection",
-        "description": "Collecting now: {count}. This window only ADDS nodes and never removes any, so the ones already added stay. The number next to a preset is nodes you are not collecting yet.",
+        "description": "Collecting now: {count}. This window only ADDS nodes to collection and never removes any. Each group gets a Home Assistant label \"MT_SW: name\" assigned to its nodes' devices, so you can use it in dashboards, automations and scripts. The number next to a preset is nodes you are not collecting yet.",
         "data": {
           "presets": "Ready-made sets",
-          "saved": "My groups (add)",
-          "delete_groups": "My groups (delete the group, nodes stay)",
+          "saved": "Groups (add nodes to collection)",
+          "delete_groups": "Delete a group (nodes stay)",
           "new_nodes": "Own group: choose nodes",
-          "new_name": "Own group: name (saves the group for later)",
-          "panel_groups": "Groups from the panel (add)"
+          "new_name": "Own group: name (saves the group for later)"
         }
       }
     },

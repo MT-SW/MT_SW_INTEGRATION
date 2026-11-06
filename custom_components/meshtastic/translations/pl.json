@@ -208,14 +208,13 @@
       },
       "groups": {
         "title": "Grupy węzłów do zbierania",
-        "description": "Teraz zbierasz: {count}. To okno tylko DODAJE węzły, niczego nie usuwa, więc już dodane zostają. Liczba przy zestawie to węzły, których jeszcze nie zbierasz.",
+        "description": "Teraz zbierasz: {count}. To okno tylko DODAJE węzły do zbierania, niczego nie usuwa. Każda grupa dostaje w Home Assistancie etykietę „MT_SW: nazwa” przypisaną do urządzeń jej węzłów, więc użyjesz jej w pulpitach, automatyzacjach i skryptach. Liczba przy zestawie to węzły, których jeszcze nie zbierasz.",
         "data": {
           "presets": "Gotowe zestawy",
-          "saved": "Moje grupy (dodaj)",
-          "delete_groups": "Moje grupy (usuń grupę, węzły zostają)",
+          "saved": "Grupy (dodaj węzły do zbierania)",
+          "delete_groups": "Usuń grupę (węzły zostają)",
           "new_nodes": "Własna grupa: wybierz węzły",
-          "new_name": "Własna grupa: nazwa (zapisze grupę na później)",
-          "panel_groups": "Grupy z panelu (dodaj)"
+          "new_name": "Własna grupa: nazwa (zapisze grupę na później)"
         }
       }
     },
