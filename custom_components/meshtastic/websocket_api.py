@@ -1066,6 +1066,111 @@ async def ws_set_tracked(hass, connection, msg) -> None:
     connection.send_result(msg["id"], {"changed": changed, "tracked_total": len(tracked)})
 
 
+def _node_label(num: int, info: Mapping[str, Any] | None, fallback: str | None = None) -> str:
+    user = (info or {}).get("user") or {}
+    name = user.get("longName") or fallback or ""
+    return f"{name} (!{num:08x})" if name else f"!{num:08x}"
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{WS_PREFIX}/collection_state", vol.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_collection_state(hass, connection, msg) -> None:
+    """Zbieranie danych: węzły zbierane, możliwe do dodania i znalezione duplikaty (niezależnie od panelu)."""
+    from .node_merge import find_merge_plans  # noqa: PLC0415
+
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    runtime = entry.runtime_data
+    try:
+        nodes = dict(await runtime.client.async_get_all_nodes())
+    except Exception:  # noqa: BLE001 - brak połączenia z radiem nie może zerwać WS
+        nodes = dict(runtime.coordinator.data or {})
+    gateway = (runtime.gateway_node or {}).get("num")
+    tracked = list(entry.options.get(CONF_OPTION_FILTER_NODES, []))
+    tracked_ids = {el["id"] for el in tracked}
+    store = get_store(msg["entry_id"])
+    available = [
+        {"id": num, "label": _node_label(num, info), "last_heard": info.get("lastHeard") or 0}
+        for num, info in nodes.items()
+        if num not in tracked_ids and num != gateway
+    ]
+    available.sort(key=lambda x: x["last_heard"], reverse=True)
+    groups = []
+    for index, plan in enumerate(find_merge_plans(hass, entry, nodes, gateway)):
+        nums = sorted(plan.nums, key=lambda n: (nodes.get(n) or {}).get("lastHeard") or 0, reverse=True)
+        groups.append(
+            {
+                "survivor_id": plan.survivor_id,
+                "name": plan.name or "?",
+                "reason": plan.reason,
+                "nodes": [
+                    {"id": n, "label": _node_label(n, nodes.get(n), plan.name), "live": n in nodes, "gateway": n == gateway}
+                    for n in nums
+                ],
+            }
+        )
+    connection.send_result(
+        msg["id"],
+        {
+            "tracked": [
+                {"id": el["id"], "label": _node_label(el["id"], nodes.get(el["id"]), el.get("name")), "live": el["id"] in nodes}
+                for el in tracked
+            ],
+            "available": available[:500],
+            "waiting": len(store.removed_tracked) if store is not None else 0,
+            "duplicates": groups,
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/merge_apply",
+        vol.Required("entry_id"): str,
+        vol.Required("survivor_id"): str,
+        vol.Required("keep"): int,
+        vol.Optional("remove_from_radio", default=True): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_merge_apply(hass, connection, msg) -> None:
+    """Scal jedną grupę duplikatów: zostaje wybrany węzeł, pozostałe znikają ze zbierania i (opcjonalnie) z radia."""
+    from .node_merge import apply_merge_plan, canonicalise_keys, find_merge_plans, merge_tracked_list, plan_with_kept_node  # noqa: PLC0415
+
+    entry = _entry_by_id(hass, msg["entry_id"])
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Nie znaleziono załadowanego wpisu konfiguracyjnego")
+        return
+    runtime = entry.runtime_data
+    try:
+        nodes = dict(await runtime.client.async_get_all_nodes())
+    except Exception:  # noqa: BLE001
+        nodes = dict(runtime.coordinator.data or {})
+    gateway = (runtime.gateway_node or {}).get("num")
+    plan = next((p for p in find_merge_plans(hass, entry, nodes, gateway) if p.survivor_id == msg["survivor_id"]), None)
+    if plan is None or msg["keep"] not in plan.nums:
+        connection.send_error(msg["id"], "not_found", "Tej grupy duplikatów już nie ma. Odśwież listę.")
+        return
+    plan = plan_with_kept_node(plan, msg["keep"], nodes)
+    changed = apply_merge_plan(hass, entry, plan)
+    dropped = [n for n in plan.nums if n != msg["keep"] and n != gateway]
+    tracked = [dict(el) for el in entry.options.get(CONF_OPTION_FILTER_NODES, [])]
+    new_tracked = merge_tracked_list(tracked, plan, msg["keep"], dropped, nodes)
+    canonicalise_keys(hass, entry, nodes)
+    if msg["remove_from_radio"]:
+        for num in dropped:
+            if num in nodes:
+                hass.async_create_task(runtime.coordinator.async_request_node_removal(num))
+    if new_tracked != tracked:
+        # zapis opcji przeładowuje wpis — robimy go na końcu
+        hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_OPTION_FILTER_NODES: new_tracked})
+    connection.send_result(msg["id"], {"merged": len(plan.nums), "entities_changed": changed})
+
+
 @websocket_api.websocket_command(_node_action_schema("remove_node"))
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -2325,6 +2430,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_set_tracked,
         ws_remove_node,
         ws_retention_set,
+        ws_collection_state,
+        ws_merge_apply,
         ws_request_position,
         ws_gateway_debug,
         ws_request_neighbors,
