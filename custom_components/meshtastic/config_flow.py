@@ -1024,150 +1024,36 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Menu zarządzania obszarami."""
         return self.async_show_menu(
             step_id="areas",
-            menu_options=["area_create", "area_collect", "area_delete"],
+            menu_options=["area_create", "device_area"],
             description_placeholders={"count": str(len(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])))},
         )
 
     async def async_step_area_create(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Utwórz obszar w Home Assistancie i przypisz do niego wybrane urządzenia (nowe też zaczną być zbierane)."""
+        """Utwórz obszar w Home Assistancie i przypisz do niego wybrane, już zbierane urządzenia."""
         from .groups import assign_nodes_to_area, get_or_create_area  # noqa: PLC0415
 
-        loaded = await self._load_radio()
-        if loaded is None:
-            return self.async_abort(reason="not_loaded")
-        nodes, own = loaded
-        tracked = [deepcopy(el) for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])]
+        tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
+        if not tracked:
+            return self.async_abort(reason="no_devices")
         if user_input is not None:
-            name = (user_input.get("new_name") or "").strip()
-            ids = {int(v) for v in user_input.get("new_nodes", [])}
-            tracked_ids = {el["id"] for el in tracked}
-            for num in sorted(ids - tracked_ids):
-                info = nodes.get(num)
-                if info is None or num == own:
-                    continue
-                tracked.append(
-                    {
-                        "id": num,
-                        "name": (info.get("user") or {}).get("longName") or f"!{num:08x}",
-                        "identity_key": node_identity_key(num, info),
-                        **_signature_fields(info),
-                    }
-                )
-            saved = [dict(g) for g in self.config_entry.options.get(CONF_OPTION_NODE_GROUPS, []) if g.get("name") != name]
-            saved.append({"name": name, "node_ids": sorted(ids)})
-            assign_nodes_to_area(self.hass, self.config_entry, ids, get_or_create_area(self.hass, name))
-            return self.async_create_entry(
-                title="",
-                data={**self.config_entry.options, CONF_OPTION_FILTER_NODES: tracked, CONF_OPTION_NODE_GROUPS: saved},
+            ids = {int(v) for v in user_input["new_nodes"]}
+            assign_nodes_to_area(
+                self.hass, self.config_entry, ids, get_or_create_area(self.hass, user_input["new_name"].strip())
             )
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
         schema = vol.Schema(
             {
                 vol.Required("new_name"): str,
-                vol.Required("new_nodes"): _tracked_nodes_selector(
-                    {n: i for n, i in nodes.items() if n != own}, tracked, self.hass.config.language
+                vol.Required("new_nodes"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
+                        multiple=True,
+                        mode=SelectSelectorMode.LIST,
+                    )
                 ),
             }
         )
         return self.async_show_form(step_id="area_create", data_schema=schema)
-
-    async def async_step_area_collect(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Dodaj do zbierania urządzenia z własnych grup albo gotowych zestawów (nic nie usuwa). Obszary HA tu nie pasują: mają tylko już zbierane urządzenia."""
-        from .groups import async_all_groups  # noqa: PLC0415
-
-        loaded = await self._load_radio()
-        if loaded is None:
-            return self.async_abort(reason="not_loaded")
-        nodes, own = loaded
-        polish = self._is_polish()
-        tracked = [deepcopy(el) for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])]
-        tracked_ids = {el["id"] for el in tracked}
-        all_groups = await async_all_groups(self.hass, self.config_entry, include_areas=False)
-
-        if user_input is not None:
-            wanted: set[int] = set()
-            for preset in user_input.get("presets", []):
-                wanted |= self._preset_ids(preset, nodes, own)
-            for name in user_input.get("areas", []):
-                wanted |= set(all_groups.get(name, []))
-            for num in sorted(wanted - tracked_ids):
-                info = nodes.get(num)
-                if info is None or num == own:
-                    continue
-                tracked.append(
-                    {
-                        "id": num,
-                        "name": (info.get("user") or {}).get("longName") or f"!{num:08x}",
-                        "identity_key": node_identity_key(num, info),
-                        **_signature_fields(info),
-                    }
-                )
-            return self.async_create_entry(title="", data={**self.config_entry.options, CONF_OPTION_FILTER_NODES: tracked})
-
-        labels = {
-            "favorites": ("Ulubione", "Favorites"),
-            "heard_24h": ("Słyszane w ostatnich 24 godzinach", "Heard in the last 24 hours"),
-            "heard_7d": ("Słyszane w ostatnich 7 dniach", "Heard in the last 7 days"),
-            "routers": ("Routery i repeatery", "Routers and repeaters"),
-            "with_position": ("Z pozycją", "With a position"),
-        }
-        fields: dict[Any, Any] = {}
-        if all_groups:
-            fields[vol.Optional("areas", default=[])] = SelectSelector(
-                SelectSelectorConfig(
-                    options=[
-                        SelectOptionDict(
-                            value=name,
-                            label=f"{name} ({len(ids)}{' urządzeń' if polish else ' devices'})",
-                        )
-                        for name, ids in all_groups.items()
-                    ],
-                    multiple=True,
-                    mode=SelectSelectorMode.LIST,
-                )
-            )
-        fields[vol.Optional("presets", default=[])] = SelectSelector(
-            SelectSelectorConfig(
-                options=[
-                    SelectOptionDict(
-                        value=p,
-                        label=f"{labels[p][0 if polish else 1]} ({len(self._preset_ids(p, nodes, own) - tracked_ids)})",
-                    )
-                    for p in self._PRESETS
-                ],
-                multiple=True,
-                mode=SelectSelectorMode.LIST,
-            )
-        )
-        return self.async_show_form(
-            step_id="area_collect", data_schema=vol.Schema(fields), description_placeholders={"count": str(len(tracked))}
-        )
-
-    async def async_step_area_delete(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Usuń własne grupy zapisane w integracji (obszary w Home Assistancie i urządzenia zostają)."""
-        saved = [dict(g) for g in self.config_entry.options.get(CONF_OPTION_NODE_GROUPS, [])]
-        if not saved:
-            return self.async_abort(reason="no_groups")
-        if user_input is not None:
-            gone = set(user_input["delete_groups"])
-            return self.async_create_entry(
-                title="",
-                data={
-                    **self.config_entry.options,
-                    CONF_OPTION_NODE_GROUPS: [g for g in saved if g.get("name") not in gone],
-                },
-            )
-        schema = vol.Schema(
-            {
-                vol.Required("delete_groups"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[SelectOptionDict(value=g["name"], label=g["name"]) for g in saved],
-                        multiple=True,
-                        mode=SelectSelectorMode.LIST,
-                    )
-                )
-            }
-        )
-        return self.async_show_form(step_id="area_delete", data_schema=schema)
 
     async def async_step_device_list(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Lista dodanych urządzeń — wybór dowolnego otwiera jego szczegóły i akcje."""
@@ -1259,32 +1145,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 "device_link": link,
             },
         )
-
-    # --- Grupy węzłów do zbierania: gotowe zestawy + własne zapisane grupy. Zawsze tylko DOKŁADAJĄ ---
-
-    _PRESETS = ("favorites", "heard_24h", "heard_7d", "routers", "with_position")
-
-    @staticmethod
-    def _preset_ids(preset: str, nodes: Mapping[int, Any], own: int | None) -> set[int]:
-        import time  # noqa: PLC0415
-
-        now = time.time()
-        routers = {"ROUTER", "ROUTER_CLIENT", "ROUTER_LATE", "REPEATER"}
-        out: set[int] = set()
-        for num, info in nodes.items():
-            if num == own or info.get("isIgnored"):
-                continue
-            heard = info.get("lastHeard") or 0
-            pos = info.get("position") or {}
-            if (
-                (preset == "favorites" and info.get("isFavorite"))
-                or (preset == "heard_24h" and heard and now - heard <= 86400)  # noqa: PLR2004
-                or (preset == "heard_7d" and heard and now - heard <= 7 * 86400)  # noqa: PLR2004
-                or (preset == "routers" and (info.get("user") or {}).get("role") in routers)
-                or (preset == "with_position" and (pos.get("latitudeI") or pos.get("latitude")))
-            ):
-                out.add(num)
-        return out
 
     # --- Scalanie duplikatów: lista znalezionych grup -> wybór, który węzeł zostaje -> potwierdzenie ---
 
