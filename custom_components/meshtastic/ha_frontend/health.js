@@ -209,6 +209,11 @@ class MeshHealthTab extends LitElement {
     try {
       const r = await this.hass.callWS({ type: "meshtastic/ui_settings" });
       this._groups = (r && r.settings && r.settings.node_groups) || {};
+      const dm = r && r.settings && r.settings.health_defaults && r.settings.health_defaults.metric;
+      if (dm && !this._metricDefaultApplied) {
+        this._metricDefaultApplied = true;
+        this._view = dm;
+      }
     } catch (err) {
       console.warn("MT_SW: grupy węzłów", err);
     }

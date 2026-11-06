@@ -154,6 +154,16 @@ class MtswHealthMetrics extends LitElement {
     try {
       const r = await this.hass.callWS({ type: "meshtastic/ui_settings" });
       this._groups = (r && r.settings && r.settings.node_groups) || {};
+      const d = (r && r.settings && r.settings.health_defaults) || {};
+      if (!this._defaultsApplied) {
+        this._defaultsApplied = true;
+        if (typeof d.activity === "number") this._act = d.activity;
+        if (typeof d.fav_top === "boolean") this._favTop = d.fav_top;
+        if (typeof d.hide_ignored === "boolean") this._ign = d.hide_ignored;
+        if (d.sort) this._sort = d.sort;
+        if (typeof d.range === "number") this._range = d.range;
+        this._defaultMetric = d.metric || null;
+      }
     } catch (err) {
       console.warn("MT_SW: grupy węzłów", err);
     }
