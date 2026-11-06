@@ -41,6 +41,8 @@ fi
 $SEDCMD 's/^package meshtastic;/package meshtastic.aiomeshtastic.protobuf;/' "${INDIR}/"*.proto
 # fix the imports to match
 $SEDCMD 's/^import "meshtastic\//import "meshtastic\/aiomeshtastic\/protobuf\//' "${INDIR}/"*.proto
+# qualified custom options must follow the renamed package
+$SEDCMD 's/\(meshtastic\.(enum_value_metadata|field_metadata)/(meshtastic.aiomeshtastic.protobuf.\1/g' "${INDIR}/"*.proto
 # adjust nanopb
 $SEDCMD 's/^import "nanopb.proto";/import "meshtastic\/aiomeshtastic\/protobuf\/nanopb.proto";/' "${INDIR}/"*.proto
 

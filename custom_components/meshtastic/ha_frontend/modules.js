@@ -47,6 +47,12 @@ const SERIAL_MODES = [
   { value: "TEXTMSG", label: PL("Text Message") },
   { value: "NMEA", label: PL("NMEA") },
   { value: "CALTOPO", label: PL("CalTopo") },
+  { value: "WS85", label: "WS85" },
+  { value: "VE_DIRECT", label: "VE.Direct" },
+  { value: "MS_CONFIG", label: "MS config" },
+  { value: "LOG", label: "Log" },
+  { value: "LOGTEXT", label: "Log text" },
+  { value: "MODBUS", label: "Modbus" },
 ];
 
 /* Zdarzenia wejścia z protobufu (CannedMessageConfig.InputEventChar). Wcześniej

@@ -8,7 +8,6 @@ Custom options for defining:
 These are used by nanopb to generate statically allocable structures
 for memory-limited environments.
 """
-
 import builtins
 import collections.abc
 import google.protobuf.descriptor
@@ -143,7 +142,7 @@ DS_8: DescriptorSize.ValueType  # 8
 """8 words; up to 2^32-1 entry arrays"""
 global___DescriptorSize = DescriptorSize
 
-@typing.final
+@typing_extensions.final
 class NanoPBOptions(google.protobuf.message.Message):
     """This is the inner options message, which basically defines options for
     a field. When it is used in message or file scope, it applies to all
@@ -251,6 +250,14 @@ class NanoPBOptions(google.protobuf.message.Message):
     """
     default_has: builtins.bool
     """Set default value for has_ fields."""
+    @property
+    def include(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
+        """Extra files to include in generated `.pb.h`"""
+    @property
+    def exclude(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
+        """Automatic includes to exclude from generated `.pb.h`
+        Same as nanopb_generator.py command line flag -x.
+        """
     package: builtins.str
     """Package name that applies only for nanopb."""
     type_override: google.protobuf.descriptor_pb2.FieldDescriptorProto.Type.ValueType
@@ -266,16 +273,6 @@ class NanoPBOptions(google.protobuf.message.Message):
     will be a a static field.
     Fields with dynamic length are converted to either a pointer or a callback.
     """
-    @property
-    def include(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
-        """Extra files to include in generated `.pb.h`"""
-
-    @property
-    def exclude(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
-        """Automatic includes to exclude from generated `.pb.h`
-        Same as nanopb_generator.py command line flag -x.
-        """
-
     def __init__(
         self,
         *,
@@ -309,8 +306,8 @@ class NanoPBOptions(google.protobuf.message.Message):
         sort_by_tag: builtins.bool | None = ...,
         fallback_type: global___FieldType.ValueType | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["anonymous_oneof", b"anonymous_oneof", "callback_datatype", b"callback_datatype", "callback_function", b"callback_function", "default_has", b"default_has", "descriptorsize", b"descriptorsize", "enum_to_string", b"enum_to_string", "fallback_type", b"fallback_type", "fixed_count", b"fixed_count", "fixed_length", b"fixed_length", "int_size", b"int_size", "long_names", b"long_names", "mangle_names", b"mangle_names", "max_count", b"max_count", "max_length", b"max_length", "max_size", b"max_size", "msgid", b"msgid", "no_unions", b"no_unions", "package", b"package", "packed_enum", b"packed_enum", "packed_struct", b"packed_struct", "proto3", b"proto3", "proto3_singular_msgs", b"proto3_singular_msgs", "skip_message", b"skip_message", "sort_by_tag", b"sort_by_tag", "submsg_callback", b"submsg_callback", "type", b"type", "type_override", b"type_override"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["anonymous_oneof", b"anonymous_oneof", "callback_datatype", b"callback_datatype", "callback_function", b"callback_function", "default_has", b"default_has", "descriptorsize", b"descriptorsize", "enum_to_string", b"enum_to_string", "exclude", b"exclude", "fallback_type", b"fallback_type", "fixed_count", b"fixed_count", "fixed_length", b"fixed_length", "include", b"include", "int_size", b"int_size", "long_names", b"long_names", "mangle_names", b"mangle_names", "max_count", b"max_count", "max_length", b"max_length", "max_size", b"max_size", "msgid", b"msgid", "no_unions", b"no_unions", "package", b"package", "packed_enum", b"packed_enum", "packed_struct", b"packed_struct", "proto3", b"proto3", "proto3_singular_msgs", b"proto3_singular_msgs", "skip_message", b"skip_message", "sort_by_tag", b"sort_by_tag", "submsg_callback", b"submsg_callback", "type", b"type", "type_override", b"type_override"]) -> None: ...
+    def HasField(self, field_name: typing_extensions.Literal["anonymous_oneof", b"anonymous_oneof", "callback_datatype", b"callback_datatype", "callback_function", b"callback_function", "default_has", b"default_has", "descriptorsize", b"descriptorsize", "enum_to_string", b"enum_to_string", "fallback_type", b"fallback_type", "fixed_count", b"fixed_count", "fixed_length", b"fixed_length", "int_size", b"int_size", "long_names", b"long_names", "mangle_names", b"mangle_names", "max_count", b"max_count", "max_length", b"max_length", "max_size", b"max_size", "msgid", b"msgid", "no_unions", b"no_unions", "package", b"package", "packed_enum", b"packed_enum", "packed_struct", b"packed_struct", "proto3", b"proto3", "proto3_singular_msgs", b"proto3_singular_msgs", "skip_message", b"skip_message", "sort_by_tag", b"sort_by_tag", "submsg_callback", b"submsg_callback", "type", b"type", "type_override", b"type_override"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing_extensions.Literal["anonymous_oneof", b"anonymous_oneof", "callback_datatype", b"callback_datatype", "callback_function", b"callback_function", "default_has", b"default_has", "descriptorsize", b"descriptorsize", "enum_to_string", b"enum_to_string", "exclude", b"exclude", "fallback_type", b"fallback_type", "fixed_count", b"fixed_count", "fixed_length", b"fixed_length", "include", b"include", "int_size", b"int_size", "long_names", b"long_names", "mangle_names", b"mangle_names", "max_count", b"max_count", "max_length", b"max_length", "max_size", b"max_size", "msgid", b"msgid", "no_unions", b"no_unions", "package", b"package", "packed_enum", b"packed_enum", "packed_struct", b"packed_struct", "proto3", b"proto3", "proto3_singular_msgs", b"proto3_singular_msgs", "skip_message", b"skip_message", "sort_by_tag", b"sort_by_tag", "submsg_callback", b"submsg_callback", "type", b"type", "type_override", b"type_override"]) -> None: ...
 
 global___NanoPBOptions = NanoPBOptions
 

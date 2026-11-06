@@ -115,6 +115,7 @@ Dodane funkcje:
 - Panorama terenu (2.8.20): okno na zakładce Mapa pokazuje sylwetkę terenu dookoła bramki (do 60 km) z naniesionymi węzłami: zielone stoją nad grzbietem przed nimi, czerwone są zasłonięte przez teren. Liczy geometrię terenu i krzywiznę Ziemi (współczynnik 4/3) tak jak aplikacja MT_SW_APP. Do wyboru: położenie stacji (domyślnie bramka), wysokości anten, zasięg terenu i węzłów, tylko ulubione, nazwy, kierunek i szerokość widoku; kliknięcie węzła na liście obraca widok w jego stronę. Dane o terenie: Mapterhorn (to samo źródło co w Planerze).
 - Kalkulator anten (2.8.20): okno na zakładce Mapa, 13 typów anten (ground plane, dipol, folded, 5/8, J-pole, Slim Jim, collinear, Yagi, Moxon, biquad, helisa, patch, odcinki kabla): wymiary, zysk, impedancja, straty w kablu i złączach, moc wypromieniowana na tle limitów pasm. Matematyka jak w aplikacji MT_SW_APP.
 - Funkcje MT_SW (2.8.20): Ustawienia → Inne → Funkcje MT_SW to jedno miejsce z listą wszystkich naszych funkcji i przyciskiem, który każdą otwiera.
+- Protobufy 2.8.2 (2.8.20): wbudowane definicje protokołu odświeżone do najnowszych oryginalnych (meshtastic/protobufs v2.8.2), tej samej wersji co w aplikacji MT_SW_APP; w ustawieniach modułu serial doszły tryby WS85, VE.Direct, MS config, Log, Log text i Modbus, a lista modeli sprzętu zna nowe urządzenia (np. Nodara, Heltec Mesh Pocket V2).
 - Szybkie komendy (2.8.20): w administracji zdalnej węzła przyciski /ping, /hello i /test wysyłają zwykłą wiadomość prywatną do tego węzła.
 
 Licencja, nazwa i cudze treści:
@@ -244,6 +245,7 @@ Added features:
 - Terrain panorama (2.8.20): a window on the Map tab shows the terrain skyline around the gateway (up to 60 km) with nodes placed on it: green ones stand above the ridge in front of them, red ones are hidden by terrain. It uses terrain geometry and Earth curvature (4/3 factor) like the MT_SW_APP app. Options: station position (gateway by default), antenna heights, terrain and node range, favorites only, names, heading and view width; clicking a node in the list turns the view toward it. Terrain data: Mapterhorn (same source as the Planner).
 - Antenna calculator (2.8.20): a window on the Map tab, 13 antenna types (ground plane, dipole, folded, 5/8, J-pole, Slim Jim, collinear, Yagi, Moxon, biquad, helix, patch, coax sections): dimensions, gain, impedance, cable and connector losses, radiated power against band limits. Same maths as the MT_SW_APP app.
 - MT_SW functions (2.8.20): Settings → Other → MT_SW functions is one place listing all our functions with a button that opens each.
+- Protobufs 2.8.2 (2.8.20): the built-in protocol definitions were refreshed to the latest original ones (meshtastic/protobufs v2.8.2), the same version as in the MT_SW_APP app; the serial module settings gained the WS85, VE.Direct, MS config, Log, Log text and Modbus modes, and the hardware model list knows the new devices (e.g. Nodara, Heltec Mesh Pocket V2).
 - Quick commands (2.8.20): in a node's remote administration the /ping, /hello and /test buttons send a plain direct message to that node.
 
 Licence, name and third-party content:
