@@ -16,6 +16,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from .const import CONF_OPTION_FILTER_NODES, DOMAIN, LOGGER
+from .helpers import device_config_entry_ids
 from .identity import (
     DeviceRecord,
     MergePlan,
@@ -150,7 +151,7 @@ def apply_merge_plan(hass: HomeAssistant, entry: MeshtasticConfigEntry, plan: Me
                     entity_registry.async_update_entity(reg_entry.entity_id, device_id=plan.survivor_id)
                 except Exception:  # noqa: BLE001
                     LOGGER.warning("Could not re-attach entity %s", reg_entry.entity_id, exc_info=True)
-            if loser.config_entries == {entry.entry_id}:
+            if device_config_entry_ids(loser) == {entry.entry_id}:
                 device_registry.async_remove_device(loser_id)
             else:
                 device_registry.async_update_device(loser_id, remove_config_entry_id=entry.entry_id)

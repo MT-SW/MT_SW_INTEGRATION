@@ -73,6 +73,7 @@ from .entity import (
     MeshtasticEntity,
 )
 from .helpers import (
+    device_config_entry_ids,
     async_prune_stale_node_entities,
     device_by_connection,
     device_by_identifier,
@@ -639,7 +640,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: MeshtasticConfigEntry) 
     device_registry = dr.async_get(hass)
     for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
         try:
-            if device.config_entries == {entry.entry_id}:
+            if device_config_entry_ids(device) == {entry.entry_id}:
                 device_registry.async_remove_device(device.id)
             else:
                 device_registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
@@ -692,7 +693,7 @@ async def _remove_meshtastic_device(
     device_registry: DeviceRegistry, entry: MeshtasticConfigEntry, device: dr.DeviceEntry
 ) -> None:
     # only clean up devices if they are exclusively from us
-    if device.config_entries == {entry.entry_id}:
+    if device_config_entry_ids(device) == {entry.entry_id}:
         device_registry.async_remove_device(device.id)
     else:
         device_registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
@@ -732,7 +733,7 @@ def _release_identifiers(
                 owner.name,
                 node_id,
             )
-            if owner.config_entries == {entry.entry_id}:
+            if device_config_entry_ids(owner) == {entry.entry_id}:
                 device_registry.async_remove_device(owner.id)
             else:
                 device_registry.async_update_device(owner.id, remove_config_entry_id=entry.entry_id)
@@ -796,7 +797,7 @@ async def _setup_meshtastic_device(  # noqa: PLR0913
          )
         existing_device_is_same_identity = False
     via_device = None
-    if existing_device is not None and existing_device.config_entries != {entry.entry_id}:
+    if existing_device is not None and device_config_entry_ids(existing_device) != {entry.entry_id}:
         # get other meshtastic connections
 
         connection_parts = [

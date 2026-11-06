@@ -99,6 +99,19 @@ def stats_enabled(entry: Any) -> bool:
     )
 
 
+def device_config_entry_ids(device: Any) -> set[str]:
+    """Zbiór wpisów konfiguracji urządzenia — działa na starym i nowym HA.
+
+    Nowy HA oznacza pole `config_entries` jako przestarzałe (ostrzeżenie w logu),
+    a daje `config_entries_subentries`. Na starszym HA, który go nie ma,
+    używamy dawnego pola.
+    """
+    subentries = getattr(device, "config_entries_subentries", None)
+    if subentries is not None:
+        return set(subentries)
+    return set(device.config_entries)
+
+
 def device_by_identifier(
     device_registry: Any, identifier: tuple[str, str], config_entry_id: str
 ) -> Any | None:
@@ -116,7 +129,7 @@ def device_by_identifier(
     if getter is not None:
         return getter(identifier, config_entry_id)
     device = device_registry.async_get_device(identifiers={identifier})
-    if device is not None and config_entry_id in device.config_entries:
+    if device is not None and config_entry_id in device_config_entry_ids(device):
         return device
     return None
 
@@ -129,7 +142,7 @@ def device_by_connection(
     if getter is not None:
         return getter(connection, config_entry_id)
     device = device_registry.async_get_device(connections={connection})
-    if device is not None and config_entry_id in device.config_entries:
+    if device is not None and config_entry_id in device_config_entry_ids(device):
         return device
     return None
 

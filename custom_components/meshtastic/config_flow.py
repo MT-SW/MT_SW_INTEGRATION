@@ -64,7 +64,7 @@ from .const import (
     ConfigOptionNotifyPlatformNodes,
     ConnectionType,
 )
-from .helpers import node_identity_key
+from .helpers import device_config_entry_ids, node_identity_key
 from .identity import node_signature
 
 if TYPE_CHECKING:
@@ -877,7 +877,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         for ident in (el.get("identity_key"), str(node_id)):
             if ident:
                 device = registry.async_get_device(identifiers={(DOMAIN, ident)})
-                if device is not None and self.config_entry.entry_id in device.config_entries:
+                if device is not None and self.config_entry.entry_id in device_config_entry_ids(device):
                     break
                 device = None
         node_hex = f"!{node_id:08x}"
