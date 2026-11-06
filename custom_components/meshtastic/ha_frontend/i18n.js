@@ -26,6 +26,7 @@ const STRINGS = {
     "tab.nodes": "Węzły",
     "tab.map": "Mapa",
     "tab.health": "Zdrowie sieci",
+    "tab.horizon": "Panorama terenu",
     "tab.settings": "Ustawienia",
     "tab.neighbors": "Sąsiedzi",
 
@@ -504,6 +505,7 @@ const STRINGS = {
     "tab.nodes": "Nodes",
     "tab.map": "Map",
     "tab.health": "Network health",
+    "tab.horizon": "Terrain panorama",
     "tab.settings": "Settings",
     "tab.neighbors": "Neighbors",
 
