@@ -38,6 +38,16 @@ const RANGES = [
   ["Wszystko", null],
 ];
 
+const ACTIVITY = [
+  ["any", 0],
+  ["1 h", H],
+  ["6 h", 6 * H],
+  ["24 h", D],
+  ["2 dni", 2 * D],
+  ["7 dni", 7 * D],
+  ["30 dni", 30 * D],
+];
+
 const TRAFFIC_SERIES = [
   { key: "numPacketsRx", labelKey: "nodes.packets.rx", color: "#4FC3F7" },
   { key: "numPacketsTx", labelKey: "nodes.packets.tx", color: "#F5C839" },
@@ -47,8 +57,8 @@ const TRAFFIC_SERIES = [
 ];
 
 const TEXT = {
-  pl: { search: "Szukaj węzła", sort_value: "Wg wartości", sort_heard: "Wg ostatnio słyszanych", back: "Wróć", empty: "Brak węzłów.", nodata: "Brak danych", min: "min", max: "maks", last: "ostatnio", chart_empty: "Za mało danych na wykres w tym zakresie.", powered: "zasilanie", note_traffic: "Przyrost pakietów na minutę.", sort: "Sortowanie" },
-  en: { search: "Search node", sort_value: "By value", sort_heard: "By last heard", back: "Back", empty: "No nodes.", nodata: "No data", min: "min", max: "max", last: "latest", chart_empty: "Not enough data for a chart in this range.", powered: "powered", note_traffic: "Packets per minute.", sort: "Sorting" },
+  pl: { search: "Szukaj węzła", sort_value: "Wg wartości", sort_heard: "Wg ostatnio słyszanych", back: "Wróć", empty: "Brak węzłów.", nodata: "Brak danych", min: "min", max: "maks", last: "ostatnio", chart_empty: "Za mało danych na wykres w tym zakresie.", powered: "zasilanie", note_traffic: "Przyrost pakietów na minutę.", sort: "Sortowanie", f_activity: "Aktywność", f_any: "Wszystkie", f_fav: "Ulubione", f_fav_only: "Tylko ulubione", f_fav_no: "Bez ulubionych", f_hops: "Odległość", f_hops_all: "Dowolna", f_hops_0: "Bezpośrednio", f_hops_1: "1 skok", f_hops_2: "2 skoki", f_hops_3: "3+ skoków", f_group: "Grupa", f_group_all: "Wszystkie węzły", f_pos: "Tylko z pozycją", f_nomqtt: "Bez MQTT", f_ign: "Ukryj ignorowane", f_reset: "Wyczyść filtry", shown: "Pokazano", of: "z" },
+  en: { search: "Search node", sort_value: "By value", sort_heard: "By last heard", back: "Back", empty: "No nodes.", nodata: "No data", min: "min", max: "max", last: "latest", chart_empty: "Not enough data for a chart in this range.", powered: "powered", note_traffic: "Packets per minute.", sort: "Sorting", f_activity: "Activity", f_any: "All", f_fav: "Favorites", f_fav_only: "Favorites only", f_fav_no: "Without favorites", f_hops: "Distance", f_hops_all: "Any", f_hops_0: "Direct", f_hops_1: "1 hop", f_hops_2: "2 hops", f_hops_3: "3+ hops", f_group: "Group", f_group_all: "All nodes", f_pos: "With position only", f_nomqtt: "Hide MQTT", f_ign: "Hide ignored", f_reset: "Clear filters", shown: "Shown", of: "of" },
 };
 
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -79,6 +89,14 @@ class MtswHealthMetrics extends LitElement {
       _detail: { type: Object },
       _hist: { type: Object },
       _range: { type: Number },
+      _act: { type: Number },
+      _fav: { type: String },
+      _hops: { type: String },
+      _group: { type: String },
+      _groups: { type: Object },
+      _pos: { type: Boolean },
+      _nomqtt: { type: Boolean },
+      _ign: { type: Boolean },
       _loading: { type: Boolean },
     };
   }
@@ -93,6 +111,14 @@ class MtswHealthMetrics extends LitElement {
     this._detail = null;
     this._hist = null;
     this._range = 3;
+    this._act = 0;
+    this._fav = "all";
+    this._hops = "all";
+    this._group = "";
+    this._groups = {};
+    this._pos = false;
+    this._nomqtt = false;
+    this._ign = true;
     this._loading = false;
     this._timer = null;
   }
@@ -100,6 +126,7 @@ class MtswHealthMetrics extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._loadSeries();
+    this._loadGroups();
     this._timer = setInterval(() => this._loadSeries(), 60000);
   }
 
@@ -119,6 +146,45 @@ class MtswHealthMetrics extends LitElement {
 
   _label(m) {
     return ((this.hass && this.hass.language) || "pl").startsWith("pl") ? m.pl : m.en;
+  }
+
+  async _loadGroups() {
+    try {
+      const r = await this.hass.callWS({ type: "meshtastic/ui_settings" });
+      this._groups = (r && r.settings && r.settings.node_groups) || {};
+    } catch (err) {
+      console.warn("MT_SW: grupy węzłów", err);
+    }
+  }
+
+  _resetFilters() {
+    this._search = "";
+    this._act = 0;
+    this._fav = "all";
+    this._hops = "all";
+    this._group = "";
+    this._pos = false;
+    this._nomqtt = false;
+    this._ign = true;
+  }
+
+  _passes(n) {
+    if (this._act) {
+      const ms = ACTIVITY[this._act][1];
+      if (!n.last_heard || Date.now() - n.last_heard * 1000 > ms) return false;
+    }
+    if (this._fav === "fav" && !n.is_favorite) return false;
+    if (this._fav === "nofav" && n.is_favorite) return false;
+    if (this._hops !== "all") {
+      const h = n.hops_away;
+      if (typeof h !== "number") return false;
+      if (this._hops === "3" ? h < 3 : h !== Number(this._hops)) return false;
+    }
+    if (this._group && this._groups[this._group] && !this._groups[this._group].includes(n.node_id)) return false;
+    if (this._pos && typeof n.latitude !== "number") return false;
+    if (this._nomqtt && n.via_mqtt) return false;
+    if (this._ign && n.is_ignored) return false;
+    return true;
   }
 
   async _loadSeries() {
@@ -166,6 +232,7 @@ class MtswHealthMetrics extends LitElement {
   _rows() {
     const q = this._search.trim().toLowerCase();
     const rows = (this.nodes || [])
+      .filter((n) => this._passes(n))
       .filter((n) => !q || this._name(n).toLowerCase().includes(q) || (n.node_hex || "").toLowerCase().includes(q))
       .map((n) => ({ node: n, value: this._value(n) }));
     if (this._sort === "heard") {
@@ -288,6 +355,38 @@ class MtswHealthMetrics extends LitElement {
             <option value="heard" ?selected=${this._sort === "heard"}>${this._tr("sort_heard")}</option>
           </select>
         </div>
+        <div class="bar filters">
+          <label>${this._tr("f_activity")}
+            <select @change=${(e) => (this._act = Number(e.target.value))}>
+              ${ACTIVITY.map(([label], i) => html`<option value=${i} ?selected=${this._act === i}>${i === 0 ? this._tr("f_any") : label}</option>`)}
+            </select></label>
+          <label>${this._tr("f_fav")}
+            <select @change=${(e) => (this._fav = e.target.value)}>
+              <option value="all" ?selected=${this._fav === "all"}>${this._tr("f_any")}</option>
+              <option value="fav" ?selected=${this._fav === "fav"}>${this._tr("f_fav_only")}</option>
+              <option value="nofav" ?selected=${this._fav === "nofav"}>${this._tr("f_fav_no")}</option>
+            </select></label>
+          <label>${this._tr("f_hops")}
+            <select @change=${(e) => (this._hops = e.target.value)}>
+              ${[["all", "f_hops_all"], ["0", "f_hops_0"], ["1", "f_hops_1"], ["2", "f_hops_2"], ["3", "f_hops_3"]].map(
+                ([v, k]) => html`<option value=${v} ?selected=${this._hops === v}>${this._tr(k)}</option>`
+              )}
+            </select></label>
+          ${Object.keys(this._groups).length
+            ? html`<label>${this._tr("f_group")}
+                <select @change=${(e) => (this._group = e.target.value)}>
+                  <option value="" ?selected=${!this._group}>${this._tr("f_group_all")}</option>
+                  ${Object.keys(this._groups).map((g) => html`<option value=${g} ?selected=${this._group === g}>${g}</option>`)}
+                </select></label>`
+            : ""}
+        </div>
+        <div class="bar filters">
+          <label class="chk"><input type="checkbox" .checked=${this._pos} @change=${(e) => (this._pos = e.target.checked)} />${this._tr("f_pos")}</label>
+          <label class="chk"><input type="checkbox" .checked=${this._nomqtt} @change=${(e) => (this._nomqtt = e.target.checked)} />${this._tr("f_nomqtt")}</label>
+          <label class="chk"><input type="checkbox" .checked=${this._ign} @change=${(e) => (this._ign = e.target.checked)} />${this._tr("f_ign")}</label>
+          <button class="chip" @click=${() => this._resetFilters()}>${this._tr("f_reset")}</button>
+          <span class="hint">${this._tr("shown")}: ${rows.length} ${this._tr("of")} ${(this.nodes || []).length}</span>
+        </div>
         ${rows.length
           ? rows.map((r) => {
               const s = this._series[String(r.node.node_id)];
@@ -329,6 +428,8 @@ class MtswHealthMetrics extends LitElement {
       .card { background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
       .stats { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--secondary-text-color); margin-bottom: 6px; }
       .stats i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+      .filters label { font-size: 12px; color: var(--secondary-text-color); display: flex; flex-direction: column; gap: 2px; }
+      .filters .chk { flex-direction: row; align-items: center; gap: 6px; color: var(--primary-text-color); font-size: 13px; }
       .hint { font-size: 13px; color: var(--secondary-text-color); }
     `;
   }
