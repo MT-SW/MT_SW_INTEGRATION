@@ -916,31 +916,135 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         )
         return self.async_show_form(step_id="device_add", data_schema=schema)
 
-    async def async_step_areas(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Zarządzanie obszarami: dodaj zbierane urządzenia do obszaru Home Assistanta (rozwijana lista urządzeń)."""
+    # --- Zarządzanie obszarami: tworzenie, a po wejściu w obszar dodawanie, usuwanie urządzeń, zmiana nazwy, usunięcie ---
+
+    def _area_devices(self, area_id: str) -> set[int]:
+        """Numery zbieranych węzłów, których urządzenia są w tym obszarze."""
+        from .groups import device_for_node  # noqa: PLC0415
+
+        result: set[int] = set()
+        for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []):
+            device = device_for_node(self.hass, self.config_entry, el["id"])
+            if device is not None and device.area_id == area_id:
+                result.add(el["id"])
+        return result
+
+    def _devices_dropdown(self, nums: set[int] | None = None) -> SelectSelector:
+        tracked = [el for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []) if nums is None or el["id"] in nums]
+        return SelectSelector(
+            SelectSelectorConfig(
+                options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
+                multiple=True,
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        )
+
+    async def async_step_areas(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
+        """Menu zarządzania obszarami."""
+        return self.async_show_menu(step_id="areas", menu_options=["area_create", "area_manage"])
+
+    async def async_step_area_create(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Utwórz obszar w Home Assistancie (opcjonalnie od razu z wybranymi, już zbieranymi urządzeniami)."""
+        from .groups import assign_nodes_to_area, get_or_create_area  # noqa: PLC0415
+
+        if user_input is not None:
+            area_id = get_or_create_area(self.hass, user_input["new_name"].strip())
+            ids = {int(v) for v in user_input.get("new_nodes", [])}
+            if ids:
+                assign_nodes_to_area(self.hass, self.config_entry, ids, area_id)
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+        fields: dict[Any, Any] = {vol.Required("new_name"): str}
+        if self.config_entry.options.get(CONF_OPTION_FILTER_NODES):
+            fields[vol.Optional("new_nodes", default=[])] = self._devices_dropdown()
+        return self.async_show_form(step_id="area_create", data_schema=vol.Schema(fields))
+
+    async def async_step_area_manage(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Wybierz obszar, którym chcesz zarządzać."""
+        if user_input is not None:
+            self._area_id = user_input["area"]
+            return await self.async_step_area_details()
+        return self.async_show_form(step_id="area_manage", data_schema=vol.Schema({vol.Required("area"): AreaSelector()}))
+
+    async def async_step_area_details(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
+        """Menu jednego obszaru: dodaj, usuń urządzenia, zmień nazwę, usuń obszar."""
+        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
+
+        area = ar.async_get(self.hass).async_get_area(getattr(self, "_area_id", None) or "")
+        if area is None:
+            return await self.async_step_areas()
+        return self.async_show_menu(
+            step_id="area_details",
+            menu_options=["area_add", "area_remove", "area_rename", "area_delete"],
+            description_placeholders={"name": area.name, "count": str(len(self._area_devices(area.id)))},
+        )
+
+    async def async_step_area_add(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Dodaj do obszaru zbierane urządzenia (rozwijana lista)."""
         from .groups import assign_nodes_to_area  # noqa: PLC0415
 
-        tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
-        if not tracked:
+        area_id = getattr(self, "_area_id", None)
+        outside = {el["id"] for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])} - self._area_devices(area_id)
+        if not outside:
             return self.async_abort(reason="no_devices")
         if user_input is not None:
-            assign_nodes_to_area(
-                self.hass, self.config_entry, {int(v) for v in user_input["assign_nodes"]}, user_input["area"]
-            )
+            assign_nodes_to_area(self.hass, self.config_entry, {int(v) for v in user_input["nodes"]}, area_id)
             return self.async_create_entry(title="", data=dict(self.config_entry.options))
-        schema = vol.Schema(
-            {
-                vol.Required("area"): AreaSelector(),
-                vol.Required("assign_nodes"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
-                        multiple=True,
-                        mode=SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-            }
+        return self.async_show_form(
+            step_id="area_add", data_schema=vol.Schema({vol.Required("nodes"): self._devices_dropdown(outside)})
         )
-        return self.async_show_form(step_id="areas", data_schema=schema)
+
+    async def async_step_area_remove(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Wyjmij urządzenia z obszaru (nadal są zbierane)."""
+        from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
+
+        from .groups import device_for_node  # noqa: PLC0415
+
+        inside = self._area_devices(getattr(self, "_area_id", None))
+        if not inside:
+            return self.async_abort(reason="no_devices")
+        if user_input is not None:
+            registry = dr.async_get(self.hass)
+            for num in (int(v) for v in user_input["nodes"]):
+                device = device_for_node(self.hass, self.config_entry, num)
+                if device is not None:
+                    registry.async_update_device(device.id, area_id=None)
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+        return self.async_show_form(
+            step_id="area_remove", data_schema=vol.Schema({vol.Required("nodes"): self._devices_dropdown(inside)})
+        )
+
+    async def async_step_area_rename(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Zmień nazwę obszaru."""
+        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
+
+        registry = ar.async_get(self.hass)
+        area = registry.async_get_area(getattr(self, "_area_id", None) or "")
+        if area is None:
+            return await self.async_step_areas()
+        if user_input is not None:
+            registry.async_update(area.id, name=user_input["new_name"].strip())
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+        return self.async_show_form(
+            step_id="area_rename", data_schema=vol.Schema({vol.Required("new_name", default=area.name): str})
+        )
+
+    async def async_step_area_delete(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Usuń obszar (urządzenia zostają i są dalej zbierane, tylko bez obszaru)."""
+        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
+
+        registry = ar.async_get(self.hass)
+        area = registry.async_get_area(getattr(self, "_area_id", None) or "")
+        if area is None:
+            return await self.async_step_areas()
+        if user_input is not None:
+            if user_input.get("confirm"):
+                registry.async_delete(area.id)
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+        return self.async_show_form(
+            step_id="area_delete",
+            data_schema=vol.Schema({vol.Required("confirm", default=False): bool}),
+            description_placeholders={"name": area.name},
+        )
 
     async def async_step_device_remove(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Usuń urządzenia ze zbierania (znikają też z bazy radia i z listy w panelu)."""

@@ -224,10 +224,63 @@
       },
       "areas": {
         "title": "Zarządzanie obszarami",
-        "description": "Wybierz obszar Home Assistanta (z już utworzonych) i dodaj do niego urządzenia, które już zbierasz.",
+        "description": "Obszary Home Assistanta są grupami. W obszarze mogą być tylko urządzenia, które już zbierasz.",
+        "menu_options": {
+          "area_create": "Utwórz obszar",
+          "area_manage": "Zarządzaj obszarem"
+        }
+      },
+      "area_create": {
+        "title": "Utwórz obszar",
+        "description": "Powstanie obszar w Home Assistancie. Możesz od razu dodać do niego zbierane urządzenia.",
         "data": {
-          "area": "Obszar",
-          "assign_nodes": "Urządzenia"
+          "new_name": "Nazwa obszaru",
+          "new_nodes": "Urządzenia (opcjonalnie)"
+        }
+      },
+      "area_manage": {
+        "title": "Zarządzaj obszarem",
+        "description": "Wybierz jeden z już utworzonych obszarów.",
+        "data": {
+          "area": "Obszar"
+        }
+      },
+      "area_details": {
+        "title": "Obszar: {name}",
+        "description": "Urządzeń w obszarze: {count}.",
+        "menu_options": {
+          "area_add": "Dodaj urządzenia",
+          "area_remove": "Usuń urządzenia z obszaru",
+          "area_rename": "Zmień nazwę",
+          "area_delete": "Usuń obszar"
+        }
+      },
+      "area_add": {
+        "title": "Dodaj urządzenia do obszaru",
+        "description": "Wybierz zbierane urządzenia, które nie są jeszcze w tym obszarze.",
+        "data": {
+          "nodes": "Urządzenia"
+        }
+      },
+      "area_remove": {
+        "title": "Usuń urządzenia z obszaru",
+        "description": "Urządzenia wychodzą z obszaru, ale nadal są zbierane.",
+        "data": {
+          "nodes": "Urządzenia"
+        }
+      },
+      "area_rename": {
+        "title": "Zmień nazwę obszaru",
+        "description": "Nowa nazwa obszaru w Home Assistancie.",
+        "data": {
+          "new_name": "Nazwa obszaru"
+        }
+      },
+      "area_delete": {
+        "title": "Usuń obszar",
+        "description": "Obszar „{name}” zostanie usunięty z Home Assistanta. Urządzenia zostają i są dalej zbierane, tylko bez obszaru.",
+        "data": {
+          "confirm": "Tak, usuń ten obszar"
         }
       }
     },

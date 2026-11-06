@@ -224,10 +224,63 @@
       },
       "areas": {
         "title": "Area management",
-        "description": "Pick a Home Assistant area (from the existing ones) and add the devices you already collect to it.",
+        "description": "Home Assistant areas are groups. An area can only hold devices you already collect.",
+        "menu_options": {
+          "area_create": "Create an area",
+          "area_manage": "Manage an area"
+        }
+      },
+      "area_create": {
+        "title": "Create an area",
+        "description": "An area is created in Home Assistant. You can add collected devices to it right away.",
         "data": {
-          "area": "Area",
-          "assign_nodes": "Devices"
+          "new_name": "Area name",
+          "new_nodes": "Devices (optional)"
+        }
+      },
+      "area_manage": {
+        "title": "Manage an area",
+        "description": "Pick one of the existing areas.",
+        "data": {
+          "area": "Area"
+        }
+      },
+      "area_details": {
+        "title": "Area: {name}",
+        "description": "Devices in the area: {count}.",
+        "menu_options": {
+          "area_add": "Add devices",
+          "area_remove": "Remove devices from the area",
+          "area_rename": "Rename",
+          "area_delete": "Delete the area"
+        }
+      },
+      "area_add": {
+        "title": "Add devices to the area",
+        "description": "Pick collected devices that are not yet in this area.",
+        "data": {
+          "nodes": "Devices"
+        }
+      },
+      "area_remove": {
+        "title": "Remove devices from the area",
+        "description": "Devices leave the area but are still collected.",
+        "data": {
+          "nodes": "Devices"
+        }
+      },
+      "area_rename": {
+        "title": "Rename the area",
+        "description": "The new area name in Home Assistant.",
+        "data": {
+          "new_name": "Area name"
+        }
+      },
+      "area_delete": {
+        "title": "Delete the area",
+        "description": "The area “{name}” will be deleted from Home Assistant. Devices stay and are still collected, just without an area.",
+        "data": {
+          "confirm": "Yes, delete this area"
         }
       }
     },
