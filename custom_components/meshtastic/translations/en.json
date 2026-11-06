@@ -121,10 +121,9 @@
         "title": "MT_SW_INTEGRATION options",
         "description": "Choose what you want to do.",
         "menu_options": {
-          "settings": "Settings (mode, tracked nodes, notifications, servers)",
-          "devices": "Device management — adding, areas and merging",
-          "groups": "Areas and groups — create and add nodes",
-          "device_list": "Added devices — details and removal"
+          "settings": "Integration settings",
+          "devices": "Device management",
+          "areas": "Area management"
         }
       },
       "settings": {
@@ -179,12 +178,13 @@
       },
       "devices": {
         "title": "Device management",
-        "description": "Currently collecting: {count}.\n\n{merge_hint}\n\nIn one window you can merge duplicates, add new devices and assign devices to a Home Assistant area (your existing areas are listed). Nothing here removes devices except merging.",
-        "data": {
-          "merge": "Merge (the freshest node stays; the old one disappears from the list, the radio database and the devices; entities move to the remaining device)",
-          "add_nodes": "Add new devices to collection",
-          "assign_nodes": "Devices to assign to the area",
-          "area": "Area for the added and ticked devices"
+        "description": "Collected devices: {count}.\n\n{merge_hint}\n\nChoose an action.",
+        "menu_options": {
+          "device_add": "Add devices",
+          "device_area": "Assign devices to an area",
+          "device_remove": "Remove devices",
+          "device_merge": "Merge duplicates",
+          "device_list": "Device details"
         }
       },
       "device_details": {
@@ -194,37 +194,73 @@
           "action": "Action"
         }
       },
-      "merge": {
-        "title": "Merge duplicate nodes",
-        "description": "Found groups of devices that look like the same node under different numbers (same public key or — without a key — same names and model): {count}. Tick the ones you want to merge. In the next step you choose which node stays for each group. Entities and history move to one device.",
-        "data": {
-          "groups": "Groups to merge"
-        }
-      },
-      "merge_pick": {
-        "title": "Which node stays?",
-        "description": "Group: **{name}** (matched by: {reason}). Groups left (including this one): {left}.\n\nThe chosen node stays on the tracked list. The other numbers are removed from the list and, optionally, from the radio's node database. History and entities stay on one device.",
-        "data": {
-          "keep": "Node to keep",
-          "remove_from_radio": "Also remove the others from the radio's node database"
-        }
-      },
-      "groups": {
-        "title": "Areas and groups",
-        "description": "Currently collecting: {count}. Home Assistant areas are groups here: pick an area and its devices join collection. A custom group also creates an area with that name and assigns the chosen nodes to it. This window only ADDS nodes to collection, it removes nothing. The number next to a set is nodes you are not yet collecting.",
-        "data": {
-          "presets": "Ready-made sets",
-          "saved": "Areas and groups (add their nodes to collection)",
-          "delete_groups": "Delete a group (nodes stay)",
-          "new_nodes": "New area: choose nodes",
-          "new_name": "New area: name (creates an area in Home Assistant)"
-        }
-      },
       "device_list": {
-        "title": "Added devices",
-        "description": "Pick a device to see its details, jump to its Home Assistant device page or stop tracking it.",
+        "title": "Device details",
+        "description": "Pick a device to see its details, open its Home Assistant page or stop collecting it.",
         "data": {
           "device": "Device"
+        }
+      },
+      "device_add": {
+        "title": "Add devices",
+        "description": "Pick devices from the radio's database to collect. You can assign them to an area right away.",
+        "data": {
+          "add_nodes": "Devices to add",
+          "area": "Area (optional)"
+        }
+      },
+      "device_area": {
+        "title": "Assign devices to an area",
+        "description": "Pick collected devices and one of your existing Home Assistant areas.",
+        "data": {
+          "assign_nodes": "Devices",
+          "area": "Area"
+        }
+      },
+      "device_remove": {
+        "title": "Remove devices",
+        "description": "Ticked devices stop being collected and disappear from the radio's database and the panel list.",
+        "data": {
+          "remove_nodes": "Devices to remove"
+        }
+      },
+      "device_merge": {
+        "title": "Merge duplicates",
+        "description": "Found devices that look like the same node under different numbers (same public key, or — without a key — same names and model): {count}. Once ticked, the freshest node stays and the old one disappears from the database, the device list and the radio's database. Entities and history move to the remaining device, so collection continues.",
+        "data": {
+          "merge": "Duplicates to merge"
+        }
+      },
+      "areas": {
+        "title": "Area management",
+        "description": "Collected devices: {count}. The Home Assistant areas you already have are groups here.",
+        "menu_options": {
+          "area_create": "Create an area",
+          "area_collect": "Add devices from areas and sets to collection",
+          "area_delete": "Delete custom groups"
+        }
+      },
+      "area_create": {
+        "title": "Create an area",
+        "description": "An area with this name is created in Home Assistant and the chosen devices are assigned to it. New devices start being collected.",
+        "data": {
+          "new_name": "Area name",
+          "new_nodes": "Devices in the area"
+        }
+      },
+      "area_collect": {
+        "title": "Add to collection from areas and sets",
+        "description": "Collected devices: {count}. This window only ADDS devices to collection, it removes nothing. The number next to a set is devices you are not yet collecting.",
+        "data": {
+          "areas": "Areas and custom groups",
+          "presets": "Ready-made sets"
+        }
+      },
+      "area_delete": {
+        "title": "Delete custom groups",
+        "description": "Only deletes saved groups. Areas in Home Assistant and devices stay.",
+        "data": {
+          "delete_groups": "Groups to delete"
         }
       }
     },
@@ -239,7 +275,8 @@
       "no_devices": "No devices have been added yet.",
       "not_loaded": "The integration has not started yet.",
       "merge_done": "Done. Entity registry entries changed: {count}. Details are in the Home Assistant log (INFO).",
-      "merge_none": "No duplicates to merge were found."
+      "merge_none": "No duplicates to merge were found.",
+      "no_groups": "There are no custom groups to delete."
     }
   },
   "services": {

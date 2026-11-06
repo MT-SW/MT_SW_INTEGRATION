@@ -121,10 +121,9 @@
         "title": "Opcje MT_SW_INTEGRATION",
         "description": "Wybierz, co chcesz zrobić.",
         "menu_options": {
-          "settings": "Ustawienia (tryb pracy, śledzone węzły, powiadomienia, serwery)",
-          "devices": "Zarządzanie urządzeniami — dodawanie, obszary i scalanie",
-          "groups": "Obszary i grupy — tworzenie i dodawanie węzłów",
-          "device_list": "Dodane urządzenia — szczegóły i usuwanie"
+          "settings": "Ustawienia integracji",
+          "devices": "Zarządzanie urządzeniami",
+          "areas": "Zarządzanie obszarami"
         }
       },
       "settings": {
@@ -179,12 +178,13 @@
       },
       "devices": {
         "title": "Zarządzanie urządzeniami",
-        "description": "Teraz zbierasz: {count}.\n\n{merge_hint}\n\nTu w jednym oknie możesz scalić duplikaty, dodać nowe urządzenia i przypisać urządzenia do obszaru Home Assistanta (obszary, które już masz, są na liście). Nic tu nie usuwa urządzeń poza scaleniem.",
-        "data": {
-          "merge": "Scal (zostaje najświeższy węzeł, stary znika z listy, z bazy radia i z urządzeń; encje przechodzą na zostające urządzenie)",
-          "add_nodes": "Dodaj nowe urządzenia do zbierania",
-          "assign_nodes": "Urządzenia do przypisania do obszaru",
-          "area": "Obszar dla dodawanych i zaznaczonych urządzeń"
+        "description": "Zbierane urządzenia: {count}.\n\n{merge_hint}\n\nWybierz akcję.",
+        "menu_options": {
+          "device_add": "Dodaj urządzenia",
+          "device_area": "Przypisz urządzenia do obszaru",
+          "device_remove": "Usuń urządzenia",
+          "device_merge": "Scal duplikaty",
+          "device_list": "Szczegóły urządzeń"
         }
       },
       "device_details": {
@@ -194,37 +194,73 @@
           "action": "Akcja"
         }
       },
-      "merge": {
-        "title": "Scal duplikaty węzłów",
-        "description": "Znaleziono grupy urządzeń, które wyglądają na ten sam węzeł pod różnymi numerami (ten sam klucz publiczny albo — bez klucza — te same nazwy i model): {count}. Zaznacz te, które chcesz scalić. W następnym kroku wskażesz dla każdej grupy, który węzeł zostaje. Encje i historia przechodzą na jedno urządzenie.",
-        "data": {
-          "groups": "Grupy do scalenia"
-        }
-      },
-      "merge_pick": {
-        "title": "Który węzeł zostaje?",
-        "description": "Grupa: **{name}** (dopasowanie: {reason}). Pozostało grup do obsłużenia (z tą): {left}.\n\nWybrany węzeł zostaje na liście śledzonych. Pozostałe numery znikają z listy, a opcjonalnie także z bazy węzłów w radiu. Historia i encje zostają na jednym urządzeniu.",
-        "data": {
-          "keep": "Węzeł, który zostaje",
-          "remove_from_radio": "Usuń pozostałe też z bazy węzłów w radiu"
-        }
-      },
-      "groups": {
-        "title": "Obszary i grupy",
-        "description": "Teraz zbierasz: {count}. Obszary Home Assistanta są tu grupami: wybierz obszar, a jego urządzenia dołączą do zbierania. Własna grupa tworzy też obszar o tej nazwie i przypisuje do niego wybrane węzły. To okno tylko DODAJE węzły do zbierania, niczego nie usuwa. Liczba przy zestawie to węzły, których jeszcze nie zbierasz.",
-        "data": {
-          "presets": "Gotowe zestawy",
-          "saved": "Obszary i grupy (dodaj ich węzły do zbierania)",
-          "delete_groups": "Usuń grupę (węzły zostają)",
-          "new_nodes": "Nowy obszar: wybierz węzły",
-          "new_name": "Nowy obszar: nazwa (powstanie obszar w Home Assistancie)"
-        }
-      },
       "device_list": {
-        "title": "Dodane urządzenia",
-        "description": "Wybierz urządzenie, aby zobaczyć jego szczegóły, przejść do jego strony w Home Assistant albo przestać je śledzić.",
+        "title": "Szczegóły urządzeń",
+        "description": "Wybierz urządzenie, aby zobaczyć jego szczegóły, przejść do jego strony w Home Assistant albo przestać je zbierać.",
         "data": {
           "device": "Urządzenie"
+        }
+      },
+      "device_add": {
+        "title": "Dodaj urządzenia",
+        "description": "Wybierz urządzenia z bazy radia, które mają być zbierane. Możesz od razu przypisać je do obszaru.",
+        "data": {
+          "add_nodes": "Urządzenia do dodania",
+          "area": "Obszar (opcjonalnie)"
+        }
+      },
+      "device_area": {
+        "title": "Przypisz urządzenia do obszaru",
+        "description": "Wybierz zbierane urządzenia i jeden z już utworzonych obszarów Home Assistanta.",
+        "data": {
+          "assign_nodes": "Urządzenia",
+          "area": "Obszar"
+        }
+      },
+      "device_remove": {
+        "title": "Usuń urządzenia",
+        "description": "Zaznaczone urządzenia przestają być zbierane, znikają z bazy radia i z listy w panelu.",
+        "data": {
+          "remove_nodes": "Urządzenia do usunięcia"
+        }
+      },
+      "device_merge": {
+        "title": "Scal duplikaty",
+        "description": "Znaleziono urządzenia, które wyglądają na ten sam węzeł pod różnymi numerami (ten sam klucz publiczny albo — bez klucza — te same nazwy i model): {count}. Po zaznaczeniu zostaje najświeższy węzeł, a stary znika z bazy, z listy urządzeń i z bazy radia. Encje i historia przechodzą na zostające urządzenie, więc zbieranie trwa dalej.",
+        "data": {
+          "merge": "Duplikaty do scalenia"
+        }
+      },
+      "areas": {
+        "title": "Zarządzanie obszarami",
+        "description": "Zbierane urządzenia: {count}. Obszary Home Assistanta, które już masz, są tu grupami.",
+        "menu_options": {
+          "area_create": "Utwórz obszar",
+          "area_collect": "Dodaj do zbierania urządzenia z obszarów i zestawów",
+          "area_delete": "Usuń własne grupy"
+        }
+      },
+      "area_create": {
+        "title": "Utwórz obszar",
+        "description": "Powstanie obszar w Home Assistancie o podanej nazwie, a wybrane urządzenia zostaną do niego przypisane. Nowe urządzenia zaczną być zbierane.",
+        "data": {
+          "new_name": "Nazwa obszaru",
+          "new_nodes": "Urządzenia w obszarze"
+        }
+      },
+      "area_collect": {
+        "title": "Dodaj do zbierania z obszarów i zestawów",
+        "description": "Zbierane urządzenia: {count}. To okno tylko DODAJE urządzenia do zbierania, niczego nie usuwa. Liczba przy zestawie to urządzenia, których jeszcze nie zbierasz.",
+        "data": {
+          "areas": "Obszary i własne grupy",
+          "presets": "Gotowe zestawy"
+        }
+      },
+      "area_delete": {
+        "title": "Usuń własne grupy",
+        "description": "Usuwa tylko zapisane grupy. Obszary w Home Assistancie i urządzenia zostają.",
+        "data": {
+          "delete_groups": "Grupy do usunięcia"
         }
       }
     },
@@ -239,7 +275,8 @@
       "no_devices": "Nie dodano jeszcze żadnych urządzeń.",
       "not_loaded": "Integracja jeszcze się nie uruchomiła.",
       "merge_done": "Gotowe. Zmienionych wpisów encji: {count}. Szczegóły w logu Home Assistanta (INFO).",
-      "merge_none": "Nie znaleziono duplikatów do scalenia."
+      "merge_none": "Nie znaleziono duplikatów do scalenia.",
+      "no_groups": "Nie ma własnych grup do usunięcia."
     }
   },
   "services": {
