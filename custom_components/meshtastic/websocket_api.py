@@ -2084,7 +2084,19 @@ async def ws_ui_settings(
 ) -> None:
     """Ustawienia interfejsu panelu; brakujące wartości mają domyślne."""
     saved = await _ui_settings_store(hass).async_load()
-    connection.send_result(msg["id"], {"settings": {**UI_SETTINGS_DEFAULTS, **(saved or {})}})
+    settings = {**UI_SETTINGS_DEFAULTS, **(saved or {})}
+    # Obszary Home Assistanta są też grupami (osobny klucz tylko do odczytu, nie trafia do zapisanych ustawień)
+    try:
+        from .groups import area_groups  # noqa: PLC0415
+
+        areas: dict[str, list[int]] = {}
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            for name, ids in area_groups(hass, entry).items():
+                areas[name] = sorted(set(areas.get(name, [])) | set(ids))
+        settings["area_groups"] = areas
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("Could not read areas for panel groups", exc_info=True)
+    connection.send_result(msg["id"], {"settings": settings})
 
 
 @websocket_api.websocket_command(

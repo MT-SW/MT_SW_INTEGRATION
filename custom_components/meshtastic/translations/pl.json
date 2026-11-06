@@ -122,9 +122,9 @@
         "description": "Wybierz, co chcesz zrobić.",
         "menu_options": {
           "settings": "Ustawienia (tryb pracy, śledzone węzły, powiadomienia, serwery)",
-          "devices": "Dodane urządzenia — otwórz szczegóły",
-          "merge": "Scal duplikaty węzłów (zmiana numeru)",
-          "groups": "Dodaj grupę węzłów do zbierania"
+          "devices": "Dane urządzeń — dodawanie, obszary i scalanie",
+          "groups": "Obszary i grupy — tworzenie i dodawanie węzłów",
+          "device_list": "Dodane urządzenia — szczegóły i usuwanie"
         }
       },
       "settings": {
@@ -178,10 +178,13 @@
         }
       },
       "devices": {
-        "title": "Dodane urządzenia",
-        "description": "Wybierz urządzenie, aby zobaczyć jego szczegóły, przejść do jego strony w Home Assistant albo przestać je śledzić.",
+        "title": "Dane urządzeń",
+        "description": "Teraz zbierasz: {count}.\n\n{merge_hint}\n\nTu w jednym oknie możesz scalić duplikaty, dodać nowe urządzenia i przypisać urządzenia do obszaru Home Assistanta (obszary, które już masz, są na liście). Nic tu nie usuwa urządzeń poza scaleniem.",
         "data": {
-          "device": "Urządzenie"
+          "merge": "Scal (zostaje najświeższy węzeł, stary znika z listy, z bazy radia i z urządzeń; encje przechodzą na zostające urządzenie)",
+          "add_nodes": "Dodaj nowe urządzenia do zbierania",
+          "assign_nodes": "Urządzenia do przypisania do obszaru",
+          "area": "Obszar dla dodawanych i zaznaczonych urządzeń"
         }
       },
       "device_details": {
@@ -207,14 +210,21 @@
         }
       },
       "groups": {
-        "title": "Grupy węzłów do zbierania",
-        "description": "Teraz zbierasz: {count}. To okno tylko DODAJE węzły do zbierania, niczego nie usuwa. Każda grupa dostaje w Home Assistancie etykietę „MT_SW: nazwa” przypisaną do urządzeń jej węzłów, więc użyjesz jej w pulpitach, automatyzacjach i skryptach. Liczba przy zestawie to węzły, których jeszcze nie zbierasz.",
+        "title": "Obszary i grupy",
+        "description": "Teraz zbierasz: {count}. Obszary Home Assistanta są tu grupami: wybierz obszar, a jego urządzenia dołączą do zbierania. Własna grupa tworzy też obszar o tej nazwie i przypisuje do niego wybrane węzły. To okno tylko DODAJE węzły do zbierania, niczego nie usuwa. Liczba przy zestawie to węzły, których jeszcze nie zbierasz.",
         "data": {
           "presets": "Gotowe zestawy",
-          "saved": "Grupy (dodaj węzły do zbierania)",
+          "saved": "Obszary i grupy (dodaj ich węzły do zbierania)",
           "delete_groups": "Usuń grupę (węzły zostają)",
-          "new_nodes": "Własna grupa: wybierz węzły",
-          "new_name": "Własna grupa: nazwa (zapisze grupę na później)"
+          "new_nodes": "Nowy obszar: wybierz węzły",
+          "new_name": "Nowy obszar: nazwa (powstanie obszar w Home Assistancie)"
+        }
+      },
+      "device_list": {
+        "title": "Dodane urządzenia",
+        "description": "Wybierz urządzenie, aby zobaczyć jego szczegóły, przejść do jego strony w Home Assistant albo przestać je śledzić.",
+        "data": {
+          "device": "Urządzenie"
         }
       }
     },

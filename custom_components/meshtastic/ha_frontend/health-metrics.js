@@ -153,7 +153,7 @@ class MtswHealthMetrics extends LitElement {
   async _loadGroups() {
     try {
       const r = await this.hass.callWS({ type: "meshtastic/ui_settings" });
-      this._groups = (r && r.settings && r.settings.node_groups) || {};
+      this._groups = { ...((r && r.settings && r.settings.area_groups) || {}), ...((r && r.settings && r.settings.node_groups) || {}) };
     } catch (err) {
       console.warn("MT_SW: grupy węzłów", err);
     }

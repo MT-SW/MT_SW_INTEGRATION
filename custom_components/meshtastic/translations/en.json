@@ -122,9 +122,9 @@
         "description": "Choose what you want to do.",
         "menu_options": {
           "settings": "Settings (mode, tracked nodes, notifications, servers)",
-          "devices": "Added devices — open details",
-          "merge": "Merge duplicate nodes (number change)",
-          "groups": "Add a group of nodes to collection"
+          "devices": "Device data — adding, areas and merging",
+          "groups": "Areas and groups — create and add nodes",
+          "device_list": "Added devices — details and removal"
         }
       },
       "settings": {
@@ -178,10 +178,13 @@
         }
       },
       "devices": {
-        "title": "Added devices",
-        "description": "Pick a device to see its details, jump to its Home Assistant device page or stop tracking it.",
+        "title": "Device data",
+        "description": "Currently collecting: {count}.\n\n{merge_hint}\n\nIn one window you can merge duplicates, add new devices and assign devices to a Home Assistant area (your existing areas are listed). Nothing here removes devices except merging.",
         "data": {
-          "device": "Device"
+          "merge": "Merge (the freshest node stays; the old one disappears from the list, the radio database and the devices; entities move to the remaining device)",
+          "add_nodes": "Add new devices to collection",
+          "assign_nodes": "Devices to assign to the area",
+          "area": "Area for the added and ticked devices"
         }
       },
       "device_details": {
@@ -207,14 +210,21 @@
         }
       },
       "groups": {
-        "title": "Node groups for collection",
-        "description": "Collecting now: {count}. This window only ADDS nodes to collection and never removes any. Each group gets a Home Assistant label \"MT_SW: name\" assigned to its nodes' devices, so you can use it in dashboards, automations and scripts. The number next to a preset is nodes you are not collecting yet.",
+        "title": "Areas and groups",
+        "description": "Currently collecting: {count}. Home Assistant areas are groups here: pick an area and its devices join collection. A custom group also creates an area with that name and assigns the chosen nodes to it. This window only ADDS nodes to collection, it removes nothing. The number next to a set is nodes you are not yet collecting.",
         "data": {
           "presets": "Ready-made sets",
-          "saved": "Groups (add nodes to collection)",
+          "saved": "Areas and groups (add their nodes to collection)",
           "delete_groups": "Delete a group (nodes stay)",
-          "new_nodes": "Own group: choose nodes",
-          "new_name": "Own group: name (saves the group for later)"
+          "new_nodes": "New area: choose nodes",
+          "new_name": "New area: name (creates an area in Home Assistant)"
+        }
+      },
+      "device_list": {
+        "title": "Added devices",
+        "description": "Pick a device to see its details, jump to its Home Assistant device page or stop tracking it.",
+        "data": {
+          "device": "Device"
         }
       }
     },

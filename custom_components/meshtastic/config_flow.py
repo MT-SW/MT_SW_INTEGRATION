@@ -14,6 +14,7 @@ from homeassistant import config_entries, data_entry_flow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, IntegrationError
 from homeassistant.helpers.selector import (
+    AreaSelector,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -817,9 +818,132 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
         """Menu: ustawienia / lista śledzonych urządzeń (każde do otwarcia) / scalanie duplikatów."""
-        return self.async_show_menu(step_id="init", menu_options=["settings", "devices", "groups", "merge"])
+        return self.async_show_menu(step_id="init", menu_options=["settings", "devices", "groups", "device_list"])
 
-    async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: PLR0912, PLR0915
+        """
+        Dane urządzeń w jednym oknie: dodawanie, obszar i scalanie.
+
+        Aplikacja sama podsuwa scalenia (ten sam klucz albo te same nazwy i model pod innym numerem).
+        Zaznaczone scalenie zostawia najświeższy węzeł, a stary znika z listy, z bazy radia i z listy urządzeń;
+        encje przechodzą na zostające urządzenie, więc zbieranie trwa dalej.
+        """
+        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
+
+        from .groups import assign_nodes_to_area, device_for_node  # noqa: PLC0415
+        from .node_merge import find_merge_plans  # noqa: PLC0415
+
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        if runtime is None or not runtime.client:
+            return self.async_abort(reason="not_loaded")
+        polish = (self.hass.config.language or "").lower().startswith("pl")
+        tracked = [deepcopy(el) for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])]
+        own = (runtime.gateway_node or {}).get("num")
+
+        if user_input is None:
+            try:
+                self._merge_nodes = dict(await runtime.client.async_get_all_nodes())
+            except Exception:  # noqa: BLE001
+                self._merge_nodes = dict(runtime.coordinator.data or {})
+            self._merge_nodes = {
+                n: i for n, i in self._merge_nodes.items() if (i.get("user") or {}).get("hwModel") != "UNSET"
+            }
+            self._merge_gateway = own
+            self._merge_plans = find_merge_plans(self.hass, self.config_entry, self._merge_nodes, own)
+        nodes = self._merge_live_nodes()
+        tracked_ids = {el["id"] for el in tracked}
+
+        if user_input is not None:
+            self._merge_options = deepcopy(dict(self.config_entry.options))
+            self._merge_removals = []
+            self._merge_changed = 0
+            plans = getattr(self, "_merge_plans", [])
+            merged_any = False
+            for index in (int(i) for i in user_input.get("merge", [])):
+                if not 0 <= index < len(plans):
+                    continue
+                plan = plans[index]
+                kept = max(plan.nums, key=lambda n: (nodes.get(n) or {}).get("lastHeard") or 0)
+                self._apply_merge_choice(plan, kept, remove_from_radio=True)
+                merged_any = True
+            options = self._merge_options
+            current = list(options.get(CONF_OPTION_FILTER_NODES, []))
+            current_ids = {el["id"] for el in current}
+            added: set[int] = set()
+            for num in (int(v) for v in user_input.get("add_nodes", [])):
+                info = nodes.get(num)
+                if info is None or num == own or num in current_ids:
+                    continue
+                current.append(
+                    {
+                        "id": num,
+                        "name": (info.get("user") or {}).get("longName") or f"!{num:08x}",
+                        "identity_key": node_identity_key(num, info),
+                        **_signature_fields(info),
+                    }
+                )
+                added.add(num)
+            options[CONF_OPTION_FILTER_NODES] = current
+            area_id = user_input.get("area")
+            targets = added | {int(v) for v in user_input.get("assign_nodes", [])}
+            if area_id and targets:
+                assign_nodes_to_area(self.hass, self.config_entry, targets, area_id)
+            if merged_any:
+                return await self._merge_finish()
+            return self.async_create_entry(title="", data=options)
+
+        area_registry = ar.async_get(self.hass)
+
+        def area_name(num: int) -> str:
+            device = device_for_node(self.hass, self.config_entry, num)
+            area = area_registry.async_get_area(device.area_id) if device is not None and device.area_id else None
+            return area.name if area is not None else ("brak obszaru" if polish else "no area")
+
+        fields: dict[Any, Any] = {}
+        plans = self._merge_plans
+        if plans:
+            merge_options = [
+                SelectOptionDict(
+                    value=str(index),
+                    label=f"{plan.name or '?'} — {', '.join(f'!{n:08x}' for n in sorted(plan.nums))}",
+                )
+                for index, plan in enumerate(plans)
+            ]
+            fields[vol.Optional("merge", default=[])] = SelectSelector(
+                SelectSelectorConfig(options=merge_options, multiple=True, mode=SelectSelectorMode.LIST)
+            )
+            hint = (
+                f"⚠️ Można scalić: {len(plans)}. Zaznacz poniżej, a zostanie najświeższy węzeł."
+                if polish
+                else f"⚠️ Can be merged: {len(plans)}. Tick below and the freshest node stays."
+            )
+        else:
+            hint = "Nie ma nic do scalenia." if polish else "Nothing to merge."
+        fields[vol.Optional("add_nodes", default=[])] = _tracked_nodes_selector(
+            {n: i for n, i in nodes.items() if n != own}, tracked, self.hass.config.language
+        )
+        if tracked:
+            fields[vol.Optional("assign_nodes", default=[])] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(
+                            value=str(el["id"]),
+                            label=f"{el.get('name') or '!%08x' % el['id']} — {area_name(el['id'])}",
+                        )
+                        for el in tracked
+                    ],
+                    multiple=True,
+                    mode=SelectSelectorMode.LIST,
+                )
+            )
+        fields[vol.Optional("area")] = AreaSelector()
+        return self.async_show_form(
+            step_id="devices",
+            data_schema=vol.Schema(fields),
+            description_placeholders={"count": str(len(tracked_ids)), "merge_hint": hint},
+        )
+
+    async def async_step_device_list(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Lista dodanych urządzeń — wybór dowolnego otwiera jego szczegóły i akcje."""
         tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
         if not tracked:
@@ -849,7 +973,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 )
             }
         )
-        return self.async_show_form(step_id="devices", data_schema=schema)
+        return self.async_show_form(step_id="device_list", data_schema=schema)
 
     async def async_step_device_details(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Szczegóły jednego urządzenia: link do jego strony w HA, tożsamość, akcje."""
@@ -964,9 +1088,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             new_ids = {int(v) for v in user_input.get("new_nodes", [])}
             wanted |= new_ids
             new_name = (user_input.get("new_name") or "").strip()
+            area_nodes: set[int] = set()
             if new_name and new_ids:
                 saved = [g for g in saved if g.get("name") != new_name]
                 saved.append({"name": new_name, "node_ids": sorted(new_ids)})
+                area_nodes = set(new_ids)
             delete = set(user_input.get("delete_groups", []))
             if delete:
                 saved = [g for g in saved if g.get("name") not in delete]
@@ -982,6 +1108,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         **_signature_fields(info),
                     }
                 )
+            if area_nodes:
+                from .groups import assign_nodes_to_area, get_or_create_area  # noqa: PLC0415
+
+                # grupa to też obszar Home Assistanta o tej nazwie; urządzenia dostaną go po utworzeniu
+                assign_nodes_to_area(self.hass, self.config_entry, area_nodes, get_or_create_area(self.hass, new_name))
             return self.async_create_entry(
                 title="",
                 data={**self.config_entry.options, CONF_OPTION_FILTER_NODES: tracked, CONF_OPTION_NODE_GROUPS: saved},
@@ -1063,6 +1194,43 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return f"{name} ({node_hex}) — słyszany {ago}"
         return f"{name} ({node_hex}) — nigdy nie słyszany"
 
+    def _apply_merge_choice(self, plan: Any, kept: int, remove_from_radio: bool) -> None:
+        """Scal jedną grupę duplikatów: zostaje ``kept``, reszta znika z listy, a opcjonalnie z bazy radia."""
+        from .node_merge import apply_merge_plan, plan_with_kept_node  # noqa: PLC0415
+
+        nodes = self._merge_live_nodes()
+        gateway = getattr(self, "_merge_gateway", None)
+        plan = plan_with_kept_node(plan, kept, nodes)
+        self._merge_changed += apply_merge_plan(self.hass, self.config_entry, plan)
+        dropped = [n for n in plan.nums if n != kept and n != gateway]
+        options = self._merge_options
+        tracked = list(options.get(CONF_OPTION_FILTER_NODES, []))
+        user = (nodes.get(kept) or {}).get("user") or {}
+        was_tracked = any(e["id"] in plan.nums for e in tracked)
+        new_tracked, seen_kept = [], False
+        for entry_el in tracked:
+            if entry_el["id"] == kept:
+                seen_kept = True
+                new_tracked.append({**entry_el, "identity_key": plan.target_key})
+            elif entry_el["id"] in dropped:
+                continue
+            else:
+                new_tracked.append(entry_el)
+        if was_tracked and not seen_kept:
+            template = next((e for e in tracked if e["id"] in dropped), {})
+            new_tracked.append(
+                {
+                    **template,
+                    "id": kept,
+                    "name": user.get("longName") or template.get("name"),
+                    "short_name": user.get("shortName") or template.get("short_name"),
+                    "identity_key": plan.target_key,
+                }
+            )
+        options[CONF_OPTION_FILTER_NODES] = new_tracked
+        if remove_from_radio:
+            self._merge_removals.extend(n for n in dropped if n in nodes)
+
     async def async_step_merge(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Krok 1: lista znalezionych duplikatów — użytkownik zaznacza, które grupy scalić."""
         from .node_merge import find_merge_plans  # noqa: PLC0415
@@ -1103,8 +1271,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_merge_pick(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Krok 2 (dla każdej grupy): który węzeł zostaje; pozostałe znikają z listy i (opcjonalnie) z bazy radia."""
-        from .node_merge import apply_merge_plan, plan_with_kept_node  # noqa: PLC0415
-
         queue = getattr(self, "_merge_queue", [])
         if not queue:
             return await self._merge_finish()
@@ -1114,38 +1280,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         nums = sorted(plan.nums, key=lambda n: (nodes.get(n) or {}).get("lastHeard") or 0, reverse=True)
 
         if user_input is not None:
-            kept = int(user_input["keep"])
-            plan = plan_with_kept_node(plan, kept, nodes)
-            self._merge_changed += apply_merge_plan(self.hass, self.config_entry, plan)
-            dropped = [n for n in plan.nums if n != kept and n != gateway]
-            options = self._merge_options
-            tracked = list(options.get(CONF_OPTION_FILTER_NODES, []))
-            info = nodes.get(kept) or {}
-            user = info.get("user") or {}
-            was_tracked = any(e["id"] in plan.nums for e in tracked)
-            new_tracked, seen_kept = [], False
-            for entry_el in tracked:
-                if entry_el["id"] == kept:
-                    seen_kept = True
-                    new_tracked.append({**entry_el, "identity_key": plan.target_key})
-                elif entry_el["id"] in dropped:
-                    continue
-                else:
-                    new_tracked.append(entry_el)
-            if was_tracked and not seen_kept:
-                template = next((e for e in tracked if e["id"] in dropped), {})
-                new_tracked.append(
-                    {
-                        **template,
-                        "id": kept,
-                        "name": user.get("longName") or template.get("name"),
-                        "short_name": user.get("shortName") or template.get("short_name"),
-                        "identity_key": plan.target_key,
-                    }
-                )
-            options[CONF_OPTION_FILTER_NODES] = new_tracked
-            if user_input.get("remove_from_radio", True):
-                self._merge_removals.extend(n for n in dropped if n in nodes)
+            self._apply_merge_choice(plan, int(user_input["keep"]), bool(user_input.get("remove_from_radio", True)))
             self._merge_queue = queue[1:]
             return await self.async_step_merge_pick()
 
