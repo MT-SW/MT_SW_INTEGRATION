@@ -178,109 +178,24 @@
       },
       "devices": {
         "title": "Zarządzanie urządzeniami",
-        "description": "Zbierane urządzenia: {count}.\n\n{merge_hint}\n\nWybierz akcję.",
-        "menu_options": {
-          "device_add": "Dodaj urządzenia",
-          "device_remove": "Usuń urządzenia",
-          "device_merge": "Scal duplikaty",
-          "device_list": "Szczegóły urządzeń"
-        }
-      },
-      "device_details": {
-        "title": "Urządzenie: {name}",
-        "description": "**{name}** ({node})\n\nKrótka nazwa: {short_name}\nModel: {hw_model}\nTożsamość: `{identity}`\n\nStrona urządzenia w Home Assistant: {device_link}\n\nWybierz akcję:",
+        "description": "Zbierane urządzenia: {count}. Wszystko w jednym oknie.\n\n{merge_hint}\n\n• Zaznacz zbierane urządzenia i wybierz, co z nimi zrobić (przypisz do obszaru albo usuń ze zbierania; usunięte znikają też z bazy radia i z listy w panelu).\n• Dodaj nowe urządzenia — lista pokazuje tylko te, których jeszcze nie zbierasz.\n• Obszar jest używany do przypisania zaznaczonych i dodawanych urządzeń.\n• Scalanie: zostaje najświeższy węzeł, stary znika z bazy, z listy urządzeń i z radia, a encje przechodzą na zostające urządzenie, więc zbieranie trwa dalej.",
         "data": {
-          "action": "Akcja"
-        }
-      },
-      "device_list": {
-        "title": "Szczegóły urządzeń",
-        "description": "Wybierz urządzenie, aby zobaczyć jego szczegóły, przejść do jego strony w Home Assistant albo przestać je zbierać.",
-        "data": {
-          "device": "Urządzenie"
-        }
-      },
-      "device_add": {
-        "title": "Dodaj urządzenia",
-        "description": "Wybierz urządzenia z bazy radia, które mają być zbierane. Możesz od razu przypisać je do obszaru.",
-        "data": {
-          "add_nodes": "Urządzenia do dodania",
-          "area": "Obszar (opcjonalnie)"
-        }
-      },
-      "device_remove": {
-        "title": "Usuń urządzenia",
-        "description": "Zaznaczone urządzenia przestają być zbierane, znikają z bazy radia i z listy w panelu.",
-        "data": {
-          "remove_nodes": "Urządzenia do usunięcia"
-        }
-      },
-      "device_merge": {
-        "title": "Scal duplikaty",
-        "description": "Znaleziono urządzenia, które wyglądają na ten sam węzeł pod różnymi numerami (ten sam klucz publiczny albo — bez klucza — te same nazwy i model): {count}. Po zaznaczeniu zostaje najświeższy węzeł, a stary znika z bazy, z listy urządzeń i z bazy radia. Encje i historia przechodzą na zostające urządzenie, więc zbieranie trwa dalej.",
-        "data": {
-          "merge": "Duplikaty do scalenia"
+          "selected": "Zbierane urządzenia (zaznacz)",
+          "action": "Co zrobić z zaznaczonymi",
+          "add_nodes": "Dodaj urządzenia do zbierania",
+          "area": "Obszar (do przypisania)",
+          "merge": "Scal duplikaty"
         }
       },
       "areas": {
         "title": "Zarządzanie obszarami",
-        "description": "Obszary Home Assistanta są grupami. W obszarze mogą być tylko urządzenia, które już zbierasz.",
-        "menu_options": {
-          "area_create": "Utwórz obszar",
-          "area_manage": "Zarządzaj obszarem"
-        }
-      },
-      "area_create": {
-        "title": "Utwórz obszar",
-        "description": "Powstanie obszar w Home Assistancie. Możesz od razu dodać do niego zbierane urządzenia.",
+        "description": "Obszary Home Assistanta są grupami; w obszarze są tylko urządzenia, które już zbierasz. Wszystko w jednym oknie:\n\n• wybierz istniejący obszar ALBO wpisz nazwę, żeby utworzyć nowy,\n• dodaj albo usuń urządzenia z obszaru (usunięte nadal są zbierane),\n• przy wybranym obszarze wpisana nazwa zmienia jego nazwę,\n• zaznacz „Usuń obszar”, żeby go skasować (urządzenia zostają i są dalej zbierane).",
         "data": {
-          "new_name": "Nazwa obszaru",
-          "new_nodes": "Urządzenia (opcjonalnie)"
-        }
-      },
-      "area_manage": {
-        "title": "Zarządzaj obszarem",
-        "description": "Wybierz jeden z już utworzonych obszarów.",
-        "data": {
-          "area": "Obszar"
-        }
-      },
-      "area_details": {
-        "title": "Obszar: {name}",
-        "description": "Urządzeń w obszarze: {count}.",
-        "menu_options": {
-          "area_add": "Dodaj urządzenia",
-          "area_remove": "Usuń urządzenia z obszaru",
-          "area_rename": "Zmień nazwę",
-          "area_delete": "Usuń obszar"
-        }
-      },
-      "area_add": {
-        "title": "Dodaj urządzenia do obszaru",
-        "description": "Wybierz zbierane urządzenia, które nie są jeszcze w tym obszarze.",
-        "data": {
-          "nodes": "Urządzenia"
-        }
-      },
-      "area_remove": {
-        "title": "Usuń urządzenia z obszaru",
-        "description": "Urządzenia wychodzą z obszaru, ale nadal są zbierane.",
-        "data": {
-          "nodes": "Urządzenia"
-        }
-      },
-      "area_rename": {
-        "title": "Zmień nazwę obszaru",
-        "description": "Nowa nazwa obszaru w Home Assistancie.",
-        "data": {
-          "new_name": "Nazwa obszaru"
-        }
-      },
-      "area_delete": {
-        "title": "Usuń obszar",
-        "description": "Obszar „{name}” zostanie usunięty z Home Assistanta. Urządzenia zostają i są dalej zbierane, tylko bez obszaru.",
-        "data": {
-          "confirm": "Tak, usuń ten obszar"
+          "area": "Istniejący obszar",
+          "new_name": "Nazwa (nowy obszar albo nowa nazwa wybranego)",
+          "add_nodes": "Dodaj urządzenia do obszaru",
+          "remove_nodes": "Usuń urządzenia z obszaru",
+          "delete_area": "Usuń wybrany obszar"
         }
       }
     },

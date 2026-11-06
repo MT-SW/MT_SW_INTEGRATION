@@ -178,109 +178,24 @@
       },
       "devices": {
         "title": "Device management",
-        "description": "Collected devices: {count}.\n\n{merge_hint}\n\nChoose an action.",
-        "menu_options": {
-          "device_add": "Add devices",
-          "device_remove": "Remove devices",
-          "device_merge": "Merge duplicates",
-          "device_list": "Device details"
-        }
-      },
-      "device_details": {
-        "title": "Device: {name}",
-        "description": "**{name}** ({node})\n\nShort name: {short_name}\nModel: {hw_model}\nIdentity: `{identity}`\n\nHome Assistant device page: {device_link}\n\nChoose an action:",
+        "description": "Collected devices: {count}. Everything in one window.\n\n{merge_hint}\n\n• Tick collected devices and choose what to do with them (assign to an area or remove from collection; removed ones also disappear from the radio's database and the panel list).\n• Add new devices — the list shows only the ones you are not collecting yet.\n• The area is used to assign the ticked and added devices.\n• Merging: the freshest node stays, the old one disappears from the database, the device list and the radio, and entities move to the remaining device so collection continues.",
         "data": {
-          "action": "Action"
-        }
-      },
-      "device_list": {
-        "title": "Device details",
-        "description": "Pick a device to see its details, open its Home Assistant page or stop collecting it.",
-        "data": {
-          "device": "Device"
-        }
-      },
-      "device_add": {
-        "title": "Add devices",
-        "description": "Pick devices from the radio's database to collect. You can assign them to an area right away.",
-        "data": {
-          "add_nodes": "Devices to add",
-          "area": "Area (optional)"
-        }
-      },
-      "device_remove": {
-        "title": "Remove devices",
-        "description": "Ticked devices stop being collected and disappear from the radio's database and the panel list.",
-        "data": {
-          "remove_nodes": "Devices to remove"
-        }
-      },
-      "device_merge": {
-        "title": "Merge duplicates",
-        "description": "Found devices that look like the same node under different numbers (same public key, or — without a key — same names and model): {count}. Once ticked, the freshest node stays and the old one disappears from the database, the device list and the radio's database. Entities and history move to the remaining device, so collection continues.",
-        "data": {
-          "merge": "Duplicates to merge"
+          "selected": "Collected devices (tick)",
+          "action": "What to do with the ticked ones",
+          "add_nodes": "Add devices to collection",
+          "area": "Area (to assign to)",
+          "merge": "Merge duplicates"
         }
       },
       "areas": {
         "title": "Area management",
-        "description": "Home Assistant areas are groups. An area can only hold devices you already collect.",
-        "menu_options": {
-          "area_create": "Create an area",
-          "area_manage": "Manage an area"
-        }
-      },
-      "area_create": {
-        "title": "Create an area",
-        "description": "An area is created in Home Assistant. You can add collected devices to it right away.",
+        "description": "Home Assistant areas are the groups; an area only holds devices you already collect. Everything in one window:\n\n• pick an existing area OR type a name to create a new one,\n• add or remove devices from the area (removed ones are still collected),\n• with an area picked, a typed name renames it,\n• tick “Delete the picked area” to remove it (devices stay and are still collected).",
         "data": {
-          "new_name": "Area name",
-          "new_nodes": "Devices (optional)"
-        }
-      },
-      "area_manage": {
-        "title": "Manage an area",
-        "description": "Pick one of the existing areas.",
-        "data": {
-          "area": "Area"
-        }
-      },
-      "area_details": {
-        "title": "Area: {name}",
-        "description": "Devices in the area: {count}.",
-        "menu_options": {
-          "area_add": "Add devices",
-          "area_remove": "Remove devices from the area",
-          "area_rename": "Rename",
-          "area_delete": "Delete the area"
-        }
-      },
-      "area_add": {
-        "title": "Add devices to the area",
-        "description": "Pick collected devices that are not yet in this area.",
-        "data": {
-          "nodes": "Devices"
-        }
-      },
-      "area_remove": {
-        "title": "Remove devices from the area",
-        "description": "Devices leave the area but are still collected.",
-        "data": {
-          "nodes": "Devices"
-        }
-      },
-      "area_rename": {
-        "title": "Rename the area",
-        "description": "The new area name in Home Assistant.",
-        "data": {
-          "new_name": "Area name"
-        }
-      },
-      "area_delete": {
-        "title": "Delete the area",
-        "description": "The area “{name}” will be deleted from Home Assistant. Devices stay and are still collected, just without an area.",
-        "data": {
-          "confirm": "Yes, delete this area"
+          "area": "Existing area",
+          "new_name": "Name (new area or new name of the picked one)",
+          "add_nodes": "Add devices to the area",
+          "remove_nodes": "Remove devices from the area",
+          "delete_area": "Delete the picked area"
         }
       }
     },

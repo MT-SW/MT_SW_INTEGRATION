@@ -851,43 +851,71 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     # --- Zarządzanie urządzeniami: osobne, jasno nazwane akcje ---
 
-    async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
-        """Menu zarządzania urządzeniami; na górze podpowiedź, czy jest co scalić."""
-        from .node_merge import find_merge_plans  # noqa: PLC0415
+    # --- Zarządzanie obszarami: tworzenie, a po wejściu w obszar dodawanie, usuwanie urządzeń, zmiana nazwy, usunięcie ---
 
-        polish = self._is_polish()
-        hint = ""
-        loaded = await self._load_radio()
-        if loaded is not None:
-            nodes, own = loaded
-            self._merge_nodes = nodes
-            self._merge_gateway = own
-            self._merge_plans = find_merge_plans(self.hass, self.config_entry, nodes, own)
-            count = len(self._merge_plans)
-            if count:
-                hint = (
-                    f"⚠️ Można scalić duplikaty: {count}. Wybierz „Scal duplikaty”."
-                    if polish
-                    else f"⚠️ Duplicates can be merged: {count}. Choose “Merge duplicates”."
-                )
-        tracked = len(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
-        return self.async_show_menu(
-            step_id="devices",
-            menu_options=["device_add", "device_remove", "device_merge", "device_list"],
-            description_placeholders={"count": str(tracked), "merge_hint": hint},
-        )
+    def _area_devices(self, area_id: str) -> set[int]:
+        """Numery zbieranych węzłów, których urządzenia są w tym obszarze."""
+        from .groups import device_for_node  # noqa: PLC0415
 
-    async def async_step_device_add(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Dodaj nowe urządzenia do zbierania (opcjonalnie od razu do obszaru)."""
+        result: set[int] = set()
+        for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []):
+            device = device_for_node(self.hass, self.config_entry, el["id"])
+            if device is not None and device.area_id == area_id:
+                result.add(el["id"])
+        return result
+
+    # --- Zarządzanie urządzeniami: wszystko w jednym oknie ---
+
+    @staticmethod
+    def _radio_node_label(num: int, node: Mapping[str, Any]) -> str:
+        user = node.get("user", {}) or {}
+        details = ", ".join(part for part in (user.get("shortName") or "", user.get("id") or f"!{num:08x}") if part)
+        return f"{user.get('longName')} ({details})" if user.get("longName") else details
+
+    async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: PLR0912, PLR0915
+        """
+        Jedno okno: lista zbieranych urządzeń (z akcją dla zaznaczonych), dodawanie nowych i scalanie duplikatów.
+
+        Dodawanie pokazuje tylko urządzenia, których jeszcze nie zbierasz. Aplikacja sama podpowiada scalenia;
+        po zaznaczeniu zostaje najświeższy węzeł, a stary znika z bazy, z listy urządzeń i z bazy radia,
+        encje przechodzą na zostające urządzenie, więc zbieranie trwa dalej.
+        """
         from .groups import assign_nodes_to_area  # noqa: PLC0415
+        from .node_merge import find_merge_plans  # noqa: PLC0415
 
         loaded = await self._load_radio()
         if loaded is None:
             return self.async_abort(reason="not_loaded")
-        nodes, own = loaded
+        polish = self._is_polish()
         tracked = [deepcopy(el) for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])]
+        tracked_ids = {el["id"] for el in tracked}
+        if user_input is None:
+            self._merge_nodes, self._merge_gateway = loaded
+            self._merge_plans = find_merge_plans(self.hass, self.config_entry, *loaded)
+        nodes = self._merge_live_nodes()
+        own = getattr(self, "_merge_gateway", None)
+
         if user_input is not None:
-            current = list(tracked)
+            self._merge_options = deepcopy(dict(self.config_entry.options))
+            self._merge_removals = []
+            self._merge_changed = 0
+            merged_any = False
+            for index in (int(i) for i in user_input.get("merge", [])):
+                if 0 <= index < len(self._merge_plans):
+                    plan = self._merge_plans[index]
+                    kept = max(plan.nums, key=lambda n: (nodes.get(n) or {}).get("lastHeard") or 0)
+                    self._apply_merge_choice(plan, kept, remove_from_radio=True)
+                    merged_any = True
+            options = self._merge_options
+            current = list(options.get(CONF_OPTION_FILTER_NODES, []))
+            selected = {int(v) for v in user_input.get("selected", [])}
+            action = user_input.get("action", "none")
+            runtime = getattr(self.config_entry, "runtime_data", None)
+            if action == "remove" and selected:
+                if runtime is not None and runtime.coordinator:
+                    for num in selected:
+                        self.hass.async_create_task(runtime.coordinator.async_request_node_removal(num))
+                current = [el for el in current if el["id"] not in selected]
             current_ids = {el["id"] for el in current}
             added: set[int] = set()
             for num in (int(v) for v in user_input.get("add_nodes", [])):
@@ -903,315 +931,127 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     }
                 )
                 added.add(num)
-            if user_input.get("area") and added:
-                assign_nodes_to_area(self.hass, self.config_entry, added, user_input["area"])
-            return self.async_create_entry(title="", data={**self.config_entry.options, CONF_OPTION_FILTER_NODES: current})
-        schema = vol.Schema(
-            {
-                vol.Required("add_nodes"): _tracked_nodes_selector(
-                    {n: i for n, i in nodes.items() if n != own}, tracked, self.hass.config.language
-                ),
-                vol.Optional("area"): AreaSelector(),
-            }
-        )
-        return self.async_show_form(step_id="device_add", data_schema=schema)
+            options[CONF_OPTION_FILTER_NODES] = current
+            area_id = user_input.get("area")
+            targets = added | (selected if action == "area" else set())
+            if area_id and targets:
+                assign_nodes_to_area(self.hass, self.config_entry, targets, area_id)
+            if merged_any:
+                return await self._merge_finish()
+            return self.async_create_entry(title="", data=options)
 
-    # --- Zarządzanie obszarami: tworzenie, a po wejściu w obszar dodawanie, usuwanie urządzeń, zmiana nazwy, usunięcie ---
-
-    def _area_devices(self, area_id: str) -> set[int]:
-        """Numery zbieranych węzłów, których urządzenia są w tym obszarze."""
-        from .groups import device_for_node  # noqa: PLC0415
-
-        result: set[int] = set()
-        for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []):
-            device = device_for_node(self.hass, self.config_entry, el["id"])
-            if device is not None and device.area_id == area_id:
-                result.add(el["id"])
-        return result
-
-    def _devices_dropdown(self, nums: set[int] | None = None) -> SelectSelector:
-        tracked = [el for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []) if nums is None or el["id"] in nums]
-        return SelectSelector(
-            SelectSelectorConfig(
-                options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
-                multiple=True,
-                mode=SelectSelectorMode.DROPDOWN,
+        fields: dict[Any, Any] = {}
+        if tracked:
+            fields[vol.Optional("selected", default=[])] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
+                    multiple=True,
+                    mode=SelectSelectorMode.LIST,
+                )
             )
-        )
-
-    async def async_step_areas(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
-        """Menu zarządzania obszarami."""
-        return self.async_show_menu(step_id="areas", menu_options=["area_create", "area_manage"])
-
-    async def async_step_area_create(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Utwórz obszar w Home Assistancie (opcjonalnie od razu z wybranymi, już zbieranymi urządzeniami)."""
-        from .groups import assign_nodes_to_area, get_or_create_area  # noqa: PLC0415
-
-        if user_input is not None:
-            area_id = get_or_create_area(self.hass, user_input["new_name"].strip())
-            ids = {int(v) for v in user_input.get("new_nodes", [])}
-            if ids:
-                assign_nodes_to_area(self.hass, self.config_entry, ids, area_id)
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
-        fields: dict[Any, Any] = {vol.Required("new_name"): str}
-        if self.config_entry.options.get(CONF_OPTION_FILTER_NODES):
-            fields[vol.Optional("new_nodes", default=[])] = self._devices_dropdown()
-        return self.async_show_form(step_id="area_create", data_schema=vol.Schema(fields))
-
-    async def async_step_area_manage(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Wybierz obszar, którym chcesz zarządzać."""
-        if user_input is not None:
-            self._area_id = user_input["area"]
-            return await self.async_step_area_details()
-        return self.async_show_form(step_id="area_manage", data_schema=vol.Schema({vol.Required("area"): AreaSelector()}))
-
-    async def async_step_area_details(self, user_input: dict[str, Any] | None = None) -> FlowResult:  # noqa: ARG002
-        """Menu jednego obszaru: dodaj, usuń urządzenia, zmień nazwę, usuń obszar."""
-        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
-
-        area = ar.async_get(self.hass).async_get_area(getattr(self, "_area_id", None) or "")
-        if area is None:
-            return await self.async_step_areas()
-        return self.async_show_menu(
-            step_id="area_details",
-            menu_options=["area_add", "area_remove", "area_rename", "area_delete"],
-            description_placeholders={"name": area.name, "count": str(len(self._area_devices(area.id)))},
-        )
-
-    async def async_step_area_add(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Dodaj do obszaru zbierane urządzenia (rozwijana lista)."""
-        from .groups import assign_nodes_to_area  # noqa: PLC0415
-
-        area_id = getattr(self, "_area_id", None)
-        outside = {el["id"] for el in self.config_entry.options.get(CONF_OPTION_FILTER_NODES, [])} - self._area_devices(area_id)
-        if not outside:
-            return self.async_abort(reason="no_devices")
-        if user_input is not None:
-            assign_nodes_to_area(self.hass, self.config_entry, {int(v) for v in user_input["nodes"]}, area_id)
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+            action_labels = (
+                ("none", "Nic"),
+                ("area", "Przypisz zaznaczone do obszaru"),
+                ("remove", "Usuń zaznaczone ze zbierania"),
+            ) if polish else (
+                ("none", "Nothing"),
+                ("area", "Assign ticked to the area"),
+                ("remove", "Remove ticked from collection"),
+            )
+            fields[vol.Optional("action", default="none")] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[SelectOptionDict(value=v, label=t) for v, t in action_labels],
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
+        untracked = {n: i for n, i in nodes.items() if n not in tracked_ids and n != own}
+        if untracked:
+            ordered = sorted(
+                untracked.items(),
+                key=lambda kv: (0 if kv[1].get("isFavorite") else 1, self._radio_node_label(kv[0], kv[1]).lower()),
+            )
+            fields[vol.Optional("add_nodes", default=[])] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[SelectOptionDict(value=str(n), label=self._radio_node_label(n, i)) for n, i in ordered],
+                    multiple=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
+        fields[vol.Optional("area")] = AreaSelector()
+        hint = "Nie ma nic do scalenia." if polish else "Nothing to merge."
+        if self._merge_plans:
+            fields[vol.Optional("merge", default=[])] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(
+                            value=str(index),
+                            label=f"{plan.name or '?'} — {', '.join(f'!{n:08x}' for n in sorted(plan.nums))}",
+                        )
+                        for index, plan in enumerate(self._merge_plans)
+                    ],
+                    multiple=True,
+                    mode=SelectSelectorMode.LIST,
+                )
+            )
+            hint = (
+                f"⚠️ Można scalić duplikaty: {len(self._merge_plans)} (pole „Scal duplikaty” niżej)."
+                if polish
+                else f"⚠️ Duplicates can be merged: {len(self._merge_plans)} (the “Merge duplicates” field below)."
+            )
         return self.async_show_form(
-            step_id="area_add", data_schema=vol.Schema({vol.Required("nodes"): self._devices_dropdown(outside)})
+            step_id="devices",
+            data_schema=vol.Schema(fields),
+            description_placeholders={"count": str(len(tracked)), "merge_hint": hint},
         )
 
-    async def async_step_area_remove(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Wyjmij urządzenia z obszaru (nadal są zbierane)."""
+    # --- Zarządzanie obszarami: wszystko w jednym oknie ---
+
+    async def async_step_areas(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """
+        Jedno okno: wybierz istniejący obszar (albo wpisz nazwę nowego) i dodaj, usuń urządzenia, zmień nazwę lub usuń obszar.
+
+        W obszarze mogą być tylko urządzenia, które już zbierasz.
+        """
+        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
         from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
 
-        from .groups import device_for_node  # noqa: PLC0415
+        from .groups import assign_nodes_to_area, device_for_node, get_or_create_area  # noqa: PLC0415
 
-        inside = self._area_devices(getattr(self, "_area_id", None))
-        if not inside:
-            return self.async_abort(reason="no_devices")
-        if user_input is not None:
-            registry = dr.async_get(self.hass)
-            for num in (int(v) for v in user_input["nodes"]):
-                device = device_for_node(self.hass, self.config_entry, num)
-                if device is not None:
-                    registry.async_update_device(device.id, area_id=None)
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
-        return self.async_show_form(
-            step_id="area_remove", data_schema=vol.Schema({vol.Required("nodes"): self._devices_dropdown(inside)})
-        )
-
-    async def async_step_area_rename(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Zmień nazwę obszaru."""
-        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
-
-        registry = ar.async_get(self.hass)
-        area = registry.async_get_area(getattr(self, "_area_id", None) or "")
-        if area is None:
-            return await self.async_step_areas()
-        if user_input is not None:
-            registry.async_update(area.id, name=user_input["new_name"].strip())
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
-        return self.async_show_form(
-            step_id="area_rename", data_schema=vol.Schema({vol.Required("new_name", default=area.name): str})
-        )
-
-    async def async_step_area_delete(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Usuń obszar (urządzenia zostają i są dalej zbierane, tylko bez obszaru)."""
-        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
-
-        registry = ar.async_get(self.hass)
-        area = registry.async_get_area(getattr(self, "_area_id", None) or "")
-        if area is None:
-            return await self.async_step_areas()
-        if user_input is not None:
-            if user_input.get("confirm"):
-                registry.async_delete(area.id)
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
-        return self.async_show_form(
-            step_id="area_delete",
-            data_schema=vol.Schema({vol.Required("confirm", default=False): bool}),
-            description_placeholders={"name": area.name},
-        )
-
-    async def async_step_device_remove(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Usuń urządzenia ze zbierania (znikają też z bazy radia i z listy w panelu)."""
         tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
-        if not tracked:
-            return self.async_abort(reason="no_devices")
         if user_input is not None:
-            gone = {int(v) for v in user_input["remove_nodes"]}
-            runtime = getattr(self.config_entry, "runtime_data", None)
-            if runtime is not None and runtime.coordinator:
-                for num in gone:
-                    self.hass.async_create_task(runtime.coordinator.async_request_node_removal(num))
-            return self.async_create_entry(
-                title="",
-                data={
-                    **self.config_entry.options,
-                    CONF_OPTION_FILTER_NODES: [el for el in tracked if el["id"] not in gone],
-                },
-            )
-        schema = vol.Schema(
-            {
-                vol.Required("remove_nodes"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked],
-                        multiple=True,
-                        mode=SelectSelectorMode.LIST,
-                    )
+            registry = ar.async_get(self.hass)
+            name = (user_input.get("new_name") or "").strip()
+            area_id = user_input.get("area")
+            add = {int(v) for v in user_input.get("add_nodes", [])}
+            remove = {int(v) for v in user_input.get("remove_nodes", [])}
+            if area_id:
+                area = registry.async_get_area(area_id)
+                if area is not None and user_input.get("delete_area"):
+                    registry.async_delete(area_id)
+                    return self.async_create_entry(title="", data=dict(self.config_entry.options))
+                if area is not None and name and name != area.name:
+                    registry.async_update(area_id, name=name)
+            elif name:
+                area_id = get_or_create_area(self.hass, name)
+            if area_id:
+                if add:
+                    assign_nodes_to_area(self.hass, self.config_entry, add, area_id)
+                device_registry = dr.async_get(self.hass)
+                for num in remove & self._area_devices(area_id):
+                    device = device_for_node(self.hass, self.config_entry, num)
+                    if device is not None:
+                        device_registry.async_update_device(device.id, area_id=None)
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+
+        options = [SelectOptionDict(value=str(el["id"]), label=self._tracked_label(el)) for el in tracked]
+        fields: dict[Any, Any] = {vol.Optional("area"): AreaSelector(), vol.Optional("new_name", default=""): str}
+        if options:
+            for key in ("add_nodes", "remove_nodes"):
+                fields[vol.Optional(key, default=[])] = SelectSelector(
+                    SelectSelectorConfig(options=options, multiple=True, mode=SelectSelectorMode.DROPDOWN)
                 )
-            }
-        )
-        return self.async_show_form(step_id="device_remove", data_schema=schema)
-
-    async def async_step_device_merge(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """
-        Scal duplikaty: aplikacja podsuwa pary (ten sam klucz albo te same nazwy i model pod innym numerem).
-
-        Po zaznaczeniu zostaje najświeższy węzeł, a stary znika z bazy, z listy urządzeń i z bazy radia;
-        encje przechodzą na zostające urządzenie, więc zbieranie trwa dalej.
-        """
-        from .node_merge import find_merge_plans  # noqa: PLC0415
-
-        if user_input is None:
-            loaded = await self._load_radio()
-            if loaded is None:
-                return self.async_abort(reason="not_loaded")
-            self._merge_nodes, self._merge_gateway = loaded
-            self._merge_plans = find_merge_plans(self.hass, self.config_entry, *loaded)
-            if not self._merge_plans:
-                return self.async_abort(reason="merge_none")
-            options = [
-                SelectOptionDict(
-                    value=str(index),
-                    label=f"{plan.name or '?'} — {', '.join(f'!{n:08x}' for n in sorted(plan.nums))}",
-                )
-                for index, plan in enumerate(self._merge_plans)
-            ]
-            schema = vol.Schema(
-                {
-                    vol.Required("merge"): SelectSelector(
-                        SelectSelectorConfig(options=options, multiple=True, mode=SelectSelectorMode.LIST)
-                    )
-                }
-            )
-            return self.async_show_form(
-                step_id="device_merge", data_schema=schema, description_placeholders={"count": str(len(options))}
-            )
-        nodes = self._merge_live_nodes()
-        self._merge_options = deepcopy(dict(self.config_entry.options))
-        self._merge_removals = []
-        self._merge_changed = 0
-        for index in (int(i) for i in user_input.get("merge", [])):
-            if 0 <= index < len(self._merge_plans):
-                plan = self._merge_plans[index]
-                kept = max(plan.nums, key=lambda n: (nodes.get(n) or {}).get("lastHeard") or 0)
-                self._apply_merge_choice(plan, kept, remove_from_radio=True)
-        return await self._merge_finish()
-
-    async def async_step_device_list(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Lista dodanych urządzeń — wybór dowolnego otwiera jego szczegóły i akcje."""
-        tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
-        if not tracked:
-            return self.async_abort(reason="no_devices")
-        if user_input is not None:
-            self._selected_node = int(user_input["device"])
-            return await self.async_step_device_details()
-
-        live: dict[int, Any] = {}
-        try:
-            runtime = getattr(self.config_entry, "runtime_data", None)
-            if runtime is not None and runtime.coordinator.data:
-                live = dict(runtime.coordinator.data)
-        except Exception:  # noqa: BLE001
-            live = {}
-        options = []
-        for el in tracked:
-            node_hex = f"!{el['id']:08x}"
-            state = "online" if el["id"] in live else "offline"
-            options.append(
-                SelectOptionDict(value=str(el["id"]), label=f"{el.get('name') or node_hex} ({node_hex}) — {state}")
-            )
-        schema = vol.Schema(
-            {
-                vol.Required("device"): SelectSelector(
-                    SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
-                )
-            }
-        )
-        return self.async_show_form(step_id="device_list", data_schema=schema)
-
-    async def async_step_device_details(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Szczegóły jednego urządzenia: link do jego strony w HA, tożsamość, akcje."""
-        from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
-
-        node_id = getattr(self, "_selected_node", None)
-        tracked = list(self.config_entry.options.get(CONF_OPTION_FILTER_NODES, []))
-        el = next((e for e in tracked if e["id"] == node_id), None)
-        if el is None:
-            return await self.async_step_init()
-
-        if user_input is not None:
-            if user_input.get("action") == "untrack":
-                new_options = {
-                    **self.config_entry.options,
-                    CONF_OPTION_FILTER_NODES: [e for e in tracked if e["id"] != node_id],
-                }
-                runtime = getattr(self.config_entry, "runtime_data", None)
-                if runtime is not None and runtime.coordinator:
-                    self.hass.async_create_task(runtime.coordinator.async_request_node_removal(node_id))
-                return self.async_create_entry(title="", data=new_options)
-            return await self.async_step_init()
-
-        registry = dr.async_get(self.hass)
-        device = None
-        for ident in (el.get("identity_key"), str(node_id)):
-            if ident:
-                device = registry.async_get_device(identifiers={(DOMAIN, ident)})
-                if device is not None and self.config_entry.entry_id in device_config_entry_ids(device):
-                    break
-                device = None
-        node_hex = f"!{node_id:08x}"
-        if device is not None:
-            link = f"[{device.name_by_user or device.name}](/config/devices/device/{device.id})"
-        else:
-            link = "—"
-        schema = vol.Schema(
-            {
-                vol.Required("action", default="back"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=["back", "untrack"],
-                        mode=SelectSelectorMode.LIST,
-                        translation_key="option_device_action_selector",
-                    )
-                )
-            }
-        )
-        return self.async_show_form(
-            step_id="device_details",
-            data_schema=schema,
-            description_placeholders={
-                "name": el.get("name") or node_hex,
-                "node": node_hex,
-                "short_name": el.get("short_name") or "—",
-                "hw_model": el.get("hw_model") or "—",
-                "identity": el.get("identity_key") or "—",
-                "device_link": link,
-            },
-        )
+        fields[vol.Optional("delete_area", default=False)] = bool
+        return self.async_show_form(step_id="areas", data_schema=vol.Schema(fields))
 
     # --- Scalanie duplikatów: lista znalezionych grup -> wybór, który węzeł zostaje -> potwierdzenie ---
 
