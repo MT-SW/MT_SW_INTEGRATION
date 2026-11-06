@@ -951,9 +951,21 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         tracked_ids = {el["id"] for el in tracked}
         saved = [dict(g) for g in self.config_entry.options.get(CONF_OPTION_NODE_GROUPS, [])]
         polish = (self.hass.config.language or "").lower().startswith("pl")
+        # grupy zrobione ręcznie w panelu (Zdrowie sieci) — tylko do odczytu, zbieranie je widzi
+        try:
+            from .websocket_api import _ui_settings_store  # noqa: PLC0415
+
+            panel_groups = {
+                str(k): [int(n) for n in v]
+                for k, v in (((await _ui_settings_store(self.hass).async_load()) or {}).get("node_groups") or {}).items()
+            }
+        except Exception:  # noqa: BLE001
+            panel_groups = {}
 
         if user_input is not None:
             wanted: set[int] = set()
+            for name in user_input.get("panel_groups", []):
+                wanted |= set(panel_groups.get(name, []))
             for preset in user_input.get("presets", []):
                 wanted |= self._preset_ids(preset, nodes, own)
             for name in user_input.get("saved", []):
@@ -1005,6 +1017,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 SelectSelectorConfig(options=presets, multiple=True, mode=SelectSelectorMode.LIST)
             )
         }
+        if panel_groups:
+            fields[vol.Optional("panel_groups", default=[])] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(
+                            value=name,
+                            label=f"{name} ({len(ids)}, {'w radiu' if polish else 'on the radio'}: {len([n for n in ids if n in nodes])})",
+                        )
+                        for name, ids in panel_groups.items()
+                    ],
+                    multiple=True,
+                    mode=SelectSelectorMode.LIST,
+                )
+            )
         if saved:
             names = [
                 SelectOptionDict(value=g["name"], label=f"{g['name']} ({len(g.get('node_ids', []))})") for g in saved

@@ -214,7 +214,8 @@
           "saved": "My groups (add)",
           "delete_groups": "My groups (delete the group, nodes stay)",
           "new_nodes": "Own group: choose nodes",
-          "new_name": "Own group: name (saves the group for later)"
+          "new_name": "Own group: name (saves the group for later)",
+          "panel_groups": "Groups from the panel (add)"
         }
       }
     },

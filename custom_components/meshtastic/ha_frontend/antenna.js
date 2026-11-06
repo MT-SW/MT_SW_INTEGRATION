@@ -10,6 +10,7 @@
  */
 
 import { LitElement, html, css } from "./vendor/lit/lit-element.js";
+import { getPlannerSession } from "./planner/planner-ui.js";
 
 const C = 299792458.0;
 const OUR_MHZ = 869.44165;
@@ -267,6 +268,10 @@ const TEXT = {
     conn_loss: "Złącza",
     mismatch_loss: "Niedopasowanie (SWR)",
     total_loss: "Straty razem",
+    to_planner: "Użyj w planerze",
+    planner_a: "koniec A",
+    planner_b: "koniec B",
+    sent: "Przekazano do planera: zysk i straty",
     at_antenna: "Moc na antenie",
     eirp: "EIRP",
     erp: "ERP",
@@ -349,6 +354,10 @@ const TEXT = {
     conn_loss: "Connectors",
     mismatch_loss: "Mismatch (SWR)",
     total_loss: "Total losses",
+    to_planner: "Use in the planner",
+    planner_a: "end A",
+    planner_b: "end B",
+    sent: "Sent to the planner: gain and losses",
     at_antenna: "Power at the antenna",
     eirp: "EIRP",
     erp: "ERP",
@@ -473,6 +482,20 @@ class MeshAntennaTab extends LitElement {
     `;
   }
 
+  /* Jak w aplikacji: zysk anteny i straty toru trafiają do planera zasięgu (wybrany koniec łącza). */
+  _toPlanner(side, gain, lossDb) {
+    try {
+      const store = getPlannerSession().store;
+      store.setAntennaGain(side, Math.round(gain * 10) / 10);
+      store.setFeederPrecise(side, false);
+      store.setFeederManualDb(side, Math.round(lossDb * 100) / 100);
+      this._sent = `${side}: ${gain.toFixed(1)} dBi, ${lossDb.toFixed(2)} dB`;
+    } catch (err) {
+      this._sent = `błąd: ${err && err.message ? err.message : err}`;
+    }
+    this.requestUpdate();
+  }
+
   _feedBlock(gain) {
     const f = this._feed;
     const r = feed({
@@ -517,6 +540,11 @@ class MeshAntennaTab extends LitElement {
         <tr><td>${this._tr("band")}</td><td>${r.band ? html`${r.band[5]}${r.band[4] !== null ? html`, ${this._tr("duty")} ${r.band[4]}%` : ""}` : this._tr("no_band")}</td></tr>
         ${r.over === null ? "" : html`<tr><td></td><td class=${r.over ? "bad" : "good"}>${this._tr(r.over ? "limit_over" : "limit_ok")}</td></tr>`}
       </tbody></table></div>
+      <div class="sub">${this._tr("to_planner")}</div>
+      <div class="grid">
+        ${["A", "B"].map((side) => html`<button @click=${() => this._toPlanner(side, gain, r.total)}>${this._tr("to_planner")}: ${this._tr(side === "A" ? "planner_a" : "planner_b")}</button>`)}
+      </div>
+      ${this._sent ? html`<p class="legend">${this._tr("sent")} (${this._sent})</p>` : ""}
     `;
   }
 

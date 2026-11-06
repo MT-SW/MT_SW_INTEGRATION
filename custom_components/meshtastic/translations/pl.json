@@ -214,7 +214,8 @@
           "saved": "Moje grupy (dodaj)",
           "delete_groups": "Moje grupy (usuń grupę, węzły zostają)",
           "new_nodes": "Własna grupa: wybierz węzły",
-          "new_name": "Własna grupa: nazwa (zapisze grupę na później)"
+          "new_name": "Własna grupa: nazwa (zapisze grupę na później)",
+          "panel_groups": "Grupy z panelu (dodaj)"
         }
       }
     },
