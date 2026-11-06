@@ -235,25 +235,9 @@ const NAV_ITEMS = [
     ],
   },
   {
-    group: "Funkcje MT_SW",
-    items: [
-      { id: "mtsw_functions", label: "Przegląd wszystkich funkcji", icon: "mdi:star-box" },
-      { id: "health", label: "Zdrowie sieci", icon: "mdi:heart-pulse", goto: "tab:health" },
-      { id: "goto_antenna", label: "Kalkulator anten", icon: "mdi:antenna", goto: "map:antenna" },
-      { id: "goto_horizon", label: "Panorama terenu", icon: "mdi:image-filter-hdr", goto: "map:horizon" },
-      { id: "goto_planner", label: "Planer zasięgu", icon: "mdi:map-marker-path", goto: "tab:map" },
-      { id: "goto_nodes", label: "Śledzenie węzłów i szybkie komendy", icon: "mdi:radio-tower", goto: "tab:nodes" },
-      { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
-      { id: "ota", label: PL("Firmware (OTA)"), icon: "mdi:update" },
-      { id: "storage", label: PL("Storage"), icon: "mdi:database" },
-      { id: "chat", label: PL("Chat"), icon: "mdi:chat-outline" },
-      { id: "debug_logs", label: PL("Debug"), icon: "mdi:bug-outline" },
-      { id: "support", label: "Wsparcie i zgłoszenia", icon: "mdi:heart-outline" },
-    ],
-  },
-  {
     group: "Other",
     items: [
+      { id: "mtsw_functions", label: "Funkcje MT_SW", icon: "mdi:tune" },
       { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
     ],
   },
@@ -422,6 +406,62 @@ export class MeshSettingsTab extends LitElement {
       this._versionNote = null;
       this.requestUpdate();
     }, 3000);
+  }
+
+  _renderMtswPage() {
+    const row = (icon, text, hint, onClick) => html`<div class="mtsw-row" @click=${onClick}>
+      <ha-icon icon=${icon}></ha-icon>
+      <span><b>${text}</b>${hint ? html`<small>${hint}</small>` : ""}</span>
+      <ha-icon class="mtsw-go" icon="mdi:chevron-right"></ha-icon>
+    </div>`;
+    const tab = (w) => () => this._gotoTab(w);
+    const panel = (id) => () => this._selectPanel(id);
+    return html`
+      <style>
+        .mtsw-page { padding: 8px 16px 24px; max-width: 1000px; }
+        .mtsw-page h3 { margin: 14px 0 6px; font-weight: 500; }
+        .mtsw-page h4 { margin: 18px 0 8px; font-weight: 500; color: var(--secondary-text-color); font-size: 14px; }
+        .mtsw-page .hint { font-size: 12px; color: var(--secondary-text-color); margin: 0 0 8px; }
+        .mtsw-row { display: flex; gap: 12px; align-items: center; cursor: pointer; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+        .mtsw-row:hover { background: var(--secondary-background-color); }
+        .mtsw-row ha-icon { color: var(--secondary-text-color); flex: none; }
+        .mtsw-row span { display: flex; flex-direction: column; gap: 2px; }
+        .mtsw-row small { color: var(--secondary-text-color); font-size: 12px; }
+        .mtsw-go { margin-left: auto; }
+      </style>
+      <div class="mtsw-page">
+        <h3>Funkcje MT_SW</h3>
+        <h4>Planowanie sieci</h4>
+        ${row("mdi:map-marker-path", "Mesh Link Planer", "Symuluje łącze radiowe między dwoma punktami, z terenem i bilansem łącza", tab("tab:map"))}
+        ${row("mdi:image-filter-hdr", "Panorama terenu", "Sylwetka terenu dookoła z węzłami: zielone w zasięgu wzroku, czerwone zasłonięte", tab("map:horizon"))}
+        ${row("mdi:antenna", "Kalkulator anten", "Wymiary anten dla dowolnej częstotliwości oraz straty kabla i złączy", tab("map:antenna"))}
+        <h4>Logi, zgłoszenia i wsparcie</h4>
+        <mesh-settings-support
+          .hass=${this.hass}
+          .wsCommand=${(type, data) => this._ws(type, data)}
+        ></mesh-settings-support>
+        <h4>Skróty</h4>
+        <p class="hint">Te ustawienia zostają w swoich zwykłych miejscach. Wiersze poniżej tylko je otwierają.</p>
+        ${row("mdi:heart-pulse", "Zdrowie sieci", "", tab("tab:health"))}
+        ${row("mdi:radio-tower", "Śledzenie węzłów i szybkie komendy", "", tab("tab:nodes"))}
+        ${this.remote ? "" : html`
+          ${row("mdi:radar", "Sniffer", "", panel("sniffer"))}
+          ${row("mdi:update", "Firmware (OTA)", "", panel("ota"))}
+          ${row("mdi:database", "Pamięć", "", panel("storage"))}
+          ${row("mdi:chat-outline", "Czat", "", panel("chat"))}
+          ${row("mdi:bug-outline", "Debugowanie", "", panel("debug_logs"))}`}
+        <mtsw-functions-tab
+          .hass=${this.hass}
+          @mtsw-goto=${(e) => {
+            const w = (e.detail && e.detail.where) || "";
+            if (w.startsWith("settings:")) {
+              e.stopPropagation();
+              this._selectPanel(w.slice(9));
+            }
+          }}
+        ></mtsw-functions-tab>
+      </div>
+    `;
   }
 
   _gotoTab(where) {
@@ -627,16 +667,7 @@ export class MeshSettingsTab extends LitElement {
           .wsCommand=${(type, data) => this._ws(type, data)}
         ></mesh-settings-actions>`;
       case "mtsw_functions":
-        return html`<mtsw-functions-tab
-          .hass=${this.hass}
-          @mtsw-goto=${(e) => {
-            const w = (e.detail && e.detail.where) || "";
-            if (w.startsWith("settings:")) {
-              e.stopPropagation();
-              this._selectPanel(w.slice(9));
-            }
-          }}
-        ></mtsw-functions-tab>`;
+        return this._renderMtswPage();
       case "ota":
         return html`<mesh-settings-ota
           .hass=${this.hass}

@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: MIT
  *
- * Ustawienia → Funkcje MT_SW → Przegląd wszystkich funkcji: wszystko, co dodaliśmy sami względem
+ * Ustawienia → Funkcje MT_SW → Pozostałe funkcje: wszystko, co dodaliśmy sami względem
  * oryginału, zebrane w grupach. Kliknięcie przenosi do miejsca, gdzie dana funkcja działa
  * (zakładka, narzędzie na mapie albo panel w ustawieniach). Funkcje bez przejścia opisują
  * to, co działa w tle albo w Opcjach integracji.
@@ -458,8 +458,8 @@ class MtswFunctionsTab extends LitElement {
     const lang = this._lang();
     return html`
       <div class="wrap">
-        <h3>${lang === "pl" ? "Funkcje MT_SW" : "MT_SW functions"}</h3>
-        <p class="legend">${lang === "pl" ? "Wszystko, co dodaliśmy od siebie, w jednym miejscu. Kliknij funkcję z ikoną strzałki, żeby ją otworzyć." : "Everything we added ourselves, in one place. Click a function with an arrow to open it."}</p>
+        <h4>${lang === "pl" ? "Pozostałe funkcje" : "Other functions"}</h4>
+        <p class="legend">${lang === "pl" ? "Wszystko, co dodaliśmy od siebie. Kliknij funkcję z ikoną strzałki, żeby ją otworzyć." : "Everything we added ourselves. Click a function with an arrow to open it."}</p>
         ${SECTIONS.map(
           (s) => html`
             <h4>${s[lang]}</h4>
@@ -480,7 +480,7 @@ class MtswFunctionsTab extends LitElement {
   static get styles() {
     return css`
       :host { display: block; }
-      .wrap { padding: 8px 16px 24px; max-width: 1000px; }
+      .wrap { padding: 0; }
       h3 { margin: 14px 0 6px; font-weight: 500; }
       h4 { margin: 18px 0 8px; font-weight: 500; color: var(--secondary-text-color); font-size: 14px; }
       .legend { font-size: 12px; color: var(--secondary-text-color); }
