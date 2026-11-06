@@ -57,8 +57,8 @@ const TRAFFIC_SERIES = [
 ];
 
 const TEXT = {
-  pl: { search: "Szukaj węzła", sort_value: "Wg wartości", sort_heard: "Wg ostatnio słyszanych", back: "Wróć", empty: "Brak węzłów.", nodata: "Brak danych", min: "min", max: "maks", last: "ostatnio", chart_empty: "Za mało danych na wykres w tym zakresie.", powered: "zasilanie", note_traffic: "Przyrost pakietów na minutę.", sort: "Sortowanie", f_activity: "Aktywność", f_any: "Wszystkie", f_fav: "Ulubione", f_fav_only: "Tylko ulubione", f_fav_no: "Bez ulubionych", f_hops: "Odległość", f_hops_all: "Dowolna", f_hops_0: "Bezpośrednio", f_hops_1: "1 skok", f_hops_2: "2 skoki", f_hops_3: "3+ skoków", f_group: "Grupa", f_group_all: "Wszystkie węzły", f_pos: "Tylko z pozycją", f_nomqtt: "Bez MQTT", f_ign: "Ukryj ignorowane", f_reset: "Wyczyść filtry", shown: "Pokazano", of: "z" },
-  en: { search: "Search node", sort_value: "By value", sort_heard: "By last heard", back: "Back", empty: "No nodes.", nodata: "No data", min: "min", max: "max", last: "latest", chart_empty: "Not enough data for a chart in this range.", powered: "powered", note_traffic: "Packets per minute.", sort: "Sorting", f_activity: "Activity", f_any: "All", f_fav: "Favorites", f_fav_only: "Favorites only", f_fav_no: "Without favorites", f_hops: "Distance", f_hops_all: "Any", f_hops_0: "Direct", f_hops_1: "1 hop", f_hops_2: "2 hops", f_hops_3: "3+ hops", f_group: "Group", f_group_all: "All nodes", f_pos: "With position only", f_nomqtt: "Hide MQTT", f_ign: "Hide ignored", f_reset: "Clear filters", shown: "Shown", of: "of" },
+  pl: { search: "Szukaj węzła", sort_value: "Wg wartości", sort_heard: "Wg ostatnio słyszanych", back: "Wróć", empty: "Brak węzłów.", nodata: "Brak danych", min: "min", max: "maks", last: "ostatnio", chart_empty: "Za mało danych na wykres w tym zakresie.", powered: "zasilanie", note_traffic: "Przyrost pakietów na minutę.", sort: "Sortowanie", f_activity: "Aktywność", f_any: "Wszystkie", f_fav: "Ulubione", f_fav_only: "Tylko ulubione", f_fav_no: "Bez ulubionych", f_hops: "Odległość", f_hops_all: "Dowolna", f_hops_0: "Bezpośrednio", f_hops_1: "1 skok", f_hops_2: "2 skoki", f_hops_3: "3+ skoków", f_group: "Grupa", f_group_all: "Wszystkie węzły", f_pos: "Tylko z pozycją", f_nomqtt: "Bez MQTT", f_ign: "Ukryj ignorowane", f_reset: "Wyczyść filtry", f_favtop: "Ulubione na górze", shown: "Pokazano", of: "z" },
+  en: { search: "Search node", sort_value: "By value", sort_heard: "By last heard", back: "Back", empty: "No nodes.", nodata: "No data", min: "min", max: "max", last: "latest", chart_empty: "Not enough data for a chart in this range.", powered: "powered", note_traffic: "Packets per minute.", sort: "Sorting", f_activity: "Activity", f_any: "All", f_fav: "Favorites", f_fav_only: "Favorites only", f_fav_no: "Without favorites", f_hops: "Distance", f_hops_all: "Any", f_hops_0: "Direct", f_hops_1: "1 hop", f_hops_2: "2 hops", f_hops_3: "3+ hops", f_group: "Group", f_group_all: "All nodes", f_pos: "With position only", f_nomqtt: "Hide MQTT", f_ign: "Hide ignored", f_reset: "Clear filters", f_favtop: "Favorites on top", shown: "Shown", of: "of" },
 };
 
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -97,6 +97,7 @@ class MtswHealthMetrics extends LitElement {
       _pos: { type: Boolean },
       _nomqtt: { type: Boolean },
       _ign: { type: Boolean },
+      _favTop: { type: Boolean },
       _loading: { type: Boolean },
     };
   }
@@ -119,6 +120,7 @@ class MtswHealthMetrics extends LitElement {
     this._pos = false;
     this._nomqtt = false;
     this._ign = true;
+    this._favTop = true;
     this._loading = false;
     this._timer = null;
   }
@@ -235,11 +237,17 @@ class MtswHealthMetrics extends LitElement {
       .filter((n) => this._passes(n))
       .filter((n) => !q || this._name(n).toLowerCase().includes(q) || (n.node_hex || "").toLowerCase().includes(q))
       .map((n) => ({ node: n, value: this._value(n) }));
-    if (this._sort === "heard") {
-      rows.sort((a, b) => (b.node.last_heard || 0) - (a.node.last_heard || 0));
-    } else {
-      rows.sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity) || this._name(a.node).localeCompare(this._name(b.node)));
-    }
+    const byHeard = (a, b) => (b.node.last_heard || 0) - (a.node.last_heard || 0);
+    const byValue = (a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity) || this._name(a.node).localeCompare(this._name(b.node));
+    const cmp = this._sort === "heard" ? byHeard : byValue;
+    rows.sort((a, b) => {
+      if (this._favTop) {
+        const fa = a.node.is_favorite ? 1 : 0;
+        const fb = b.node.is_favorite ? 1 : 0;
+        if (fa !== fb) return fb - fa;
+      }
+      return cmp(a, b);
+    });
     return rows;
   }
 
@@ -383,6 +391,7 @@ class MtswHealthMetrics extends LitElement {
         <div class="bar filters">
           <label class="chk"><input type="checkbox" .checked=${this._pos} @change=${(e) => (this._pos = e.target.checked)} />${this._tr("f_pos")}</label>
           <label class="chk"><input type="checkbox" .checked=${this._nomqtt} @change=${(e) => (this._nomqtt = e.target.checked)} />${this._tr("f_nomqtt")}</label>
+          <label class="chk"><input type="checkbox" .checked=${this._favTop} @change=${(e) => (this._favTop = e.target.checked)} />${this._tr("f_favtop")}</label>
           <label class="chk"><input type="checkbox" .checked=${this._ign} @change=${(e) => (this._ign = e.target.checked)} />${this._tr("f_ign")}</label>
           <button class="chip" @click=${() => this._resetFilters()}>${this._tr("f_reset")}</button>
           <span class="hint">${this._tr("shown")}: ${rows.length} ${this._tr("of")} ${(this.nodes || []).length}</span>

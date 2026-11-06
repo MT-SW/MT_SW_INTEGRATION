@@ -229,16 +229,26 @@ const NAV_ITEMS = [
     ],
   },
   {
-    group: "Other",
+    group: "Funkcje MT_SW",
     items: [
-      { id: "mtsw_functions", label: "Funkcje MT_SW", icon: "mdi:star-box" },
+      { id: "mtsw_functions", label: "Przegląd wszystkich funkcji", icon: "mdi:star-box" },
+      { id: "health", label: "Zdrowie sieci", icon: "mdi:heart-pulse", goto: "tab:health" },
+      { id: "goto_antenna", label: "Kalkulator anten", icon: "mdi:antenna", goto: "map:antenna" },
+      { id: "goto_horizon", label: "Panorama terenu", icon: "mdi:image-filter-hdr", goto: "map:horizon" },
+      { id: "goto_planner", label: "Planer zasięgu", icon: "mdi:map-marker-path", goto: "tab:map" },
+      { id: "goto_nodes", label: "Śledzenie węzłów i szybkie komendy", icon: "mdi:radio-tower", goto: "tab:nodes" },
       { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
-      { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
       { id: "ota", label: PL("Firmware (OTA)"), icon: "mdi:update" },
       { id: "storage", label: PL("Storage"), icon: "mdi:database" },
       { id: "chat", label: PL("Chat"), icon: "mdi:chat-outline" },
       { id: "debug_logs", label: PL("Debug"), icon: "mdi:bug-outline" },
       { id: "support", label: "Wsparcie i zgłoszenia", icon: "mdi:heart-outline" },
+    ],
+  },
+  {
+    group: "Other",
+    items: [
+      { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
     ],
   },
 ];
@@ -375,7 +385,7 @@ export class MeshSettingsTab extends LitElement {
               ${group.items.map((item) => html`
                 <div
                   class="settings-nav-item ${this._activePanel === item.id ? "active" : ""}"
-                  @click=${() => this._selectPanel(item.id)}
+                  @click=${() => (item.goto ? this._gotoTab(item.goto) : this._selectPanel(item.id))}
                 >${item.label}</div>
               `)}
             </div>
@@ -406,6 +416,10 @@ export class MeshSettingsTab extends LitElement {
       this._versionNote = null;
       this.requestUpdate();
     }, 3000);
+  }
+
+  _gotoTab(where) {
+    this.dispatchEvent(new CustomEvent("mtsw-goto", { detail: { where }, bubbles: true, composed: true }));
   }
 
   _selectPanel(id) {
