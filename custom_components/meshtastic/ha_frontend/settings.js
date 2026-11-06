@@ -11,7 +11,6 @@ import "./modules.js";
 import "./sniffer-panel.js";
 import "./debug-logs.js";
 import "./support.js";
-import "./mtsw-settings.js";
 import "./nodedb-panel.js";
 import "./ota-panel.js";
 import "./functions.js";
@@ -233,7 +232,6 @@ const NAV_ITEMS = [
     group: "Funkcje MT_SW",
     items: [
       { id: "mtsw_functions", label: "Przegląd wszystkich funkcji", icon: "mdi:star-box" },
-      { id: "mtsw_settings", label: "Ustawienia MT_SW", icon: "mdi:tune-variant" },
       { id: "health", label: "Zdrowie sieci", icon: "mdi:heart-pulse", goto: "tab:health" },
       { id: "goto_antenna", label: "Kalkulator anten", icon: "mdi:antenna", goto: "map:antenna" },
       { id: "goto_horizon", label: "Panorama terenu", icon: "mdi:image-filter-hdr", goto: "map:horizon" },
@@ -650,8 +648,6 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-debug-logs
           .wsCommand=${(type, data) => this._ws(type, data)}
         ></mesh-settings-debug-logs>`;
-      case "mtsw_settings":
-        return html`<mesh-settings-mtsw .wsCommand=${(type, data) => this._ws(type, data)}></mesh-settings-mtsw>`;
       case "support":
         return html`<mesh-settings-support
           .hass=${this.hass}

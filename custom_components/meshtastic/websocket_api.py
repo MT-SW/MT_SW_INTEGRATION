@@ -2093,17 +2093,6 @@ async def ws_ui_settings(
         vol.Required("settings"): vol.Schema(
             {
                 vol.Optional("auto_load_images"): bool,
-                # domyślne ustawienia widoku Zdrowie sieci (Funkcje MT_SW → Ustawienia MT_SW)
-                vol.Optional("health_defaults"): vol.Schema(
-                    {
-                        vol.Optional("metric"): vol.In(["power", "signal", "ether", "environment", "resources", "traffic", "neighbors"]),
-                        vol.Optional("activity"): vol.All(int, vol.Range(min=0, max=6)),
-                        vol.Optional("fav_top"): bool,
-                        vol.Optional("hide_ignored"): bool,
-                        vol.Optional("sort"): vol.In(["value", "heard"]),
-                        vol.Optional("range"): vol.All(int, vol.Range(min=0, max=6)),
-                    }
-                ),
                 # własne grupy węzłów: nazwa grupy -> numery węzłów (do filtrowania i zbiorczego śledzenia)
                 vol.Optional("node_groups"): vol.All(
                     {vol.All(str, vol.Length(min=1, max=40)): vol.All([int], vol.Length(max=1000))},
