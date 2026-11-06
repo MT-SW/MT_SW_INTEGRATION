@@ -11,6 +11,10 @@ PL — WERSJA POLSKA
 
 Fork oficjalnej integracji meshtastic/home-assistant, rozwijany dla sieci mesh Świętokrzyskie. Oprócz encji i usług znanych z oryginału ma własny panel w pasku bocznym Home Assistanta, działający jak aplikacja Meshtastic na telefonie (radio, wiadomości, węzły, mapa, sniffer i pełne ustawienia radia), obsługę funkcji firmware MT_SW oraz własny klient webowy MT_SW.
 
+## Wesprzyj projekt
+
+MT_SW jest darmowe i tworzy je społeczność, po godzinach. Jeśli chcesz pomóc, możesz dobrowolnie wesprzeć utrzymanie i rozwój aplikacji, MT_SW_FIRMWARE i tej integracji: https://ko-fi.com/spontanicznemajsterkowanie (nick: spontanicznemajsterkowanie). Wpłaty trafiają na konto dewelopera, który rozdziela je na potrzeby całej ekipy. Integracja zawsze zostaje darmowa. Ten sam link jest w panelu: Ustawienia → Inne → Wsparcie i zgłoszenia, gdzie możesz też zgłosić błąd lub pomysł.
+
 Wymagania i instalacja:
 - Home Assistant 2024.11.0 lub nowszy — integracja sama dobiera API rejestru urządzeń i jednostek, więc działa zarówno na starszych wersjach (np. w kontenerze Dockera na OpenMediaVault), jak i na najnowszych
 - Instalacja przez HACS jako własne repozytorium (Custom repositories, typ Integration), potem dodanie integracji w Ustawienia → Urządzenia i usługi
@@ -147,6 +151,10 @@ EN — ENGLISH VERSION
 ## MT_SW — Meshtastic integration fork for Home Assistant
 
 A fork of the official meshtastic/home-assistant integration, maintained for the Świętokrzyskie mesh network. On top of the entities and services from the original it has its own sidebar panel in Home Assistant that works like the Meshtastic app on your phone (radio, messages, nodes, map, sniffer and full radio settings), support for MT_SW firmware features and its own MT_SW web client.
+
+## Support the project
+
+MT_SW is free and built by the community in their spare time. If you want to help, you can voluntarily support the upkeep and development of the app, MT_SW_FIRMWARE and this integration: https://ko-fi.com/spontanicznemajsterkowanie (nick: spontanicznemajsterkowanie). Donations go to the developer's account, who shares them among the whole team. The integration always stays free. The same link is in the panel: Settings → Other → Support and reports, where you can also report a bug or an idea.
 
 Requirements and installation:
 - Home Assistant 2024.11.0 or newer — the integration picks the right device-registry and unit APIs by itself, so it runs on older versions (e.g. in a Docker container on OpenMediaVault) as well as on the newest ones
