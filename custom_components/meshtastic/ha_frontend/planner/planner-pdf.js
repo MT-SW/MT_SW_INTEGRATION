@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Mały, bezzależnościowy zapis PDF raportu plannera (port PdfWriter.kt z aplikacji na Androida).
 // Strona A4, czcionki Helvetica / Helvetica-Bold (Type1, nie osadzane) z kodowaniem WinAnsi rozszerzonym o polskie
 // znaki diakrytyczne (kody 1..16 przez /Differences). Wynik: Uint8Array z poprawnym nagłówkiem, tablicą xref i %%EOF.

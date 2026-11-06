@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import {
   LitElement,
   html,

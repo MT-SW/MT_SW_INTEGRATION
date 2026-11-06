@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Publiczne API silnika plannera łączy/zasięgu MT_SW (port z aplikacji Android). Dokumentacja: API.md.
 //
 //   import { planLink, planCoverage, createDefaultInput } from './planner/index.js';

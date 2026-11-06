@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Drobne narzędzia wspólne dla modułów plannera (bez zależności od DOM).
 
 export const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));

@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Warstwy plannera na mapie Leaflet: znaczniki A/B z linią łącza, tryb wskazywania punktu kliknięciem oraz
 // warstwy zasięgu jako nakładki obrazu (raster w stylu MeshMap-Planner) z listą warstw na górze mapy.
 //

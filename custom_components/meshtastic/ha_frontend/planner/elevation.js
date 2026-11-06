@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Teren: kafelki wysokościowe Mapterhorn (Terrarium WebP w archiwach PMTiles v3, zakresowe żądania HTTP),
 // pamięć podręczna zdekodowanych kafelków i samplery: punkt / profil trasy / obszar.
 // Port: PlannerElevation.kt + MapterhornEndpoints.kt + TerrainTileMath.kt + ElevationTile.kt + czytnik PMTiles.

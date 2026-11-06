@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """
 Scalanie urządzeń i encji węzła, który wrócił pod NOWYM numerem.
 

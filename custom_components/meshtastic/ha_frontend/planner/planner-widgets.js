@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Drobne widżety DOM panelu plannera (odpowiedniki PlannerWidgets.kt: karta, nagłówek, wiersz wartości, uwaga,
 // pole liczbowe, lista rozwijana) oraz okno z objaśnieniem (InfoDialog.kt). Czysty DOM, bez bibliotek.
 import { parseNumber, formatField, sameValue } from './planner-format.js';

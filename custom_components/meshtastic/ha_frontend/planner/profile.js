@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Profil terenu wzdłuż koła wielkiego — port PathProfile.kt.
 import { distanceM, interpolate, EARTH_RADIUS_M } from './geodesy.js';
 

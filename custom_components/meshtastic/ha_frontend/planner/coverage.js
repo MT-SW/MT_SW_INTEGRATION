@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Prognoza zasięgu na siatce biegunowej (promienie x pierścienie) — port Coverage.kt.
 // Rdzeń obliczeń nie zależy od DOM, więc działa tak samo w głównym wątku i w Web Workerze (coverage-worker.js).
 import { destination, distanceM, bearingDeg } from './geodesy.js';

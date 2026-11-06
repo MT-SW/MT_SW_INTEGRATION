@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """
 Czysta (bez Home Assistanta) logika rozpoznawania tożsamości węzłów.
 

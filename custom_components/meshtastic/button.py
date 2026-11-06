@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 
 import asyncio
@@ -172,4 +176,4 @@ class MeshtasticRequestNeighborsButton(MeshtasticNodeEntity, ButtonEntity):
         # odpowiedź wraca zwykłą drogą pakietową (NEIGHBORINFO_APP -> zdarzenie
         # -> koordynator), więc nie ma tu nic do zrobienia z wynikiem. Węzły na
         # firmware bez obsługi want_response po prostu nie odpowiedzą i wyjdzie timeout.
-        await self._client.request_neighbor_info(self._node_id)
+        await self._client.request_neighbor_info(self._node_id)

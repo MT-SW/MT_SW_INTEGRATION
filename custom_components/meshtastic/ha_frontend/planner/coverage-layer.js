@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Skala jakości/kolorów i warstwa mapy dla prognozy zasięgu — port CoverageLayer.kt + pomocniki rastra i legendy.
 import { marginAt } from './coverage.js';
 import { fmt } from './util.js';

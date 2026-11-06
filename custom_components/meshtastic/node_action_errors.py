@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """Przyjazne, polskie komunikaty błędów akcji na węźle (request_position, traceroute...).
 
 Czysty moduł (bez zależności od Home Assistanta) — łatwy do przetestowania.

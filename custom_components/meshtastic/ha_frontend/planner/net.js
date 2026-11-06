@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Wspólna warstwa sieciowa plannera (Mapterhorn, Open-Meteo, Overpass).
 //
 // 1. Zapytania idą w trybie CORS bez ciasteczek i bez nagłówka Referer (`credentials: 'omit'`,

@@ -103,7 +103,7 @@ Dodane funkcje:
 - Tryb pracy z niezależnym panelem i statystykami, opisany wyżej
 - Sniffer z odszyfrowywaniem, pełnym dekodowaniem i grupowaniem powtórzeń, opisany wyżej
 - Własny branding: ikona i logo MT_SW w Home Assistancie, w panelu i w kliencie webowym MT_SW, razem z kolorystyką marki
-- Przywrócone nagłówki SPDX/MIT w plikach, które miały je w oryginale
+- Przywrócone nagłówki SPDX/MIT w plikach, które miały je w oryginale; nasze własne pliki źródłowe (bez wygenerowanych i cudzych bibliotek) dostały nagłówek SPDX/MIT „2026 MT_SW”
 - Kolory SNR i RSSI jak w aplikacji (dobry – złoty, wystarczający – czerwony, słaby – fioletowy, brak – biały; progi zależne od presetu modemu) w liście węzłów, szczegółach węzła, trasach traceroute, listach sąsiadów i wiadomościach
 - Sniffer: pakiety czytelnie rozpisane jak w aplikacji (sąsiedzi jako lista z SNR, traceroute jako lista skoków w obu kierunkach, pozycja, NodeInfo, telemetria, routing itd. jako tabele), bufor do 25 000 pakietów (do wyboru 5000 / 10 000 / 25 000) z wirtualną listą, taki sam bufor w logach debugowania
 - Scalanie urządzeń po zmianie numeru węzła: ten sam klucz publiczny PKI (a bez klucza – ta sama nazwa i model) oznacza to samo urządzenie; stare urządzenie jest zastępowane, a encje zachowują historię. W opcjach integracji jest menu „Dodane urządzenia” z przejściem do szczegółów urządzenia oraz ręczne scalanie duplikatów: lista znalezionych grup z pytaniem o scalenie, wyborem, które urządzenie zostaje, i opcją usunięcia pozostałych z bazy węzłów radia. Zmiana adresu IP radia nie tworzy duplikatu — wykrywanie zeroconf rozpoznaje radio po identyfikatorze i tylko aktualizuje adres
@@ -244,7 +244,7 @@ Added features:
 - The mode with an independent panel and statistics, described above
 - The sniffer with decryption, full decoding and duplicate grouping, described above
 - Custom branding: the MT_SW icon and logo in Home Assistant, in the panel and in the MT_SW web client, together with the brand colours
-- SPDX/MIT license headers restored in the files that had them in the original
+- SPDX/MIT license headers restored in the files that had them in the original; our own source files (excluding generated and third-party bundles) now carry an SPDX/MIT "2026 MT_SW" header
 - SNR and RSSI colours as in the app (good – gold, fair – red, weak – purple, none – white; thresholds depend on the modem preset) in the node list, node details, traceroutes, neighbour lists and messages
 - Sniffer: packets laid out readably as in the app (neighbours as a list with SNR, traceroute as a hop list in both directions, position, NodeInfo, telemetry, routing etc. as tables), a buffer of up to 25,000 packets (5000 / 10,000 / 25,000 selectable) with a virtual list, the same buffer size in the debug logs
 - Device merging after a node number change: the same PKI public key (without a key – the same name and model) means the same device; the old device is replaced and its entities keep their history. The integration options have an "Added devices" menu that opens the device details, and a manual duplicate merge: a list of the groups found, a question whether to merge, a choice of which device stays, and an option to remove the others from the radio's node database. An IP address change of the radio does not create a duplicate — zeroconf discovery recognises the radio by its identifier and only updates the address

@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Stan i zachowanie plannera w panelu HA (odpowiednik PlannerUiState + PlannerViewModel z aplikacji na Androida).
 // Bez DOM: wyłącznie dane, debounce przeliczeń i anulowanie nieaktualnych obliczeń przez AbortSignal.
 // Silnik (index.js) jest wstrzykiwany, więc testy w Node mogą podstawić atrapę.

@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * Listy wyboru czasu w ustawieniach — te same wartości i nazwy co w aplikacji
  * Meshtastic na Androida ("1 godzina", "2 godziny"…), zamiast wpisywania sekund.
  *

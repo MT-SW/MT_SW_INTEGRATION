@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Web Worker liczący prognozę zasięgu poza wątkiem UI.
 // Uruchomienie: new Worker(new URL('./coverage-worker.js', import.meta.url), { type: 'module' }).
 // Protokół (postMessage):

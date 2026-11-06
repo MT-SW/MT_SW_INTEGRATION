@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Wykres profilu terenu (SVG inline) i plan zasięgu (canvas) — odpowiedniki ProfileChart.kt i CoveragePlan.
 import { coverageRaster } from './index.js';
 import { fmt, fmtDistance, niceTicks, niceStep, decimalsFor, nearestIndex, escapeHtml } from './planner-format.js';

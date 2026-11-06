@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Wartości domyślne, limity i pomocnicze przeliczenia stanu plannera (PlannerUiState / PlannerViewModel z Androida).
 import { FEEDER_PRESETS } from './feeder.js';
 import {

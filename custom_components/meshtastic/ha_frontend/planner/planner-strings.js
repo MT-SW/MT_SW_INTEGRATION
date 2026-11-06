@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Napisy plannera Mesh Link Planer (by MT_SW) dla panelu HA.
 // Część PL/EN jest wygenerowana z planner_strings.xml, planner_info_strings.xml i planner_credits_strings.xml
 // aplikacji na Androida (values-pl i values) — polskie brzmienie jest wzięte dosłownie. Klucz = nazwa zasobu

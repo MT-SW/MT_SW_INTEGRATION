@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Style panelu Mesh Link Planer. Wszystko pod prefiksem .mlp-, kolory z zmiennych motywu HA
 // (jasny/ciemny motyw działa bez dodatkowego kodu). Wstrzykiwane jako <style> do tego samego korzenia co mapa.
 export const PLANNER_CSS = `

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """Pozycja własnego węzła (bramki) — rozwiązywanie z wielu źródeł.
 
 Czysty moduł (bez zależności od Home Assistanta) — łatwy do przetestowania.

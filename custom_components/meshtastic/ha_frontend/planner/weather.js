@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Pogoda dla propagacji (Open-Meteo, CC BY 4.0) — port PlannerWeather.kt.
 // Przy błędzie planner wraca do atmosfery standardowej (k = 4/3, N0 = 301).
 import { analyzeProfile } from './atmosphere.js';

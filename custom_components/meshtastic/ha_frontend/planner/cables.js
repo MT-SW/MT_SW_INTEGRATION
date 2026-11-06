@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Baza kabli i złączy — port CableDb.kt (dane z kart katalogowych producentów).
 
 export const MIN_F = 20.0;

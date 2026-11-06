@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """
 Per-gateway HTTP proxy server for the bundled meshtastic web client.
 

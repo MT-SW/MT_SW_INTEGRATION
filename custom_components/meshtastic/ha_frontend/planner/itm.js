@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Model Longley-Rice / ITM (punkt-punkt, zmienność czas/lokalizacja/sytuacja).
 // Port Itm.kt, który wywodzi się z NTIA/ITS ITM (domena publiczna, https://github.com/NTIA/itm).
 // Oryginalne oprogramowanie dostarczane "as is" przez rząd USA, bez gwarancji.

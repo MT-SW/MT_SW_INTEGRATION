@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Kreator feedera (złącza + odcinki kabli) — port FeederBuilder.kt.
 import { cableById, connectorById, cableLossDbPerM, connectorLossDb, MIN_F, MAX_F } from './cables.js';
 

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -39,4 +43,4 @@ async def async_get_config_entry_diagnostics(
         if runtime_data and runtime_data.coordinator.data
         else None,
         "coordinator_last_update_success": runtime_data.coordinator.last_update_success if runtime_data else None,
-    }
+    }

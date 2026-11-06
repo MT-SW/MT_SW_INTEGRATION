@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Mesh Link Planer (by MT_SW) — panel boczny w zakładce Mapa. Odpowiednik PlannerSheet.kt i sekcji z aplikacji
 // na Androida. Jedyne miejsce zaczepienia w map.js: attachPlanner() (patrz map.js). Cała logika jest tutaj:
 // stan w planner-state.js, napisy w planner-strings.js, wykresy w planner-chart.js, warstwy w planner-map-layer.js.

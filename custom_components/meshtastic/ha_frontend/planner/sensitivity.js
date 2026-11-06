@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Czułość odbiornika LoRa — port Sensitivity.kt.
 
 /** Graniczne SNR demodulatora (dB) dla SF 5..12. */

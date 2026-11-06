@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Potok obliczeń plannera: teren -> (pogoda) -> (przeszkody OSM) -> ITM -> bilans łącza; oraz prognoza zasięgu.
 // Port PlannerComputer.kt. Wejście to zwykły obiekt (patrz API.md i defaults.js: createDefaultInput).
 import { distanceM, interpolate } from './geodesy.js';

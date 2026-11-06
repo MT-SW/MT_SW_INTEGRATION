@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Radiometeorologia (ITU-R P.453, P.676, P.838) — port Atmosphere.kt.
 
 const EARTH_RADIUS_KM = 6371.0;

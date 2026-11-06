@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Pasma częstotliwości plannera + presety modemu LoRa — port PlannerBands.kt (+ potrzebne fragmenty
 // RegionInfo / ChannelOption z core/model Androida).
 

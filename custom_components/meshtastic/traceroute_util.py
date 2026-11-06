@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """
 Wynik traceroute w postaci gotowej do narysowania na mapie.
 

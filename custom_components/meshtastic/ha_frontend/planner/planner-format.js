@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Czyste funkcje pomocnicze UI plannera: liczby, współrzędne, osie wykresu (port PlannerInput / Formatting /
 // ChartMath / Num z aplikacji na Androida). Bez DOM i bez zależności od silnika — łatwe do testowania w Node.
 

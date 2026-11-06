@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Geodezja sferyczna (promień średni Ziemi) — port Geodesy.kt.
 // Punkt = { lat, lon } w stopniach WGS-84.
 

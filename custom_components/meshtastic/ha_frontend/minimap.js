@@ -1,4 +1,10 @@
 /*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
  * Mała mapa w szczegółach węzła: pozycja (jeden znacznik) albo ślad z historii pozycji.
  * Używa tego samego Leafleta i tych samych ustawień kafli co zakładka Mapa.
  */

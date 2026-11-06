@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Przeszkody terenowe z OpenStreetMap (budynki, lasy, zabudowa) przez Overpass API.
 // Port: PlannerClutter.kt (ClutterMap, ClutterPolygon, stałe), OsmClutterParser.kt, OsmQueries.kt, PlannerOverpass.kt.
 // Dane © współtwórcy OpenStreetMap (ODbL).

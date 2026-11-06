@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """Awaryjne proxy dla plannera łączy: POST /api/meshtastic/planner/proxy (tylko administrator).
 
 Przeglądarka najpierw pobiera dane (Overpass, Mapterhorn, Open-Meteo) sama; dopiero gdy to się nie uda

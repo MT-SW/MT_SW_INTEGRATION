@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Bilans łącza — port LinkBudget.kt.
 import { bearingDeg, elevationAngleDeg } from './geodesy.js';
 import { itmPointToPoint } from './itm.js';

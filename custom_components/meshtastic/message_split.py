@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """Dzielenie długich wiadomości na pakiety — ten sam format co w aplikacji MT_SW (MessageSplitter.kt).
 
 Tekst dłuższy niż jeden pakiet (200 bajtów UTF-8) idzie jako kilka wiadomości, z których każda zaczyna się

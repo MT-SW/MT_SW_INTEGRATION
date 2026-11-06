@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 MT_SW
+#
+# SPDX-License-Identifier: MIT
+
 """Reguły proxy plannera (czysty moduł, bez Home Assistanta — łatwy do przetestowania).
 
 Proxy służy tylko jako awaryjna droga, gdy przeglądarka nie może sama pobrać danych z zewnętrznych serwerów

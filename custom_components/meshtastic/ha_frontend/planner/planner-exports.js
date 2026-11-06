@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 MT_SW
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Eksport wyników plannera: model raportu, CSV, KML, GeoJSON i obraz PNG profilu (port PlannerReportBuilder,
 // PlannerCsv, PlannerKml, PlannerGeoJson, PlannerProfileImage z aplikacji na Androida). PDF jest w planner-pdf.js.
 // Czyste funkcje, bez DOM (poza `profileToPngBlob`, które potrzebuje canvasu — rysowanie jest wydzielone
