@@ -18,6 +18,8 @@
 - OTA: nie wiesza się na żądaniu restartu (limit 30 s), każdy krok jest w logu.
 - Zgodność ze starszymi i nowymi wersjami Home Assistanta (pole urządzeń `config_entries`).
 - Pozycja bramki w logu przeniesiona na poziom debug.
+- Węzeł, który zmienił tylko numer (ten sam klucz albo nazwy i model): zbieranie trwa dalej na tym samym urządzeniu, także gdy stary numer jeszcze jest w bazie radia.
+- Scalanie duplikatów w Ustawieniach integracji działa przy wyłączonym panelu; zapis ustawień nie kasuje już innych opcji (np. sniffera MQTT).
 
 ---
 
@@ -42,3 +44,5 @@
 - OTA: no longer hangs on the reboot request (30 s limit), every step is logged.
 - Compatibility with older and newer Home Assistant versions (the device `config_entries` field).
 - Gateway position log moved to debug level.
+- A node that changed only its number (same key, or same names and model): collection continues on the same device, also while the old number is still in the radio database.
+- Merging duplicates in the integration settings works with the panel turned off; saving settings no longer wipes other options (e.g. the MQTT sniffer).
