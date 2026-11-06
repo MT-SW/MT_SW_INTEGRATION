@@ -12,6 +12,7 @@ import "./sniffer-panel.js";
 import "./debug-logs.js";
 import "./nodedb-panel.js";
 import "./ota-panel.js";
+import "./functions.js";
 import "./chat-settings.js";
 import {
   REGIONS,
@@ -229,6 +230,7 @@ const NAV_ITEMS = [
   {
     group: "Other",
     items: [
+      { id: "mtsw_functions", label: "Funkcje MT_SW", icon: "mdi:star-box" },
       { id: "sniffer", label: PL("Sniffer"), icon: "mdi:radar" },
       { id: "actions", label: PL("Device Actions"), icon: "mdi:cog" },
       { id: "ota", label: PL("Firmware (OTA)"), icon: "mdi:update" },
@@ -602,6 +604,17 @@ export class MeshSettingsTab extends LitElement {
         return html`<mesh-settings-actions
           .wsCommand=${(type, data) => this._ws(type, data)}
         ></mesh-settings-actions>`;
+      case "mtsw_functions":
+        return html`<mtsw-functions-tab
+          .hass=${this.hass}
+          @mtsw-goto=${(e) => {
+            const w = (e.detail && e.detail.where) || "";
+            if (w.startsWith("settings:")) {
+              e.stopPropagation();
+              this._selectPanel(w.slice(9));
+            }
+          }}
+        ></mtsw-functions-tab>`;
       case "ota":
         return html`<mesh-settings-ota
           .hass=${this.hass}

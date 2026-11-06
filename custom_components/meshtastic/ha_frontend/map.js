@@ -22,6 +22,8 @@
 
 import { LitElement, html } from "./vendor/lit/lit-element.js";
 import { t } from "./i18n.js";
+import "./antenna.js";
+import "./horizon.js";
 import { attachPlanner } from "./planner/planner-ui.js";
 import { TracerouteOverlay } from "./traceroute-layer.js";
 
@@ -354,6 +356,8 @@ class MeshMapTab extends LitElement {
       hass: { type: Object },
       nodes: { type: Array },
       traceroute: { type: Object },
+      openTool: { type: String },
+      _tool: { type: String },
       showLinks: { type: Boolean },
       showLabels: { type: Boolean },
       showPrecision: { type: Boolean },
@@ -818,6 +822,9 @@ class MeshMapTab extends LitElement {
   }
 
   async updated(changed) {
+    if (changed.has("openTool") && this.openTool) {
+      this._tool = this.openTool;
+    }
     if (changed && changed.has("hass") && this.hass && !this._remoteRequested) {
       this._remoteRequested = true;
       this._loadRemoteTiles();
@@ -892,7 +899,7 @@ class MeshMapTab extends LitElement {
     const total = (this.nodes || []).length;
 
     return html`
-      <div class="mtsw-map">
+      <div class="mtsw-map" style="position:relative">
         <div class="map-toolbar">
           <label>
             <input
@@ -939,6 +946,8 @@ class MeshMapTab extends LitElement {
             ${t(this.hass, "map.show_mqtt")}
           </label>
           <span class="map-toolbar-right">
+            <button class="map-settings-toggle" @click=${() => { this._tool = this._tool === "antenna" ? null : "antenna"; }}>${(this.hass.language || "pl").startsWith("pl") ? "Kalkulator anten" : "Antenna calculator"}</button>
+            <button class="map-settings-toggle" @click=${() => { this._tool = this._tool === "horizon" ? null : "horizon"; }}>${(this.hass.language || "pl").startsWith("pl") ? "Panorama terenu" : "Terrain panorama"}</button>
             <span class="mlp-slot"></span>
             <span class="map-count">${t(this.hass, "map.count", { n: positioned, total })}</span>
             <button
@@ -954,6 +963,14 @@ class MeshMapTab extends LitElement {
         ${this._showTileSettings ? this._renderTileSettings() : ""}
         ${this._error ? html`<div class="map-error">${this._error}</div>` : ""}
         <div class="map-canvas"></div>
+        ${this._tool
+          ? html`<div class="tool-pane" style="position:absolute;top:44px;right:8px;bottom:8px;width:min(620px,96%);z-index:1000;overflow:auto;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.3)">
+              <button class="map-settings-toggle" style="float:right;margin:8px" @click=${() => { this._tool = null; }}>✕</button>
+              ${this._tool === "antenna"
+                ? html`<mtsw-antenna-tab .hass=${this.hass}></mtsw-antenna-tab>`
+                : html`<mtsw-horizon-tab .hass=${this.hass} .nodes=${this.nodes}></mtsw-horizon-tab>`}
+            </div>`
+          : ""}
       </div>
       <style>
         .mtsw-map {

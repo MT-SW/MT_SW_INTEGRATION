@@ -17,7 +17,7 @@ import "./messages.js";
 import "./nodes.js";
 import "./map.js";
 import "./health.js";
-import "./horizon.js";
+import "./functions.js";
 import "./settings.js";
 
 const POLL_MS = 10000;
@@ -34,7 +34,7 @@ const DEVICE_ACTIONS = {
   factory_reset_device: "factory_reset_device",
   reboot_ota: "reboot_ota",
 };
-const TABS = ["radio", "messages", "nodes", "health", "horizon", "map", "settings"];
+const TABS = ["radio", "messages", "nodes", "health", "map", "settings"];
 
 function tabFromPath() {
   const parts = location.pathname.replace(/\/+$/, "").split("/");
@@ -71,6 +71,7 @@ class MeshtasticPanel extends LitElement {
   constructor() {
     super();
     this._activeTab = tabFromPath();
+    this.addEventListener("mtsw-goto", (e) => this._onGoto(e));
     this._traceView = null;
     this._gateways = [];
     this._channels = {};
@@ -661,6 +662,19 @@ class MeshtasticPanel extends LitElement {
     this.dispatchEvent(new CustomEvent("hass-notification", { detail: { message }, bubbles: true, composed: true }));
   }
 
+  _onGoto(e) {
+    const where = (e.detail && e.detail.where) || "";
+    const [kind, name] = where.split(":");
+    if (kind === "map") {
+      this._mapTool = name;
+      this.requestUpdate();
+      this._selectTab("map");
+    } else if (kind === "tab") {
+      this._mapTool = undefined;
+      this._selectTab(name);
+    }
+  }
+
   _selectTab(tab) {
     if (tab === this._activeTab) {
       return;
@@ -692,13 +706,12 @@ class MeshtasticPanel extends LitElement {
         ></mesh-nodes-tab>`;
       case "health":
         return html`<mtsw-health-tab .hass=${this.hass} .entryId=${entryId} .nodes=${this._nodes}></mtsw-health-tab>`;
-      case "horizon":
-        return html`<mtsw-horizon-tab .hass=${this.hass} .nodes=${this._nodes}></mtsw-horizon-tab>`;
       case "map":
         return html`<mesh-map-tab
           .hass=${this.hass}
           .nodes=${this._nodes}
           .traceroute=${this._traceView}
+          .openTool=${this._mapTool}
         ></mesh-map-tab>`;
       case "settings":
         return entryId
