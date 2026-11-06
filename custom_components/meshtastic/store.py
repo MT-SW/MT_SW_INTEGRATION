@@ -67,8 +67,12 @@ MAX_TRACEROUTES_PER_NODE = 50
 # (która raportuje bardzo często) ma ograniczenie: nie częściej niż co 30 minut.
 # Jakość sygnału liczy się z każdego pakietu, więc tam odstęp to 5 minut.
 # Twardy limit chroni plik przed węzłem, który nadaje bez przerwy.
-HISTORY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+HISTORY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000  # wartość domyślna; faktyczny okres ustawia użytkownik
 MAX_NODE_HISTORY_POINTS = 5000
+DAY_MS = 24 * 60 * 60 * 1000
+DEFAULT_RETENTION_DAYS = 30
+MAX_RETENTION_DAYS = 60
+DEFAULT_GRACE_DAYS = 30
 GATEWAY_HISTORY_MIN_GAP_MS = 30 * 60 * 1000
 SIGNAL_HISTORY_MIN_GAP_MS = 5 * 60 * 1000
 KEY_LENGTH = 32  # długość klucza publicznego X25519
@@ -127,6 +131,13 @@ _ACK_RANK = {"SENT": 1, "ACK": 2, "NAK": 2}
 MAX_RELAYS_PER_MESSAGE = 20
 
 _STORES: dict[str, PanelStore] = {}
+
+
+def _clamp_days(value: Any, default: int) -> int:
+    try:
+        return max(1, min(MAX_RETENTION_DAYS, int(value)))
+    except (TypeError, ValueError):
+        return default
 
 
 def _now_ms() -> int:
@@ -198,6 +209,11 @@ class PanelStore:
         # Ostatnia dobra pozycja własnej bramki — przeżywa restart i ponowne łączenie
         # (radio nie odsyła nam własnych rozgłoszeń, patrz aiomeshtastic/gateway_position.py).
         self.gateway_position: dict[str, Any] | None = None
+        # Jak długo panel trzyma historię pakietów/węzłów (1–60 dni) oraz jak długo pamięta węzeł usunięty
+        # z radia, który był zbierany przez integrację: gdy wróci w tym czasie, zbieranie wraca samo.
+        self.retention_days: int = DEFAULT_RETENTION_DAYS
+        self.grace_days: int = DEFAULT_GRACE_DAYS
+        self.removed_tracked: dict[str, dict[str, Any]] = {}
         # Log sniffera żyje tylko w pamięci (patrz sniffer.py).
         self.sniffer = SnifferLog()
         # klucze kanałów bramki + publiczne kanały domyślne — do odszyfrowania
@@ -231,6 +247,11 @@ class PanelStore:
         saved_position = data.get("gateway_position")
         self.gateway_position = saved_position if isinstance(saved_position, dict) else None
         self.auto_clean = normalize_auto(data.get("auto_clean"))
+        self.retention_days = _clamp_days(data.get("retention_days"), DEFAULT_RETENTION_DAYS)
+        self.grace_days = _clamp_days(data.get("grace_days"), DEFAULT_GRACE_DAYS)
+        saved_removed = data.get("removed_tracked")
+        self.removed_tracked = saved_removed if isinstance(saved_removed, dict) else {}
+        self._purge_removed_tracked()
         self._mqtt_sniffer_stored = data.get("mqtt_sniffer_enabled")
         stored_capacity = data.get("log_capacity") or {}
         for kind in self.log_capacity:
@@ -297,6 +318,9 @@ class PanelStore:
             "node_history": self._node_history,
             "gateway_position": self.gateway_position,
             "auto_clean": self.auto_clean,
+            "retention_days": self.retention_days,
+            "grace_days": self.grace_days,
+            "removed_tracked": self.removed_tracked,
             "mqtt_sniffer_enabled": self.sniffer.mqtt_enabled,
             "log_capacity": self.log_capacity,
         }
@@ -404,8 +428,7 @@ class PanelStore:
     async def _cleanup_task(self, client: Any, node_ids: list[int]) -> None:
         try:
             await self.cleanup.run(client, node_ids)
-            self.forget_keys(self.cleanup.removed_ids)
-            self._untrack_removed(self.cleanup.removed_ids)
+            self.node_removed_from_radio(self.cleanup.removed_ids)
         finally:
             self.cleanup.finish()
             if self.cleanup.source == "auto":
@@ -456,7 +479,37 @@ class PanelStore:
             "conversations": len(conversations),
             "traceroutes": sum(len(routes) for routes in self._traceroutes.values()),
             "history_points": sum(len(series) for kinds in self._node_history.values() for series in kinds.values()),
+            "retention_days": self.retention_days,
+            "grace_days": self.grace_days,
+            "removed_tracked": len(self.removed_tracked),
         }
+
+    def set_retention(self, retention_days: int, grace_days: int) -> dict[str, int]:
+        """Ustaw, ile dni trzymać historię (1–60) i jak długo pamiętać usunięty węzeł (1–60)."""
+        self.retention_days = _clamp_days(retention_days, DEFAULT_RETENTION_DAYS)
+        self.grace_days = _clamp_days(grace_days, DEFAULT_GRACE_DAYS)
+        # krótszy okres obcina istniejące serie od razu, nie dopiero przy następnym punkcie
+        cutoff = _now_ms() - self.retention_days * DAY_MS
+        for kinds in self._node_history.values():
+            for series in kinds.values():
+                drop = 0
+                while drop < len(series) - 1 and int(series[drop].get("ts", 0)) < cutoff:
+                    drop += 1
+                if drop:
+                    del series[:drop]
+        self._purge_removed_tracked()
+        self._schedule_save()
+        return {"retention_days": self.retention_days, "grace_days": self.grace_days}
+
+    def _purge_removed_tracked(self) -> None:
+        """Zapomnij usunięte węzły, których czas oczekiwania na powrót minął."""
+        limit = time.time() - self.grace_days * 86400
+        stale = [key for key, item in self.removed_tracked.items() if float(item.get("ts", 0)) < limit]
+        for key in stale:
+            self.removed_tracked.pop(key, None)
+        if stale:
+            self._schedule_save()
+
 
     def clear_node_data(self) -> None:
         """Usuń zapisane trasy, historię węzłów, sąsiadów i zapamiętane statystyki."""
@@ -729,10 +782,56 @@ class PanelStore:
         remaining = [el for el in tracked if el.get("id") not in removed]
         if len(remaining) == len(tracked):
             return
+        # Zapamiętaj je na czas oczekiwania: jeśli węzeł wróci, zbieranie danych wznowi się samo.
+        for el in tracked:
+            if el.get("id") in removed:
+                self.removed_tracked[str(el["id"])] = {"name": el.get("name"), "ts": time.time()}
+        self._schedule_save()
         LOGGER.info("Czyszczenie bazy węzłów: %d usuniętych węzłów przestaje być śledzonych", len(tracked) - len(remaining))
         self._hass.config_entries.async_update_entry(
             self._entry, options={**self._entry.options, CONF_OPTION_FILTER_NODES: remaining}
         )
+
+    def node_removed_from_radio(self, node_ids: Iterable[int]) -> None:
+        """Węzły usunięte z radia (czyszczenie albo ręcznie z panelu): przestań je zbierać bez błędów."""
+        ids = list(node_ids)
+        self.forget_keys(ids)
+        self._untrack_removed(ids)
+
+    def _maybe_resume_tracking(self, node_id: int) -> None:
+        """Usunięty węzeł znów się odezwał w czasie oczekiwania — wróć do zbierania jego danych."""
+        item = self.removed_tracked.get(str(node_id))
+        if item is None:
+            return
+        if time.time() - float(item.get("ts", 0)) > self.grace_days * 86400:
+            self.removed_tracked.pop(str(node_id), None)
+            self._schedule_save()
+            return
+        from .config_flow import _signature_fields  # noqa: PLC0415
+        from .identity import node_identity_key  # noqa: PLC0415
+
+        try:
+            info = self._entry.runtime_data.client.interface.nodes().get(node_id)
+        except Exception:  # noqa: BLE001
+            return
+        if info is None:
+            return
+        tracked = list(self._entry.options.get(CONF_OPTION_FILTER_NODES, []))
+        if all(el.get("id") != node_id for el in tracked):
+            tracked.append(
+                {
+                    "id": node_id,
+                    "name": info.get("user", {}).get("longName") or item.get("name") or f"!{node_id:08x}",
+                    "identity_key": node_identity_key(node_id, info),
+                    **_signature_fields(info),
+                }
+            )
+            LOGGER.info("Węzeł %d wrócił w czasie oczekiwania — zbieranie jego danych zostało wznowione", node_id)
+            self._hass.config_entries.async_update_entry(
+                self._entry, options={**self._entry.options, CONF_OPTION_FILTER_NODES: tracked}
+            )
+        self.removed_tracked.pop(str(node_id), None)
+        self._schedule_save()
 
     def forget_keys(self, node_ids: Iterable[int]) -> None:
         """Po usunięciu węzła z radia zapomnij jego klucz — nowy zacznie od zera."""
@@ -761,6 +860,8 @@ class PanelStore:
         rx_time = packet.get("rxTime")
         # rxTime == 0 to brak odczytu zegara w radiu; zegar z przyszłości też nie jest wiarygodny
         seen = int(rx_time) if isinstance(rx_time, int | float) and 0 < rx_time <= now_s else now_s
+        if self.removed_tracked:
+            self._maybe_resume_tracking(sender)
         state = self._node_state.setdefault(str(sender), {})
         previous = state.get("seen") or 0
         if seen <= previous:
@@ -923,12 +1024,13 @@ class PanelStore:
             if gap and now - int(series[-1].get("ts", 0)) < gap:
                 return
         series.append({"ts": now, **point})
-        cutoff = now - HISTORY_RETENTION_MS
+        cutoff = now - self.retention_days * DAY_MS
+        max_points = max(MAX_NODE_HISTORY_POINTS, self.retention_days * 300)
         drop = 0
         while drop < len(series) - 1 and int(series[drop].get("ts", 0)) < cutoff:
             drop += 1
-        if len(series) - drop > MAX_NODE_HISTORY_POINTS:
-            drop = len(series) - MAX_NODE_HISTORY_POINTS
+        if len(series) - drop > max_points:
+            drop = len(series) - max_points
         if drop:
             del series[:drop]
         if persist:

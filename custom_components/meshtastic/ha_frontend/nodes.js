@@ -306,6 +306,17 @@ class MeshNodesTab extends LitElement {
   /* Śledzenie w Home Assistancie (encje węzła) — bez wchodzenia w opcje integracji. */
   _toggleTracked(node) {
     const tracked = !node.is_tracked;
+    if (!tracked) {
+      const lang = ((this.hass && this.hass.language) || "pl").startsWith("pl") ? "pl" : "en";
+      const text =
+        lang === "pl"
+          ? `Przestać zbierać dane węzła ${this._displayName(node)}? Zostanie też usunięty z urządzenia, a więc zniknie z listy.`
+          : `Stop collecting data for ${this._displayName(node)}? It will also be removed from the device and from the list.`;
+      // eslint-disable-next-line no-alert
+      if (!window.confirm(text)) {
+        return Promise.resolve();
+      }
+    }
     return this._toggleFlag(node, "set_tracked", { node_ids: [node.node_id], tracked }, { is_tracked: tracked });
   }
 

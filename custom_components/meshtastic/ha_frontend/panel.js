@@ -567,6 +567,15 @@ class MeshtasticPanel extends LitElement {
           const stats = await this.hass.callWS({ type: "meshtastic/storage_stats", entry_id: entryId });
           return { success: true, ...stats, nodes: (this._nodes || []).length };
         }
+        case "retention_set": {
+          await this.hass.callWS({
+            type: "meshtastic/retention_set",
+            entry_id: entryId,
+            retention_days: data.retention_days,
+            grace_days: data.grace_days,
+          });
+          return { success: true };
+        }
         case "clear_messages":
         case "clear_nodes":
         case "clear_all": {

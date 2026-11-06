@@ -1635,6 +1635,34 @@ class MeshSettingsStorage extends LitElement {
     }
   }
 
+  async _saveRetention(patch) {
+    const s = this._stats || {};
+    const retention_days = Math.min(60, Math.max(1, Number(patch.retention_days ?? s.retention_days ?? 30) || 30));
+    const grace_days = Math.min(60, Math.max(1, Number(patch.grace_days ?? s.grace_days ?? 30) || 30));
+    this._stats = { ...s, retention_days, grace_days };
+    this.requestUpdate();
+    await this.wsCommand("meshtastic_ui/retention_set", { retention_days, grace_days });
+    this._loadStats();
+  }
+
+  /* Jak w aplikacji: okres trzymania historii (maks. 60 dni) i czas oczekiwania na powrót usuniętego węzła. */
+  _renderRetention(s) {
+    const days = [1, 3, 7, 14, 21, 30, 45, 60];
+    const pick = (value, key) => html`
+      <select @change=${(e) => this._saveRetention({ [key]: Number(e.target.value) })}>
+        ${[...new Set([...days, value])].sort((a, b) => a - b).map(
+          (d) => html`<option value=${d} ?selected=${d === value}>${d} ${d === 1 ? "dzień" : "dni"}</option>`
+        )}
+      </select>`;
+    return html`
+      <h4 class="section-title">Historia pakietów i węzłów</h4>
+      <p class="hint">Jak długo panel trzyma zapisane dane z węzłów (maksymalnie 60 dni). Dłuższy okres to więcej miejsca na dysku.</p>
+      <div class="field-row">${pick(s.retention_days ?? 30, "retention_days")}</div>
+      <p class="hint">Gdy węzeł zbierany przez integrację zniknie z radia (czyszczenie bazy albo ręczne usunięcie), integracja przestaje go zbierać bez błędów i pamięta go przez ten czas. Jeśli węzeł wróci, zbieranie wznawia się samo.${s.removed_tracked ? ` Teraz czeka: ${s.removed_tracked}.` : ""}</p>
+      <div class="field-row">${pick(s.grace_days ?? 30, "grace_days")}</div>
+    `;
+  }
+
   _actions() {
     return [
       {
@@ -1690,6 +1718,8 @@ class MeshSettingsStorage extends LitElement {
               </div>
             `)}
           </div>
+
+          ${this._renderRetention(s)}
 
           <mesh-nodedb-cleanup
             .wsCommand=${this.wsCommand}

@@ -331,6 +331,16 @@ class MeshHealthTab extends LitElement {
     if (!entryId || !nodeIds.length) {
       return;
     }
+    if (!tracked) {
+      const pl = ((this.hass && this.hass.language) || "pl").startsWith("pl");
+      const text = pl
+        ? `Przestać zbierać dane ${nodeIds.length} węzłów? Zostaną też usunięte z urządzenia, a więc z listy.`
+        : `Stop collecting data for ${nodeIds.length} nodes? They will also be removed from the device and from the list.`;
+      // eslint-disable-next-line no-alert
+      if (!window.confirm(text)) {
+        return;
+      }
+    }
     this._notice = "";
     try {
       const result = await this.hass.callWS({

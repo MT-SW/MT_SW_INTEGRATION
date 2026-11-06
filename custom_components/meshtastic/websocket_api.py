@@ -1070,8 +1070,39 @@ async def ws_set_tracked(hass, connection, msg) -> None:
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_remove_node(hass, connection, msg) -> None:
-    """Usuń węzeł z bazy urządzenia."""
-    await _run_node_action(hass, connection, msg, lambda c, m: c.async_remove_node(m["node_id"]))
+    """Usuń węzeł z bazy urządzenia; zbieranie jego danych przez integrację kończy się bez błędów.
+
+    Węzeł jest pamiętany przez ustawiony czas oczekiwania — gdy wróci, zbieranie wraca samo.
+    """
+
+    async def _remove(client, m):
+        removed = await client.async_remove_node(m["node_id"])
+        if removed is not False:
+            store = get_store(m["entry_id"])
+            if store is not None:
+                store.node_removed_from_radio([m["node_id"]])
+        return removed
+
+    await _run_node_action(hass, connection, msg, _remove)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{WS_PREFIX}/retention_set",
+        vol.Required("entry_id"): str,
+        vol.Required("retention_days"): vol.All(int, vol.Range(min=1, max=60)),
+        vol.Required("grace_days"): vol.All(int, vol.Range(min=1, max=60)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_retention_set(hass, connection, msg) -> None:
+    """Ile dni panel trzyma historię (maks. 60) i jak długo pamięta węzeł usunięty z radia."""
+    store = get_store(msg["entry_id"])
+    if store is None:
+        connection.send_error(msg["id"], "not_found", "Magazyn panelu nie jest załadowany")
+        return
+    connection.send_result(msg["id"], store.set_retention(msg["retention_days"], msg["grace_days"]))
 
 
 @websocket_api.websocket_command(
@@ -2294,6 +2325,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ws_set_ignored,
         ws_set_tracked,
         ws_remove_node,
+        ws_retention_set,
         ws_request_position,
         ws_gateway_debug,
         ws_request_neighbors,
